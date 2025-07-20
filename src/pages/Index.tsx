@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Home } from './Home';
 import { Income } from './Income';
 import { Expenses } from './Expenses';
+import { Budget } from './Budget';
 import { Savings } from './Savings';
 import { Investments } from './Investments';
 import { Settings } from './Settings';
@@ -18,6 +19,8 @@ const Index = () => {
         return <Income />;
       case 'expenses':
         return <Expenses />;
+      case 'budget':
+        return <Budget />;
       case 'savings':
         return <Savings />;
       case 'investments':

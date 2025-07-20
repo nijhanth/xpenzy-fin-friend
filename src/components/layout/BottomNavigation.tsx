@@ -5,6 +5,7 @@ import {
   CreditCard, 
   TrendingUp, 
   BarChart3, 
+  Target,
   Settings,
   Plus
 } from 'lucide-react';
@@ -20,8 +21,8 @@ interface NavigationItem {
 const navigationItems: NavigationItem[] = [
   { id: 'home', label: 'Home', icon: Home, path: '/' },
   { id: 'expenses', label: 'Expenses', icon: CreditCard, path: '/expenses' },
+  { id: 'budget', label: 'Budget', icon: Target, path: '/budget' },
   { id: 'savings', label: 'Savings', icon: PiggyBank, path: '/savings' },
-  { id: 'investments', label: 'Invest', icon: BarChart3, path: '/investments' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
