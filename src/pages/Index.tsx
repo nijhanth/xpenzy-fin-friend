@@ -6,6 +6,11 @@ import { Expenses } from './Expenses';
 import { Budget } from './Budget';
 import { Savings } from './Savings';
 import { Investments } from './Investments';
+import { Group } from './Group';
+import { Calendar } from './Calendar';
+import { Reports } from './Reports';
+import { Notes } from './Notes';
+import { Security } from './Security';
 import { Settings } from './Settings';
 
 const Index = () => {
@@ -19,12 +24,22 @@ const Index = () => {
         return <Income />;
       case 'expenses':
         return <Expenses />;
-      case 'budget':
-        return <Budget />;
       case 'savings':
         return <Savings />;
       case 'investments':
         return <Investments />;
+      case 'group':
+        return <Group />;
+      case 'calendar':
+        return <Calendar />;
+      case 'budget':
+        return <Budget />;
+      case 'reports':
+        return <Reports />;
+      case 'notes':
+        return <Notes />;
+      case 'security':
+        return <Security />;
       case 'settings':
         return <Settings />;
       default:
