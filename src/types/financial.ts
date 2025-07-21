@@ -1,0 +1,47 @@
+export interface IncomeEntry {
+  id: string;
+  amount: number;
+  date: string;
+  category: 'Salary' | 'Freelance' | 'Gift' | 'Investment' | 'Business' | 'Custom';
+  paymentMode: 'Cash' | 'UPI' | 'Card' | 'Bank Transfer' | 'Net Banking';
+  notes: string;
+  customCategory?: string;
+}
+
+export interface ExpenseEntry {
+  id: string;
+  amount: number;
+  date: string;
+  category: 'Food & Dining' | 'Transportation' | 'Shopping' | 'Bills & Utilities' | 'Entertainment' | 'Healthcare' | 'Education' | 'Custom';
+  subcategory: string;
+  paymentMode: 'Cash' | 'UPI' | 'Card' | 'Bank Transfer' | 'Net Banking';
+  notes: string;
+  customCategory?: string;
+}
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  target: number;
+  current: number;
+  date: string;
+  notes: string;
+}
+
+export interface InvestmentEntry {
+  id: string;
+  type: 'Mutual Fund' | 'Stocks' | 'FD' | 'Crypto' | 'Gold' | 'Real Estate' | 'Custom';
+  name: string;
+  invested: number;
+  current: number;
+  date: string;
+  notes: string;
+  customType?: string;
+}
+
+export interface FinancialData {
+  income: IncomeEntry[];
+  expenses: ExpenseEntry[];
+  savings: SavingsGoal[];
+  investments: InvestmentEntry[];
+}

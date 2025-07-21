@@ -1,26 +1,12 @@
+import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { PiggyBank, Target, Plus, TrendingUp, Award } from 'lucide-react';
+import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-
-// Sample savings data
-const savingsGoals = [
-  { id: 1, name: 'Emergency Fund', target: 100000, current: 75000, color: 'hsl(var(--success))' },
-  { id: 2, name: 'Vacation Trip', target: 50000, current: 32000, color: 'hsl(var(--accent))' },
-  { id: 3, name: 'New Laptop', target: 80000, current: 45000, color: 'hsl(var(--warning))' },
-  { id: 4, name: 'Investment Fund', target: 200000, current: 120000, color: 'hsl(var(--investment))' },
-];
-
-const savingsTrend = [
-  { month: 'Jul', amount: 45000 },
-  { month: 'Aug', amount: 52000 },
-  { month: 'Sep', amount: 48000 },
-  { month: 'Oct', amount: 65000 },
-  { month: 'Nov', amount: 78000 },
-  { month: 'Dec', amount: 85000 },
-];
+import { useFinancial } from '@/contexts/FinancialContext';
+import { SavingsForm } from '@/components/forms/SavingsForm';
 
 const savingsTips = [
   "Set up automatic transfers to your savings account",
@@ -31,9 +17,26 @@ const savingsTips = [
 ];
 
 export const Savings = () => {
-  const totalSavings = savingsGoals.reduce((sum, goal) => sum + goal.current, 0);
-  const totalTargets = savingsGoals.reduce((sum, goal) => sum + goal.target, 0);
-  const overallProgress = (totalSavings / totalTargets) * 100;
+  const { data } = useFinancial();
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  
+  const totalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
+  const totalTargets = data.savings.reduce((sum, goal) => sum + goal.target, 0);
+  const overallProgress = totalTargets > 0 ? (totalSavings / totalTargets) * 100 : 0;
+
+  // Generate savings trend from monthly data
+  const savingsTrend = useMemo(() => {
+    const monthlyData = data.savings.reduce((acc, goal) => {
+      const month = new Date(goal.date).toLocaleDateString('en-US', { month: 'short' });
+      acc[month] = (acc[month] || 0) + goal.current;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(monthlyData).map(([month, amount]) => ({
+      month,
+      amount
+    }));
+  }, [data.savings]);
 
   return (
     <div className="p-4 space-y-6 animate-fade-in">
@@ -43,7 +46,7 @@ export const Savings = () => {
           <h1 className="text-2xl font-bold text-foreground">Savings Tracker</h1>
           <p className="text-sm text-muted-foreground">Total: ₹{totalSavings.toLocaleString()}</p>
         </div>
-        <Button className="bg-savings text-white">
+        <Button className="bg-savings text-white" onClick={() => setIsFormOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Add Goal
         </Button>
@@ -93,91 +96,125 @@ export const Savings = () => {
 
       {/* Savings Goals */}
       <Card className="bg-gradient-card border-border shadow-card">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Target className="w-5 h-5" />
             Savings Goals
           </CardTitle>
+          <Button variant="outline" size="sm">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            View Report
+          </Button>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
-            {savingsGoals.map((goal) => {
-              const progress = (goal.current / goal.target) * 100;
-              const isCompleted = progress >= 100;
-              
-              return (
-                <div key={goal.id} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-foreground">{goal.name}</h3>
-                      {isCompleted && (
-                        <Badge variant="outline" className="text-success border-success">
-                          <Award className="w-3 h-3 mr-1" />
-                          Completed
-                        </Badge>
-                      )}
+          {data.savings.length > 0 ? (
+            <div className="space-y-6">
+              {data.savings.map((goal) => {
+                const progress = (goal.current / goal.target) * 100;
+                const isCompleted = progress >= 100;
+                
+                return (
+                  <div key={goal.id} className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-foreground">{goal.name}</h3>
+                        {isCompleted && (
+                          <Badge variant="outline" className="text-success border-success">
+                            <Award className="w-3 h-3 mr-1" />
+                            Completed
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
+                      </p>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
-                    </p>
+                    <Progress 
+                      value={Math.min(progress, 100)} 
+                      className="h-3"
+                    />
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">{Math.round(progress)}% complete</span>
+                      <span className="text-muted-foreground">
+                        ₹{Math.max(0, goal.target - goal.current).toLocaleString()} remaining
+                      </span>
+                    </div>
                   </div>
-                  <Progress 
-                    value={Math.min(progress, 100)} 
-                    className="h-3"
-                  />
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">{Math.round(progress)}% complete</span>
-                    <span className="text-muted-foreground">
-                      ₹{(goal.target - goal.current).toLocaleString()} remaining
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-12 text-center text-muted-foreground">
+              <Target className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-medium mb-2">No Savings Goals</h3>
+              <p className="text-sm mb-4">Set your first savings goal to start tracking progress</p>
+              <Button onClick={() => setIsFormOpen(true)} className="bg-savings text-white">
+                <Plus className="w-4 h-4 mr-2" />
+                Add First Goal
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Savings Trend */}
       <Card className="bg-gradient-card border-border shadow-card">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <TrendingUp className="w-5 h-5" />
-            Monthly Savings Trend
+            Savings Goal Trend
           </CardTitle>
+          <Button variant="outline" size="sm">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            View Report
+          </Button>
         </CardHeader>
         <CardContent>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={savingsTrend}>
-                <XAxis 
-                  dataKey="month" 
-                  axisLine={false} 
-                  tickLine={false}
-                  className="text-xs text-muted-foreground"
-                />
-                <YAxis hide />
-                <Line 
-                  type="monotone" 
-                  dataKey="amount" 
-                  stroke="hsl(var(--savings))" 
-                  strokeWidth={3}
-                  dot={{ fill: 'hsl(var(--savings))', strokeWidth: 2, r: 5 }}
-                  activeDot={{ r: 7, stroke: 'hsl(var(--savings))', strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          {savingsTrend.length > 0 ? (
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={savingsTrend}>
+                  <XAxis 
+                    dataKey="month" 
+                    axisLine={false} 
+                    tickLine={false}
+                    className="text-xs text-muted-foreground"
+                  />
+                  <YAxis hide />
+                  <Line 
+                    type="monotone" 
+                    dataKey="amount" 
+                    stroke="hsl(var(--savings))" 
+                    strokeWidth={3}
+                    dot={{ fill: 'hsl(var(--savings))', strokeWidth: 2, r: 5 }}
+                    activeDot={{ r: 7, stroke: 'hsl(var(--savings))', strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-48 flex items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <TrendingUp className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <p>No savings trend available</p>
+                <p className="text-sm">Add savings goals to see trends</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Savings Tips */}
       <Card className="bg-gradient-card border-border shadow-card">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <PiggyBank className="w-5 h-5" />
             Savings Tips
           </CardTitle>
+          <Button variant="outline" size="sm">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            View Report
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -192,6 +229,8 @@ export const Savings = () => {
           </div>
         </CardContent>
       </Card>
+      
+      <SavingsForm open={isFormOpen} onClose={() => setIsFormOpen(false)} />
     </div>
   );
 };
