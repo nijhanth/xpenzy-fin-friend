@@ -186,49 +186,65 @@ export const Home = () => {
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <Card className="bg-gradient-card border-border shadow-card">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
+      {/* Enhanced Quick Actions */}
+      <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <Plus className="w-5 h-5 text-primary" />
+            Quick Actions
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">Add your financial data quickly</p>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-4 gap-4">
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-2 gap-4 mb-4">
             <Button 
               onClick={() => setActiveForm('income')}
-              size="icon"
-              className="bg-gradient-income hover:bg-gradient-income/90 h-16 w-16 rounded-2xl shadow-lg"
+              className="h-20 rounded-2xl bg-gradient-income hover:bg-gradient-income/90 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 group"
             >
-              <TrendingUp className="w-6 h-6" />
+              <div className="flex flex-col items-center gap-2">
+                <div className="p-2 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+                <span className="text-sm font-medium">Add Income</span>
+              </div>
             </Button>
             <Button 
               onClick={() => setActiveForm('expense')}
-              size="icon"
-              className="bg-gradient-expense hover:bg-gradient-expense/90 h-16 w-16 rounded-2xl shadow-lg"
+              className="h-20 rounded-2xl bg-gradient-expense hover:bg-gradient-expense/90 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 group"
             >
-              <TrendingDown className="w-6 h-6" />
+              <div className="flex flex-col items-center gap-2">
+                <div className="p-2 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
+                  <TrendingDown className="w-6 h-6" />
+                </div>
+                <span className="text-sm font-medium">Add Expense</span>
+              </div>
             </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <Button 
               onClick={() => setActiveForm('savings')}
-              size="icon"
               variant="outline"
-              className="h-16 w-16 rounded-2xl shadow-lg border-2 hover:bg-muted"
+              className="h-20 rounded-2xl border-2 border-savings/30 bg-savings/5 hover:bg-savings/10 hover:border-savings/50 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 group"
             >
-              <PiggyBank className="w-6 h-6" />
+              <div className="flex flex-col items-center gap-2">
+                <div className="p-2 bg-savings/20 rounded-full group-hover:bg-savings/30 transition-colors">
+                  <PiggyBank className="w-6 h-6 text-savings" />
+                </div>
+                <span className="text-sm font-medium text-savings">Add Savings</span>
+              </div>
             </Button>
             <Button 
               onClick={() => setActiveForm('investment')}
-              size="icon"
               variant="outline"
-              className="h-16 w-16 rounded-2xl shadow-lg border-2 hover:bg-muted"
+              className="h-20 rounded-2xl border-2 border-investment/30 bg-investment/5 hover:bg-investment/10 hover:border-investment/50 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 group"
             >
-              <Wallet className="w-6 h-6" />
+              <div className="flex flex-col items-center gap-2">
+                <div className="p-2 bg-investment/20 rounded-full group-hover:bg-investment/30 transition-colors">
+                  <Wallet className="w-6 h-6 text-investment" />
+                </div>
+                <span className="text-sm font-medium text-investment">Add Investment</span>
+              </div>
             </Button>
-          </div>
-          <div className="grid grid-cols-4 gap-4 mt-2 text-xs text-center text-muted-foreground">
-            <span>Income</span>
-            <span>Expense</span>
-            <span>Savings</span>
-            <span>Investment</span>
           </div>
         </CardContent>
       </Card>

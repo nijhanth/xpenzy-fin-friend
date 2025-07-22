@@ -26,8 +26,6 @@ export const AppLayout = ({ children, className, activeTab, onTabChange }: AppLa
         onTabChange={onTabChange} 
       />
       
-      {/* Floating AI Assistant */}
-      <FloatingAIAssistant />
     </div>
   );
 };
