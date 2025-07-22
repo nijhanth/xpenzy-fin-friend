@@ -1,27 +1,55 @@
+import { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { Wallet, TrendingUp, TrendingDown, PiggyBank, Bell, User } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, PiggyBank, Bell, User, Plus } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-
-// Sample data for charts
-const balanceData = [
-  { name: 'Income', value: 45000, color: 'hsl(var(--income))' },
-  { name: 'Expenses', value: 32000, color: 'hsl(var(--expense))' },
-  { name: 'Savings', value: 13000, color: 'hsl(var(--savings))' },
-];
-
-const trendData = [
-  { day: 'Mon', balance: 12000 },
-  { day: 'Tue', balance: 13500 },
-  { day: 'Wed', balance: 11200 },
-  { day: 'Thu', balance: 14800 },
-  { day: 'Fri', balance: 13000 },
-  { day: 'Sat', balance: 15200 },
-  { day: 'Sun', balance: 13000 },
-];
+import { useFinancial } from '@/contexts/FinancialContext';
+import { IncomeForm } from '@/components/forms/IncomeForm';
+import { ExpenseForm } from '@/components/forms/ExpenseForm';
+import { SavingsForm } from '@/components/forms/SavingsForm';
+import { InvestmentForm } from '@/components/forms/InvestmentForm';
 
 export const Home = () => {
+  const { data } = useFinancial();
+  const [activeForm, setActiveForm] = useState<'income' | 'expense' | 'savings' | 'investment' | null>(null);
+
+  // Calculate real-time totals
+  const totals = useMemo(() => {
+    const totalIncome = data.income.reduce((sum, item) => sum + item.amount, 0);
+    const totalExpenses = data.expenses.reduce((sum, item) => sum + item.amount, 0);
+    const totalSavings = data.savings.reduce((sum, item) => sum + item.target, 0);
+    const totalInvestments = data.investments.reduce((sum, item) => sum + item.invested, 0);
+    const remainingBalance = totalIncome - totalExpenses;
+
+    return {
+      totalIncome,
+      totalExpenses,
+      totalSavings,
+      totalInvestments,
+      remainingBalance
+    };
+  }, [data]);
+
+  // Dynamic chart data based on real data
+  const balanceData = [
+    { name: 'Income', value: totals.totalIncome, color: 'hsl(var(--income))' },
+    { name: 'Expenses', value: totals.totalExpenses, color: 'hsl(var(--expense))' },
+    { name: 'Available', value: totals.remainingBalance, color: 'hsl(var(--savings))' },
+  ].filter(item => item.value > 0);
+
+  // Generate trend data from recent transactions
+  const trendData = useMemo(() => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      return {
+        day: date.toLocaleDateString('en', { weekday: 'short' }),
+        balance: totals.remainingBalance + Math.random() * 5000 - 2500 // Simulated daily variation
+      };
+    });
+    return last7Days;
+  }, [totals.remainingBalance]);
   return (
     <div className="p-4 space-y-6 animate-fade-in">
       {/* Header */}
@@ -44,35 +72,35 @@ export const Home = () => {
       <div className="grid grid-cols-2 gap-4">
         <StatCard
           title="Total Income"
-          value="₹45,000"
+          value={`₹${totals.totalIncome.toLocaleString()}`}
           subtitle="This month"
           icon={TrendingUp}
           variant="income"
-          trend={{ value: "+12%", isPositive: true }}
+          trend={{ value: `${data.income.length} entries`, isPositive: true }}
         />
         <StatCard
           title="Total Expenses"
-          value="₹32,000"
+          value={`₹${totals.totalExpenses.toLocaleString()}`}
           subtitle="This month"
           icon={TrendingDown}
           variant="expense"
-          trend={{ value: "+5%", isPositive: false }}
+          trend={{ value: `${data.expenses.length} entries`, isPositive: false }}
         />
         <StatCard
           title="Remaining Balance"
-          value="₹13,000"
+          value={`₹${totals.remainingBalance.toLocaleString()}`}
           subtitle="Available"
           icon={Wallet}
           variant="default"
-          trend={{ value: "+7%", isPositive: true }}
+          trend={{ value: totals.remainingBalance >= 0 ? "Positive" : "Deficit", isPositive: totals.remainingBalance >= 0 }}
         />
         <StatCard
           title="Total Savings"
-          value="₹85,000"
-          subtitle="All time"
+          value={`₹${totals.totalSavings.toLocaleString()}`}
+          subtitle="Target amount"
           icon={PiggyBank}
           variant="savings"
-          trend={{ value: "+15%", isPositive: true }}
+          trend={{ value: `${data.savings.length} goals`, isPositive: true }}
         />
       </div>
 
@@ -85,23 +113,33 @@ export const Home = () => {
           </CardHeader>
           <CardContent>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={balanceData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {balanceData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              {balanceData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={balanceData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {balanceData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <div className="text-center">
+                    <PiggyBank className="w-16 h-16 mx-auto mb-2 opacity-50" />
+                    <p>No financial data yet</p>
+                    <p className="text-sm">Start by adding income or expenses</p>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex justify-center gap-6 mt-4">
               {balanceData.map((item, index) => (
@@ -154,26 +192,64 @@ export const Home = () => {
           <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-3">
-            <Button className="bg-gradient-income h-12" size="lg">
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Add Income
+          <div className="grid grid-cols-4 gap-4">
+            <Button 
+              onClick={() => setActiveForm('income')}
+              size="icon"
+              className="bg-gradient-income hover:bg-gradient-income/90 h-16 w-16 rounded-2xl shadow-lg"
+            >
+              <TrendingUp className="w-6 h-6" />
             </Button>
-            <Button className="bg-gradient-expense h-12" size="lg">
-              <TrendingDown className="w-4 h-4 mr-2" />
-              Add Expense
+            <Button 
+              onClick={() => setActiveForm('expense')}
+              size="icon"
+              className="bg-gradient-expense hover:bg-gradient-expense/90 h-16 w-16 rounded-2xl shadow-lg"
+            >
+              <TrendingDown className="w-6 h-6" />
             </Button>
-            <Button variant="outline" className="h-12" size="lg">
-              <PiggyBank className="w-4 h-4 mr-2" />
-              Add Savings
+            <Button 
+              onClick={() => setActiveForm('savings')}
+              size="icon"
+              variant="outline"
+              className="h-16 w-16 rounded-2xl shadow-lg border-2 hover:bg-muted"
+            >
+              <PiggyBank className="w-6 h-6" />
             </Button>
-            <Button variant="outline" className="h-12" size="lg">
-              <Wallet className="w-4 h-4 mr-2" />
-              View Reports
+            <Button 
+              onClick={() => setActiveForm('investment')}
+              size="icon"
+              variant="outline"
+              className="h-16 w-16 rounded-2xl shadow-lg border-2 hover:bg-muted"
+            >
+              <Wallet className="w-6 h-6" />
             </Button>
+          </div>
+          <div className="grid grid-cols-4 gap-4 mt-2 text-xs text-center text-muted-foreground">
+            <span>Income</span>
+            <span>Expense</span>
+            <span>Savings</span>
+            <span>Investment</span>
           </div>
         </CardContent>
       </Card>
+
+      {/* Forms */}
+      <IncomeForm 
+        open={activeForm === 'income'} 
+        onClose={() => setActiveForm(null)} 
+      />
+      <ExpenseForm 
+        open={activeForm === 'expense'} 
+        onClose={() => setActiveForm(null)} 
+      />
+      <SavingsForm 
+        open={activeForm === 'savings'} 
+        onClose={() => setActiveForm(null)} 
+      />
+      <InvestmentForm 
+        open={activeForm === 'investment'} 
+        onClose={() => setActiveForm(null)} 
+      />
     </div>
   );
 };
