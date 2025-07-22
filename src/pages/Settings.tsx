@@ -10,6 +10,8 @@ import {
   Shield,
   ChevronRight
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { UserMenu } from '@/components/ui/user-menu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -18,6 +20,7 @@ import { Separator } from '@/components/ui/separator';
 export const Settings = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
+  const { user } = useAuth();
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
@@ -27,9 +30,12 @@ export const Settings = () => {
   return (
     <div className="p-4 space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Settings</h1>
-        <p className="text-sm text-muted-foreground">Customize your Xpenzy experience</p>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Settings</h1>
+          <p className="text-sm text-muted-foreground">Customize your Xpenzy experience</p>
+        </div>
+        <UserMenu />
       </div>
 
       {/* Profile Section */}
@@ -43,8 +49,10 @@ export const Settings = () => {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-foreground">Alex Johnson</p>
-              <p className="text-sm text-muted-foreground">alex.johnson@example.com</p>
+              <p className="font-medium text-foreground">
+                {user?.user_metadata?.display_name || 'User'}
+              </p>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
             </div>
             <Button variant="ghost" size="icon">
               <ChevronRight className="w-4 h-4" />

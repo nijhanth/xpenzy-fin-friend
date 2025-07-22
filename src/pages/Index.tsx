@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { Auth } from './Auth';
 import { Home } from './Home';
 import { Income } from './Income';
 import { Expenses } from './Expenses';
@@ -15,6 +17,28 @@ import { Settings } from './Settings';
 
 const Index = () => {
   const [currentScreen, setCurrentScreen] = useState('home');
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      // Redirect to auth page if not authenticated
+      window.location.href = '/auth';
+    }
+  }, [user, loading]);
+
+  // Show loading state while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Show auth page if not authenticated
+  if (!user) {
+    return <Auth onAuthSuccess={() => window.location.reload()} />;
+  }
 
   const renderScreen = () => {
     switch (currentScreen) {
