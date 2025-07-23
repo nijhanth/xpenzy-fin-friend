@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import { Wallet, TrendingUp, TrendingDown, PiggyBank, Bell, Plus } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePrivacy } from '@/contexts/PrivacyContext';
 import { UserMenu } from '@/components/ui/user-menu';
+import { maskEmail, maskName, logSecurityEvent, hasDataAccess, sanitizeUserInput } from '@/lib/security';
 import { IncomeForm } from '@/components/forms/IncomeForm';
 import { ExpenseForm } from '@/components/forms/ExpenseForm';
 import { SavingsForm } from '@/components/forms/SavingsForm';
@@ -15,7 +17,40 @@ import { InvestmentForm } from '@/components/forms/InvestmentForm';
 export const Home = () => {
   const { data } = useFinancial();
   const { user } = useAuth();
+  const { preferences, hasConsent } = usePrivacy();
   const [activeForm, setActiveForm] = useState<'income' | 'expense' | 'savings' | 'investment' | null>(null);
+
+  // Security access check
+  const userHasAccess = hasDataAccess(user?.user_metadata?.role || 'user');
+
+  // Get and sanitize user display name with security measures
+  const getSecureDisplayName = () => {
+    if (!user || !userHasAccess) {
+      logSecurityEvent('unauthorized_name_access_attempt');
+      return 'User';
+    }
+
+    const rawName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'User';
+    const sanitizedName = sanitizeUserInput(rawName);
+
+    // Apply privacy preferences and security mode
+    if (preferences.securityMode === 'strict' && !hasConsent('showFullName')) {
+      return maskName(sanitizedName);
+    }
+
+    return sanitizedName;
+  };
+
+  // Log security event for data access
+  React.useEffect(() => {
+    if (user) {
+      logSecurityEvent('home_page_accessed', {
+        userId: user.id,
+        securityMode: preferences.securityMode,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [user, preferences.securityMode]);
 
   // Calculate real-time totals
   const totals = useMemo(() => {
@@ -59,7 +94,7 @@ export const Home = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            Good Morning, {user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'User'}! 👋
+            Good Morning, {getSecureDisplayName()}! 👋
           </h1>
           <p className="text-sm text-muted-foreground">December 2024</p>
         </div>

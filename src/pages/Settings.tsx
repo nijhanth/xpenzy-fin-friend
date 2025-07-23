@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/ui/user-menu';
+import { PrivacySettings } from '@/components/ui/privacy-settings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -174,6 +175,9 @@ export const Settings = () => {
           <p className="text-xs text-muted-foreground">Personal Finance Manager</p>
         </CardContent>
       </Card>
+
+      {/* Privacy & Security Settings */}
+      <PrivacySettings />
     </div>
   );
 };
