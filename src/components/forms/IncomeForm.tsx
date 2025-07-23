@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,11 +26,13 @@ type IncomeFormData = z.infer<typeof incomeSchema>;
 interface IncomeFormProps {
   open: boolean;
   onClose: () => void;
+  editingId?: string | null;
 }
 
-export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose }) => {
-  const { addIncome } = useFinancial();
+export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose, editingId }) => {
+  const { addIncome, updateIncome, data } = useFinancial();
   const { toast } = useToast();
+  const isEditing = !!editingId;
 
   const form = useForm<IncomeFormData>({
     resolver: zodResolver(incomeSchema),
@@ -44,24 +46,52 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose }) => {
     }
   });
 
-  const onSubmit = (data: IncomeFormData) => {
+  // Load existing data when editing
+  useEffect(() => {
+    if (editingId && open) {
+      const existingEntry = data.income.find(entry => entry.id === editingId);
+      if (existingEntry) {
+        form.reset({
+          amount: existingEntry.amount,
+          date: existingEntry.date,
+          category: existingEntry.category as any,
+          paymentMode: existingEntry.paymentMode as any,
+          notes: existingEntry.notes,
+          customCategory: existingEntry.customCategory || ''
+        });
+      }
+    } else if (!editingId) {
+      form.reset();
+    }
+  }, [editingId, open, data.income, form]);
+
+  const onSubmit = async (formData: IncomeFormData) => {
     const finalCategory = data.category === 'Custom' && data.customCategory 
-      ? data.customCategory as any
-      : data.category;
+      ? formData.customCategory as any
+      : formData.category;
     
-    addIncome({
-      amount: data.amount,
-      date: data.date,
+    const incomeData = {
+      amount: formData.amount,
+      date: formData.date,
       category: finalCategory,
-      paymentMode: data.paymentMode,
-      notes: data.notes || '',
-      customCategory: data.category === 'Custom' ? data.customCategory : undefined
-    });
-    
-    toast({
-      title: "Income Added",
-      description: `₹${data.amount.toLocaleString()} added successfully!`
-    });
+      paymentMode: formData.paymentMode,
+      notes: formData.notes || '',
+      customCategory: formData.category === 'Custom' ? formData.customCategory : undefined
+    };
+
+    if (isEditing && editingId) {
+      await updateIncome(editingId, incomeData);
+      toast({
+        title: "Income Updated",
+        description: `₹${formData.amount.toLocaleString()} income updated successfully!`
+      });
+    } else {
+      await addIncome(incomeData);
+      toast({
+        title: "Income Added",
+        description: `₹${formData.amount.toLocaleString()} income added successfully!`
+      });
+    }
     
     form.reset();
     onClose();
@@ -71,7 +101,7 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose }) => {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add Income</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Income' : 'Add Income'}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -194,7 +224,7 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose }) => {
                 Cancel
               </Button>
               <Button type="submit" className="bg-gradient-income">
-                Add Income
+                {isEditing ? 'Update Income' : 'Add Income'}
               </Button>
             </div>
           </form>

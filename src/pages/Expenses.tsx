@@ -1,17 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { Plus, CreditCard, Calendar, TrendingDown, ShoppingBag, BarChart3 } from 'lucide-react';
+import { Plus, CreditCard, Calendar, TrendingDown, ShoppingBag, BarChart3, Edit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { ExpenseForm } from '@/components/forms/ExpenseForm';
+import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
+import { useToast } from '@/hooks/use-toast';
 
 export const Expenses = () => {
   const { data } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   
   const totalExpenses = data.expenses.reduce((sum, entry) => sum + entry.amount, 0);
+  const [editingEntry, setEditingEntry] = useState<string | null>(null);
+  const { deleteExpense } = useFinancial();
+  const { toast } = useToast();
 
   // Generate category data from actual expense entries
   const categoryExpenses = useMemo(() => {
@@ -44,6 +49,19 @@ export const Expenses = () => {
       amount: dailyData[day] || 0
     }));
   }, [data.expenses]);
+
+  const handleEdit = (entryId: string) => {
+    setEditingEntry(entryId);
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = async (entryId: string) => {
+    await deleteExpense(entryId);
+    toast({
+      title: "Expense Deleted",
+      description: "Expense entry has been successfully deleted."
+    });
+  };
 
   return (
     <div className="p-4 space-y-6 animate-fade-in">
@@ -179,7 +197,7 @@ export const Expenses = () => {
         <CardContent>
           {data.expenses.length > 0 ? (
             <div className="space-y-4">
-              {data.expenses.slice(0, 5).map((entry) => (
+              {data.expenses.map((entry) => (
                 <div 
                   key={entry.id} 
                   className="flex items-center justify-between p-4 rounded-xl bg-background/50 border border-border/50 hover:shadow-card transition-all duration-200"
@@ -204,9 +222,13 @@ export const Expenses = () => {
                       <Calendar className="w-3 h-3" />
                       {new Date(entry.date).toLocaleDateString()}
                     </div>
-                    <Button variant="ghost" size="sm" className="h-8">
-                      Edit
-                    </Button>
+                    <EditDeleteMenu
+                      onEdit={() => handleEdit(entry.id)}
+                      onDelete={() => handleDelete(entry.id)}
+                      itemName="expense entry"
+                      deleteTitle="Delete Expense Entry"
+                      deleteDescription="Are you sure you want to delete this expense entry? This action cannot be undone."
+                    />
                   </div>
                 </div>
               ))}
@@ -225,7 +247,14 @@ export const Expenses = () => {
         </CardContent>
       </Card>
       
-      <ExpenseForm open={isFormOpen} onClose={() => setIsFormOpen(false)} />
+      <ExpenseForm 
+        open={isFormOpen} 
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingEntry(null);
+        }}
+        editingId={editingEntry}
+      />
     </div>
   );
 };

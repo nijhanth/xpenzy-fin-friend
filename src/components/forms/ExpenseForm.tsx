@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,6 +26,7 @@ type ExpenseFormData = z.infer<typeof expenseSchema>;
 interface ExpenseFormProps {
   open: boolean;
   onClose: () => void;
+  editingId?: string | null;
 }
 
 const subcategoryOptions = {
@@ -39,9 +40,10 @@ const subcategoryOptions = {
   'Custom': ['Other']
 };
 
-export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose }) => {
-  const { addExpense } = useFinancial();
+export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editingId }) => {
+  const { addExpense, updateExpense, data } = useFinancial();
   const { toast } = useToast();
+  const isEditing = !!editingId;
 
   const form = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),
@@ -58,25 +60,54 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose }) => {
 
   const selectedCategory = form.watch('category');
 
-  const onSubmit = (data: ExpenseFormData) => {
+  // Load existing data when editing
+  useEffect(() => {
+    if (editingId && open) {
+      const existingEntry = data.expenses.find(entry => entry.id === editingId);
+      if (existingEntry) {
+        form.reset({
+          amount: existingEntry.amount,
+          date: existingEntry.date,
+          category: existingEntry.category as any,
+          subcategory: existingEntry.subcategory,
+          paymentMode: existingEntry.paymentMode as any,
+          notes: existingEntry.notes,
+          customCategory: existingEntry.customCategory || ''
+        });
+      }
+    } else if (!editingId) {
+      form.reset();
+    }
+  }, [editingId, open, data.expenses, form]);
+
+  const onSubmit = async (formData: ExpenseFormData) => {
     const finalCategory = data.category === 'Custom' && data.customCategory 
-      ? data.customCategory as any
-      : data.category;
+      ? formData.customCategory as any
+      : formData.category;
     
-    addExpense({
-      amount: data.amount,
-      date: data.date,
+    const expenseData = {
+      amount: formData.amount,
+      date: formData.date,
       category: finalCategory,
-      subcategory: data.subcategory,
-      paymentMode: data.paymentMode,
-      notes: data.notes || '',
-      customCategory: data.category === 'Custom' ? data.customCategory : undefined
-    });
-    
-    toast({
-      title: "Expense Added",
-      description: `₹${data.amount.toLocaleString()} expense added successfully!`
-    });
+      subcategory: formData.subcategory,
+      paymentMode: formData.paymentMode,
+      notes: formData.notes || '',
+      customCategory: formData.category === 'Custom' ? formData.customCategory : undefined
+    };
+
+    if (isEditing && editingId) {
+      await updateExpense(editingId, expenseData);
+      toast({
+        title: "Expense Updated",
+        description: `₹${formData.amount.toLocaleString()} expense updated successfully!`
+      });
+    } else {
+      await addExpense(expenseData);
+      toast({
+        title: "Expense Added",
+        description: `₹${formData.amount.toLocaleString()} expense added successfully!`
+      });
+    }
     
     form.reset();
     onClose();
@@ -86,7 +117,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose }) => {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add Expense</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Expense' : 'Add Expense'}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -237,7 +268,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose }) => {
                 Cancel
               </Button>
               <Button type="submit" className="bg-gradient-expense">
-                Add Expense
+                {isEditing ? 'Update Expense' : 'Add Expense'}
               </Button>
             </div>
           </form>

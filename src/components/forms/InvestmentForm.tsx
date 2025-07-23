@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,11 +26,13 @@ type InvestmentFormData = z.infer<typeof investmentSchema>;
 interface InvestmentFormProps {
   open: boolean;
   onClose: () => void;
+  editingId?: string | null;
 }
 
-export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose }) => {
-  const { addInvestment } = useFinancial();
+export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, editingId }) => {
+  const { addInvestment, updateInvestmentEntry, data } = useFinancial();
   const { toast } = useToast();
+  const isEditing = !!editingId;
 
   const form = useForm<InvestmentFormData>({
     resolver: zodResolver(investmentSchema),
@@ -45,25 +47,54 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose })
     }
   });
 
-  const onSubmit = (data: InvestmentFormData) => {
+  // Load existing data when editing
+  useEffect(() => {
+    if (editingId && open) {
+      const existingEntry = data.investments.find(entry => entry.id === editingId);
+      if (existingEntry) {
+        form.reset({
+          type: existingEntry.type as any,
+          name: existingEntry.name,
+          invested: existingEntry.invested,
+          current: existingEntry.current,
+          date: existingEntry.date,
+          notes: existingEntry.notes,
+          customType: existingEntry.customType || ''
+        });
+      }
+    } else if (!editingId) {
+      form.reset();
+    }
+  }, [editingId, open, data.investments, form]);
+
+  const onSubmit = async (formData: InvestmentFormData) => {
     const finalType = data.type === 'Custom' && data.customType 
-      ? data.customType as any
-      : data.type;
+      ? formData.customType as any
+      : formData.type;
     
-    addInvestment({
+    const investmentData = {
       type: finalType,
-      name: data.name,
-      invested: data.invested,
-      current: data.current,
-      date: data.date,
-      notes: data.notes || '',
-      customType: data.type === 'Custom' ? data.customType : undefined
-    });
-    
-    toast({
-      title: "Investment Added",
-      description: `${data.name} investment added successfully!`
-    });
+      name: formData.name,
+      invested: formData.invested,
+      current: formData.current,
+      date: formData.date,
+      notes: formData.notes || '',
+      customType: formData.type === 'Custom' ? formData.customType : undefined
+    };
+
+    if (isEditing && editingId) {
+      await updateInvestmentEntry(editingId, investmentData);
+      toast({
+        title: "Investment Updated",
+        description: `${formData.name} investment updated successfully!`
+      });
+    } else {
+      await addInvestment(investmentData);
+      toast({
+        title: "Investment Added",
+        description: `${formData.name} investment added successfully!`
+      });
+    }
     
     form.reset();
     onClose();
@@ -73,7 +104,7 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose })
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add Investment</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Investment' : 'Add Investment'}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -205,7 +236,7 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose })
                 Cancel
               </Button>
               <Button type="submit" className="bg-investment text-white">
-                Add Investment
+                {isEditing ? 'Update Investment' : 'Add Investment'}
               </Button>
             </div>
           </form>

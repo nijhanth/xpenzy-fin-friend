@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3 } from 'lucide-react';
+import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3, Edit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { SavingsForm } from '@/components/forms/SavingsForm';
+import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
+import { useToast } from '@/hooks/use-toast';
 
 const savingsTips = [
   "Set up automatic transfers to your savings account",
@@ -19,6 +21,9 @@ const savingsTips = [
 export const Savings = () => {
   const { data } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<string | null>(null);
+  const { deleteSavings } = useFinancial();
+  const { toast } = useToast();
   
   const totalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
   const totalTargets = data.savings.reduce((sum, goal) => sum + goal.target, 0);
@@ -37,6 +42,19 @@ export const Savings = () => {
       amount
     }));
   }, [data.savings]);
+
+  const handleEdit = (entryId: string) => {
+    setEditingEntry(entryId);
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = async (entryId: string) => {
+    await deleteSavings(entryId);
+    toast({
+      title: "Savings Goal Deleted",
+      description: "Savings goal has been successfully deleted."
+    });
+  };
 
   return (
     <div className="p-4 space-y-6 animate-fade-in">
@@ -114,7 +132,7 @@ export const Savings = () => {
                 const isCompleted = progress >= 100;
                 
                 return (
-                  <div key={goal.id} className="space-y-3">
+                  <div key={goal.id} className="space-y-3 p-4 rounded-xl bg-background/50 border border-border/50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <h3 className="font-medium text-foreground">{goal.name}</h3>
@@ -125,9 +143,18 @@ export const Savings = () => {
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-muted-foreground">
+                          ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
+                        </p>
+                        <EditDeleteMenu
+                          onEdit={() => handleEdit(goal.id)}
+                          onDelete={() => handleDelete(goal.id)}
+                          itemName="savings goal"
+                          deleteTitle="Delete Savings Goal"
+                          deleteDescription="Are you sure you want to delete this savings goal? This action cannot be undone."
+                        />
+                      </div>
                     </div>
                     <Progress 
                       value={Math.min(progress, 100)} 
@@ -230,7 +257,14 @@ export const Savings = () => {
         </CardContent>
       </Card>
       
-      <SavingsForm open={isFormOpen} onClose={() => setIsFormOpen(false)} />
+      <SavingsForm 
+        open={isFormOpen} 
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingEntry(null);
+        }}
+        editingId={editingEntry}
+      />
     </div>
   );
 };

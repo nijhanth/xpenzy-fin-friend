@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Plus, DollarSign, Calendar, Target, BarChart3 } from 'lucide-react';
+import { TrendingUp, Plus, DollarSign, Calendar, Target, BarChart3, Edit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { InvestmentForm } from '@/components/forms/InvestmentForm';
+import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
+import { useToast } from '@/hooks/use-toast';
 
 export const Investments = () => {
   const { data } = useFinancial();
@@ -15,6 +17,9 @@ export const Investments = () => {
   const totalCurrent = data.investments.reduce((sum, inv) => sum + inv.current, 0);
   const totalProfit = totalCurrent - totalInvested;
   const totalProfitPercent = totalInvested > 0 ? ((totalProfit / totalInvested) * 100).toFixed(1) : '0.0';
+  const [editingEntry, setEditingEntry] = useState<string | null>(null);
+  const { deleteInvestment } = useFinancial();
+  const { toast } = useToast();
 
   // Generate allocation data from investments
   const allocationData = useMemo(() => {
@@ -45,6 +50,19 @@ export const Investments = () => {
       value
     }));
   }, [data.investments]);
+
+  const handleEdit = (entryId: string) => {
+    setEditingEntry(entryId);
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = async (entryId: string) => {
+    await deleteInvestment(entryId);
+    toast({
+      title: "Investment Deleted",
+      description: "Investment entry has been successfully deleted."
+    });
+  };
 
   return (
     <div className="p-4 space-y-6 animate-fade-in">
@@ -249,9 +267,13 @@ export const Investments = () => {
                       <p className={`text-sm font-medium ${profitLoss >= 0 ? 'text-success' : 'text-destructive'}`}>
                         {profitLoss >= 0 ? '+' : ''}₹{profitLoss.toLocaleString()}
                       </p>
-                      <Button variant="ghost" size="sm" className="h-8 mt-1">
-                        Details
-                      </Button>
+                      <EditDeleteMenu
+                        onEdit={() => handleEdit(investment.id)}
+                        onDelete={() => handleDelete(investment.id)}
+                        itemName="investment entry"
+                        deleteTitle="Delete Investment Entry"
+                        deleteDescription="Are you sure you want to delete this investment entry? This action cannot be undone."
+                      />
                     </div>
                   </div>
                 );
@@ -271,7 +293,14 @@ export const Investments = () => {
         </CardContent>
       </Card>
       
-      <InvestmentForm open={isFormOpen} onClose={() => setIsFormOpen(false)} />
+      <InvestmentForm 
+        open={isFormOpen} 
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingEntry(null);
+        }}
+        editingId={editingEntry}
+      />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,11 +23,13 @@ type SavingsFormData = z.infer<typeof savingsSchema>;
 interface SavingsFormProps {
   open: boolean;
   onClose: () => void;
+  editingId?: string | null;
 }
 
-export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose }) => {
-  const { addSavingsGoal } = useFinancial();
+export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editingId }) => {
+  const { addSavingsGoal, updateSavings, data } = useFinancial();
   const { toast } = useToast();
+  const isEditing = !!editingId;
 
   const form = useForm<SavingsFormData>({
     resolver: zodResolver(savingsSchema),
@@ -40,19 +42,46 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose }) => {
     }
   });
 
-  const onSubmit = (data: SavingsFormData) => {
-    addSavingsGoal({
+  // Load existing data when editing
+  useEffect(() => {
+    if (editingId && open) {
+      const existingEntry = data.savings.find(entry => entry.id === editingId);
+      if (existingEntry) {
+        form.reset({
+          name: existingEntry.name,
+          target: existingEntry.target,
+          current: existingEntry.current,
+          date: existingEntry.date,
+          notes: existingEntry.notes
+        });
+      }
+    } else if (!editingId) {
+      form.reset();
+    }
+  }, [editingId, open, data.savings, form]);
+
+  const onSubmit = async (formData: SavingsFormData) => {
+    const savingsData = {
       name: data.name,
       target: data.target,
       current: data.current,
       date: data.date,
       notes: data.notes || ''
-    });
-    
-    toast({
-      title: "Savings Goal Added",
-      description: `Goal "${data.name}" with target ₹${data.target.toLocaleString()} created successfully!`
-    });
+    };
+
+    if (isEditing && editingId) {
+      await updateSavings(editingId, savingsData);
+      toast({
+        title: "Savings Goal Updated",
+        description: `Goal "${formData.name}" updated successfully!`
+      });
+    } else {
+      await addSavingsGoal(savingsData);
+      toast({
+        title: "Savings Goal Added",
+        description: `Goal "${formData.name}" with target ₹${formData.target.toLocaleString()} created successfully!`
+      });
+    }
     
     form.reset();
     onClose();
@@ -62,7 +91,7 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose }) => {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add Savings Goal</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Savings Goal' : 'Add Savings Goal'}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -151,7 +180,7 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose }) => {
                 Cancel
               </Button>
               <Button type="submit" className="bg-savings text-white">
-                Add Goal
+                {isEditing ? 'Update Goal' : 'Add Goal'}
               </Button>
             </div>
           </form>
