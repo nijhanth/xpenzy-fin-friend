@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { Wallet, TrendingUp, TrendingDown, PiggyBank, Bell, User, Plus } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, PiggyBank, Bell, Plus } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useFinancial } from '@/contexts/FinancialContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { UserMenu } from '@/components/ui/user-menu';
 import { IncomeForm } from '@/components/forms/IncomeForm';
 import { ExpenseForm } from '@/components/forms/ExpenseForm';
 import { SavingsForm } from '@/components/forms/SavingsForm';
@@ -12,6 +14,7 @@ import { InvestmentForm } from '@/components/forms/InvestmentForm';
 
 export const Home = () => {
   const { data } = useFinancial();
+  const { user } = useAuth();
   const [activeForm, setActiveForm] = useState<'income' | 'expense' | 'savings' | 'investment' | null>(null);
 
   // Calculate real-time totals
@@ -55,16 +58,16 @@ export const Home = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Good Morning, Alex! 👋</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            Good Morning, {user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'User'}! 👋
+          </h1>
           <p className="text-sm text-muted-foreground">December 2024</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="rounded-full">
             <Bell className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="rounded-full">
-            <User className="w-5 h-5" />
-          </Button>
+          <UserMenu />
         </div>
       </div>
 
