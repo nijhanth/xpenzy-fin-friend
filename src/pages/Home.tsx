@@ -56,9 +56,9 @@ export const Home = () => {
   const totals = useMemo(() => {
     const totalIncome = data.income.reduce((sum, item) => sum + item.amount, 0);
     const totalExpenses = data.expenses.reduce((sum, item) => sum + item.amount, 0);
-    const totalSavings = data.savings.reduce((sum, item) => sum + item.target, 0);
+    const totalSavings = data.savings.reduce((sum, item) => sum + item.current, 0);
     const totalInvestments = data.investments.reduce((sum, item) => sum + item.invested, 0);
-    const remainingBalance = totalIncome - totalExpenses;
+    const remainingBalance = totalIncome - totalExpenses - totalSavings;
 
     return {
       totalIncome,
@@ -135,7 +135,7 @@ export const Home = () => {
         <StatCard
           title="Total Savings"
           value={`₹${totals.totalSavings.toLocaleString()}`}
-          subtitle="Target amount"
+          subtitle="Current amount"
           icon={PiggyBank}
           variant="savings"
           trend={{ value: `${data.savings.length} goals`, isPositive: true }}
