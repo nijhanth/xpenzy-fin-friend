@@ -56,12 +56,33 @@ const Particle = ({ className = "", style = {} }: { className?: string; style?: 
 );
 
 // Rupee Symbol Component
-const RupeeSymbol = ({ className = "", style = {} }: { className?: string; style?: React.CSSProperties }) => (
+const RupeeSymbol = ({ className = "", style = {}, size = "text-4xl" }: { className?: string; style?: React.CSSProperties; size?: string }) => (
   <div 
-    className={`absolute text-2xl font-bold text-primary/20 float-element-delayed ${className}`}
+    className={`absolute ${size} font-bold text-primary/30 float-element-delayed ${className}`}
     style={style}
   >
     ₹
+  </div>
+);
+
+// Chart Element Component
+const ChartElement = ({ className = "", style = {} }: { className?: string; style?: React.CSSProperties }) => (
+  <div 
+    className={`absolute w-16 h-16 opacity-25 rotate-slow ${className}`}
+    style={style}
+  >
+    <svg viewBox="0 0 64 64" className="w-full h-full text-accent">
+      <path 
+        d="M8 48 C16 32, 32 16, 56 32 L56 48 Z" 
+        fill="currentColor" 
+        opacity="0.6"
+      />
+      <path 
+        d="M8 56 C24 40, 40 24, 56 40 L56 56 Z" 
+        fill="currentColor" 
+        opacity="0.4"
+      />
+    </svg>
   </div>
 );
 
@@ -203,48 +224,59 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     <div className="min-h-screen relative overflow-hidden bg-gradient-auth-bg">
       {/* Animated Background Waves */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-80 h-80 bg-gradient-wave-1 rounded-full blur-3xl wave-1" />
-        <div className="absolute top-1/3 -right-32 w-96 h-96 bg-gradient-wave-2 rounded-full blur-3xl wave-2" />
-        <div className="absolute -bottom-32 left-1/4 w-64 h-64 bg-gradient-wave-3 rounded-full blur-3xl wave-3" />
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-gradient-wave-1 rounded-full blur-3xl wave-1" />
+        <div className="absolute top-1/3 -right-32 w-[32rem] h-[32rem] bg-gradient-wave-2 rounded-full blur-3xl wave-2" />
+        <div className="absolute -bottom-32 left-1/4 w-80 h-80 bg-gradient-wave-3 rounded-full blur-3xl wave-3" />
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-gradient-wave-1 rounded-full blur-2xl opacity-50 wave-1" />
       </div>
 
       {/* Floating Finance Elements */}
       <div className="absolute inset-0 pointer-events-none">
         {/* Top Left Quadrant */}
-        <FloatingElement icon={PiggyBank} className="top-20 left-16" />
-        <FloatingElement icon={TrendingUp} className="top-32 left-32" animationClass="float-element-delayed" />
-        <FloatingElement icon={Coins} className="top-48 left-8" animationClass="float-element-slow" />
-        <RupeeSymbol className="top-24 left-24" />
+        <FloatingElement icon={PiggyBank} className="top-20 left-16 text-investment opacity-40" style={{fontSize: '2rem'}} />
+        <FloatingElement icon={TrendingUp} className="top-32 left-32 text-success opacity-35" animationClass="float-element-delayed" style={{fontSize: '1.8rem'}} />
+        <FloatingElement icon={Coins} className="top-48 left-8 text-warning opacity-30" animationClass="float-element-slow" style={{fontSize: '2.2rem'}} />
+        <RupeeSymbol className="top-24 left-24" size="text-6xl" />
+        <ChartElement className="top-12 left-40" />
         
         {/* Top Right Quadrant */}
-        <FloatingElement icon={BarChart3} className="top-16 right-20" animationClass="float-element-delayed" />
-        <FloatingElement icon={Wallet} className="top-36 right-8" />
-        <FloatingElement icon={Target} className="top-52 right-24" animationClass="float-element-slow" />
-        <RupeeSymbol className="top-28 right-16" />
+        <FloatingElement icon={BarChart3} className="top-16 right-20 text-accent opacity-40" animationClass="float-element-delayed" style={{fontSize: '2rem'}} />
+        <FloatingElement icon={Wallet} className="top-36 right-8 text-primary opacity-35" style={{fontSize: '1.8rem'}} />
+        <FloatingElement icon={Target} className="top-52 right-24 text-success opacity-30" animationClass="float-element-slow" style={{fontSize: '2.2rem'}} />
+        <RupeeSymbol className="top-28 right-16" size="text-5xl" />
+        <ChartElement className="top-8 right-44" />
         
         {/* Bottom Left Quadrant */}
-        <FloatingElement icon={CreditCard} className="bottom-32 left-12" animationClass="float-element-slow" />
-        <FloatingElement icon={DollarSign} className="bottom-48 left-28" />
-        <FloatingElement icon={ArrowUpRight} className="bottom-16 left-40" animationClass="float-element-delayed" />
-        <RupeeSymbol className="bottom-36 left-20" />
+        <FloatingElement icon={CreditCard} className="bottom-32 left-12 text-expense opacity-40" animationClass="float-element-slow" style={{fontSize: '2rem'}} />
+        <FloatingElement icon={DollarSign} className="bottom-48 left-28 text-warning opacity-35" style={{fontSize: '1.8rem'}} />
+        <FloatingElement icon={ArrowUpRight} className="bottom-16 left-40 text-success opacity-30" animationClass="float-element-delayed" style={{fontSize: '2.2rem'}} />
+        <RupeeSymbol className="bottom-36 left-20" size="text-6xl" />
+        <ChartElement className="bottom-12 left-44" />
         
         {/* Bottom Right Quadrant */}
-        <FloatingElement icon={Sparkles} className="bottom-20 right-32" />
-        <FloatingElement icon={TrendingUp} className="bottom-40 right-12" animationClass="float-element-delayed" />
-        <FloatingElement icon={PiggyBank} className="bottom-56 right-28" animationClass="float-element-slow" />
-        <RupeeSymbol className="bottom-24 right-20" />
+        <FloatingElement icon={Sparkles} className="bottom-20 right-32 text-investment opacity-40" style={{fontSize: '2rem'}} />
+        <FloatingElement icon={TrendingUp} className="bottom-40 right-12 text-accent opacity-35" animationClass="float-element-delayed" style={{fontSize: '1.8rem'}} />
+        <FloatingElement icon={PiggyBank} className="bottom-56 right-28 text-savings opacity-30" animationClass="float-element-slow" style={{fontSize: '2.2rem'}} />
+        <RupeeSymbol className="bottom-24 right-20" size="text-5xl" />
+        <ChartElement className="bottom-8 right-44" />
         
         {/* Center Floating Elements */}
-        <FloatingElement icon={Coins} className="top-1/4 left-1/2 transform -translate-x-1/2" animationClass="float-element-delayed" />
-        <FloatingElement icon={Wallet} className="bottom-1/4 left-1/3" animationClass="float-element-slow" />
+        <FloatingElement icon={Coins} className="top-1/4 left-1/2 transform -translate-x-1/2 text-warning opacity-25" animationClass="float-element-delayed" style={{fontSize: '3rem'}} />
+        <FloatingElement icon={Wallet} className="bottom-1/4 left-1/3 text-primary opacity-25" animationClass="float-element-slow" style={{fontSize: '2.5rem'}} />
+        <RupeeSymbol className="top-1/3 right-1/3 transform translate-x-1/2" size="text-7xl" />
+        <RupeeSymbol className="bottom-1/3 left-1/4" size="text-6xl" />
+        <ChartElement className="top-1/2 left-1/4" />
+        <ChartElement className="bottom-1/2 right-1/4" />
         
-        {/* Animated Particles */}
-        <Particle className="top-1/6 left-1/5" />
-        <Particle className="top-1/3 right-1/4 particle-delayed" />
-        <Particle className="bottom-1/5 left-1/3" />
-        <Particle className="bottom-1/3 right-1/5 particle-delayed" />
-        <Particle className="top-2/3 left-1/6" />
-        <Particle className="top-1/2 right-1/6 particle-delayed" />
+        {/* Enhanced Animated Particles */}
+        <Particle className="top-1/6 left-1/5 bg-accent/40" />
+        <Particle className="top-1/3 right-1/4 particle-delayed bg-success/40" />
+        <Particle className="bottom-1/5 left-1/3 bg-investment/40" />
+        <Particle className="bottom-1/3 right-1/5 particle-delayed bg-warning/40" />
+        <Particle className="top-2/3 left-1/6 bg-expense/40" />
+        <Particle className="top-1/2 right-1/6 particle-delayed bg-savings/40" />
+        <Particle className="top-1/4 right-1/3 bg-primary/40" />
+        <Particle className="bottom-1/4 right-1/6 particle-delayed bg-accent/40" />
       </div>
 
       {/* Main Content */}
@@ -264,7 +296,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
           </div>
 
           {/* Glass Morphism Login Card */}
-          <div className="glass-card rounded-2xl p-8 backdrop-blur-xl">
+          <div className="glass-card rounded-3xl p-8 backdrop-blur-2xl border-2 border-white/20 shadow-2xl">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-3 bg-white/10 backdrop-blur-sm">
                 <TabsTrigger 
