@@ -16,18 +16,23 @@ import {
   Coins, 
   DollarSign,
   BarChart3,
-  Wallet,
+  AudioWaveform,
   Target,
   CreditCard,
   ArrowUpRight,
-  Sparkles
+  Sparkles,
+  LineChart,
+  PieChart,
+  Activity,
+  TrendingDown,
+  Zap
 } from 'lucide-react';
 
 interface AuthProps {
   onAuthSuccess: () => void;
 }
 
-// Floating Animation Component
+// Floating Animation Component - Bigger and Same Size
 const FloatingElement = ({ 
   icon: Icon, 
   className = "", 
@@ -40,47 +45,52 @@ const FloatingElement = ({
   animationClass?: string;
 }) => (
   <div 
-    className={`absolute opacity-20 text-primary ${animationClass} ${className}`}
+    className={`absolute opacity-40 text-9xl ${animationClass} ${className}`}
     style={style}
   >
-    <Icon size={24} />
+    <Icon />
   </div>
 );
 
-// Particle Component
+// Particle Component - Enhanced
 const Particle = ({ className = "", style = {} }: { className?: string; style?: React.CSSProperties }) => (
   <div 
-    className={`absolute w-2 h-2 bg-primary/30 rounded-full particle ${className}`}
+    className={`absolute w-4 h-4 bg-primary/60 rounded-full particle ${className}`}
     style={style}
   />
 );
 
-// Rupee Symbol Component
-const RupeeSymbol = ({ className = "", style = {}, size = "text-4xl" }: { className?: string; style?: React.CSSProperties; size?: string }) => (
+// Xpenzy Sound Wave Symbol Component
+const XpenzySymbol = ({ className = "", style = {} }: { className?: string; style?: React.CSSProperties }) => (
   <div 
-    className={`absolute ${size} font-bold text-primary/30 float-element-delayed ${className}`}
+    className={`absolute text-8xl font-bold text-primary/40 float-element-delayed ${className}`}
     style={style}
   >
-    ₹
+    <AudioWaveform className="w-20 h-20" />
   </div>
 );
 
-// Chart Element Component
+// Chart Element Component - Bigger and More Vibrant
 const ChartElement = ({ className = "", style = {} }: { className?: string; style?: React.CSSProperties }) => (
   <div 
-    className={`absolute w-16 h-16 opacity-25 rotate-slow ${className}`}
+    className={`absolute w-24 h-24 opacity-40 rotate-slow ${className}`}
     style={style}
   >
-    <svg viewBox="0 0 64 64" className="w-full h-full text-accent">
+    <svg viewBox="0 0 64 64" className="w-full h-full text-accent filter drop-shadow-xl">
+      <defs>
+        <linearGradient id="chartGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="1"/>
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0.6"/>
+        </linearGradient>
+      </defs>
       <path 
         d="M8 48 C16 32, 32 16, 56 32 L56 48 Z" 
-        fill="currentColor" 
-        opacity="0.6"
+        fill="url(#chartGradient)" 
       />
       <path 
         d="M8 56 C24 40, 40 24, 56 40 L56 56 Z" 
-        fill="currentColor" 
-        opacity="0.4"
+        fill="url(#chartGradient)" 
+        opacity="0.8"
       />
     </svg>
   </div>
@@ -221,7 +231,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-auth-bg">
+    <div className="min-h-screen relative overflow-hidden bg-gradient-auth-bg font-xpenzy">
       {/* Animated Background Waves */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-gradient-wave-1 rounded-full blur-3xl wave-1" />
@@ -230,53 +240,53 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-gradient-wave-1 rounded-full blur-2xl opacity-50 wave-1" />
       </div>
 
-      {/* Floating Finance Elements */}
+      {/* Floating Finance Elements - Bigger and Same Size */}
       <div className="absolute inset-0 pointer-events-none">
         {/* Top Left Quadrant */}
-        <FloatingElement icon={PiggyBank} className="top-20 left-16 text-investment opacity-40" style={{fontSize: '2rem'}} />
-        <FloatingElement icon={TrendingUp} className="top-32 left-32 text-success opacity-35" animationClass="float-element-delayed" style={{fontSize: '1.8rem'}} />
-        <FloatingElement icon={Coins} className="top-48 left-8 text-warning opacity-30" animationClass="float-element-slow" style={{fontSize: '2.2rem'}} />
-        <RupeeSymbol className="top-24 left-24" size="text-6xl" />
+        <FloatingElement icon={TrendingUp} className="top-20 left-16 text-success" />
+        <FloatingElement icon={BarChart3} className="top-32 left-32 text-accent" animationClass="float-element-delayed" />
+        <FloatingElement icon={LineChart} className="top-48 left-8 text-primary" animationClass="float-element-slow" />
+        <XpenzySymbol className="top-24 left-24" />
         <ChartElement className="top-12 left-40" />
         
         {/* Top Right Quadrant */}
-        <FloatingElement icon={BarChart3} className="top-16 right-20 text-accent opacity-40" animationClass="float-element-delayed" style={{fontSize: '2rem'}} />
-        <FloatingElement icon={Wallet} className="top-36 right-8 text-primary opacity-35" style={{fontSize: '1.8rem'}} />
-        <FloatingElement icon={Target} className="top-52 right-24 text-success opacity-30" animationClass="float-element-slow" style={{fontSize: '2.2rem'}} />
-        <RupeeSymbol className="top-28 right-16" size="text-5xl" />
+        <FloatingElement icon={PieChart} className="top-16 right-20 text-investment" animationClass="float-element-delayed" />
+        <FloatingElement icon={Activity} className="top-36 right-8 text-warning" />
+        <FloatingElement icon={Target} className="top-52 right-24 text-success" animationClass="float-element-slow" />
+        <XpenzySymbol className="top-28 right-16" />
         <ChartElement className="top-8 right-44" />
         
         {/* Bottom Left Quadrant */}
-        <FloatingElement icon={CreditCard} className="bottom-32 left-12 text-expense opacity-40" animationClass="float-element-slow" style={{fontSize: '2rem'}} />
-        <FloatingElement icon={DollarSign} className="bottom-48 left-28 text-warning opacity-35" style={{fontSize: '1.8rem'}} />
-        <FloatingElement icon={ArrowUpRight} className="bottom-16 left-40 text-success opacity-30" animationClass="float-element-delayed" style={{fontSize: '2.2rem'}} />
-        <RupeeSymbol className="bottom-36 left-20" size="text-6xl" />
+        <FloatingElement icon={CreditCard} className="bottom-32 left-12 text-expense" animationClass="float-element-slow" />
+        <FloatingElement icon={DollarSign} className="bottom-48 left-28 text-warning" />
+        <FloatingElement icon={ArrowUpRight} className="bottom-16 left-40 text-success" animationClass="float-element-delayed" />
+        <XpenzySymbol className="bottom-36 left-20" />
         <ChartElement className="bottom-12 left-44" />
         
         {/* Bottom Right Quadrant */}
-        <FloatingElement icon={Sparkles} className="bottom-20 right-32 text-investment opacity-40" style={{fontSize: '2rem'}} />
-        <FloatingElement icon={TrendingUp} className="bottom-40 right-12 text-accent opacity-35" animationClass="float-element-delayed" style={{fontSize: '1.8rem'}} />
-        <FloatingElement icon={PiggyBank} className="bottom-56 right-28 text-savings opacity-30" animationClass="float-element-slow" style={{fontSize: '2.2rem'}} />
-        <RupeeSymbol className="bottom-24 right-20" size="text-5xl" />
+        <FloatingElement icon={Sparkles} className="bottom-20 right-32 text-investment" />
+        <FloatingElement icon={TrendingDown} className="bottom-40 right-12 text-expense" animationClass="float-element-delayed" />
+        <FloatingElement icon={Zap} className="bottom-56 right-28 text-accent" animationClass="float-element-slow" />
+        <XpenzySymbol className="bottom-24 right-20" />
         <ChartElement className="bottom-8 right-44" />
         
         {/* Center Floating Elements */}
-        <FloatingElement icon={Coins} className="top-1/4 left-1/2 transform -translate-x-1/2 text-warning opacity-25" animationClass="float-element-delayed" style={{fontSize: '3rem'}} />
-        <FloatingElement icon={Wallet} className="bottom-1/4 left-1/3 text-primary opacity-25" animationClass="float-element-slow" style={{fontSize: '2.5rem'}} />
-        <RupeeSymbol className="top-1/3 right-1/3 transform translate-x-1/2" size="text-7xl" />
-        <RupeeSymbol className="bottom-1/3 left-1/4" size="text-6xl" />
+        <FloatingElement icon={Coins} className="top-1/4 left-1/2 transform -translate-x-1/2 text-warning" animationClass="float-element-delayed" />
+        <FloatingElement icon={PiggyBank} className="bottom-1/4 left-1/3 text-savings" animationClass="float-element-slow" />
+        <XpenzySymbol className="top-1/3 right-1/3 transform translate-x-1/2" />
+        <XpenzySymbol className="bottom-1/3 left-1/4" />
         <ChartElement className="top-1/2 left-1/4" />
         <ChartElement className="bottom-1/2 right-1/4" />
         
         {/* Enhanced Animated Particles */}
-        <Particle className="top-1/6 left-1/5 bg-accent/40" />
-        <Particle className="top-1/3 right-1/4 particle-delayed bg-success/40" />
-        <Particle className="bottom-1/5 left-1/3 bg-investment/40" />
-        <Particle className="bottom-1/3 right-1/5 particle-delayed bg-warning/40" />
-        <Particle className="top-2/3 left-1/6 bg-expense/40" />
-        <Particle className="top-1/2 right-1/6 particle-delayed bg-savings/40" />
-        <Particle className="top-1/4 right-1/3 bg-primary/40" />
-        <Particle className="bottom-1/4 right-1/6 particle-delayed bg-accent/40" />
+        <Particle className="top-1/6 left-1/5 bg-accent/60" />
+        <Particle className="top-1/3 right-1/4 particle-delayed bg-success/60" />
+        <Particle className="bottom-1/5 left-1/3 bg-investment/60" />
+        <Particle className="bottom-1/3 right-1/5 particle-delayed bg-warning/60" />
+        <Particle className="top-2/3 left-1/6 bg-expense/60" />
+        <Particle className="top-1/2 right-1/6 particle-delayed bg-savings/60" />
+        <Particle className="top-1/4 right-1/3 bg-primary/60" />
+        <Particle className="bottom-1/4 right-1/6 particle-delayed bg-accent/60" />
       </div>
 
       {/* Main Content */}
@@ -285,18 +295,18 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
           {/* App Logo Section */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-primary rounded-2xl shadow-float pulse-glow mb-4">
-              <Wallet className="w-10 h-10 text-white" />
+              <AudioWaveform className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent font-outfit">
               Xpenzy
             </h1>
-            <p className="text-muted-foreground mt-2 text-lg">
+            <p className="text-muted-foreground mt-2 text-lg font-inter">
               Smart Finance Management
             </p>
           </div>
 
-          {/* Glass Morphism Login Card */}
-          <div className="glass-card rounded-3xl p-8 backdrop-blur-2xl border-2 border-white/20 shadow-2xl">
+          {/* Glass Morphism Login Card - Enhanced */}
+          <div className="glass-card rounded-3xl p-8 backdrop-blur-3xl bg-gradient-to-br from-white/25 to-white/10 border-2 border-white/40 shadow-2xl">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-3 bg-white/10 backdrop-blur-sm">
                 <TabsTrigger 
