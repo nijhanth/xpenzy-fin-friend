@@ -10,7 +10,15 @@ export const incomeService = {
       .order('date', { ascending: false });
     
     if (error) throw error;
-    return data || [];
+    return data?.map(item => ({
+      id: item.id,
+      amount: item.amount,
+      date: item.date,
+      category: item.category,
+      paymentMode: item.payment_mode,
+      notes: item.notes,
+      customCategory: item.custom_category
+    })) || [];
   },
 
   async create(income: Omit<IncomeEntry, 'id'>): Promise<IncomeEntry> {

@@ -81,7 +81,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
   }, [editingId, open, data.expenses, form]);
 
   const onSubmit = async (formData: ExpenseFormData) => {
-    const finalCategory = data.category === 'Custom' && data.customCategory 
+    const finalCategory = formData.category === 'Custom' && formData.customCategory 
       ? formData.customCategory as any
       : formData.category;
     

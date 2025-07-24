@@ -68,7 +68,7 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
   }, [editingId, open, data.investments, form]);
 
   const onSubmit = async (formData: InvestmentFormData) => {
-    const finalType = data.type === 'Custom' && data.customType 
+    const finalType = formData.type === 'Custom' && formData.customType 
       ? formData.customType as any
       : formData.type;
     

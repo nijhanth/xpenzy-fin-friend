@@ -38,8 +38,41 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     savings: [],
     investments: []
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   const { toast } = useToast();
+
+  // Load all data on component mount
+  React.useEffect(() => {
+    const loadAllData = async () => {
+      try {
+        const [incomeData, expenseData, savingsData, investmentData] = await Promise.all([
+          incomeService.getAll(),
+          expenseService.getAll(),
+          savingsService.getAll(),
+          investmentService.getAll()
+        ]);
+
+        setData({
+          income: incomeData,
+          expenses: expenseData,
+          savings: savingsData,
+          investments: investmentData
+        });
+      } catch (error) {
+        console.error('Error loading financial data:', error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load your financial data."
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAllData();
+  }, [toast]);
 
   const addIncome = async (income: Omit<IncomeEntry, 'id'>) => {
     try {
