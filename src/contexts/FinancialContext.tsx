@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 
 interface FinancialContextType {
   data: FinancialData;
+  isLoading: boolean;
   addIncome: (income: Omit<IncomeEntry, 'id'>) => void;
   addExpense: (expense: Omit<ExpenseEntry, 'id'>) => void;
   addSavingsGoal: (savings: Omit<SavingsGoal, 'id'>) => void;
@@ -339,6 +340,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   return (
     <FinancialContext.Provider value={{
       data,
+      isLoading,
       addIncome,
       addExpense,
       addSavingsGoal,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useFinancial } from '@/contexts/FinancialContext';
 
 interface BudgetCategory {
   id: string;
@@ -20,13 +21,8 @@ interface BudgetCategory {
 
 export const Budget = () => {
   const { toast } = useToast();
-  const [budgets, setBudgets] = useState<BudgetCategory[]>([
-    { id: '1', name: 'Food & Dining', limit: 5000, spent: 3200, icon: '🍽️' },
-    { id: '2', name: 'Transportation', limit: 3000, spent: 2800, icon: '🚗' },
-    { id: '3', name: 'Shopping', limit: 2000, spent: 800, icon: '🛍️' },
-    { id: '4', name: 'Entertainment', limit: 1500, spent: 1200, icon: '🎬' },
-    { id: '5', name: 'Bills & Utilities', limit: 4000, spent: 3500, icon: '⚡' },
-  ]);
+  const { data } = useFinancial();
+  const [budgets, setBudgets] = useState<BudgetCategory[]>([]);
 
   const [newBudget, setNewBudget] = useState({
     name: '',
@@ -35,6 +31,24 @@ export const Budget = () => {
   });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // Calculate spent amounts from real expense data
+  const expensesByCategory = useMemo(() => {
+    const categoryTotals: Record<string, number> = {};
+    data.expenses.forEach(expense => {
+      const category = expense.customCategory || expense.category;
+      categoryTotals[category] = (categoryTotals[category] || 0) + expense.amount;
+    });
+    return categoryTotals;
+  }, [data.expenses]);
+
+  // Update budget spent amounts based on real data
+  const updatedBudgets = useMemo(() => {
+    return budgets.map(budget => ({
+      ...budget,
+      spent: expensesByCategory[budget.name] || 0
+    }));
+  }, [budgets, expensesByCategory]);
 
   const getProgressPercentage = (spent: number, limit: number) => {
     return Math.min((spent / limit) * 100, 100);
@@ -68,7 +82,7 @@ export const Budget = () => {
       id: Date.now().toString(),
       name: newBudget.name,
       limit: parseFloat(newBudget.limit),
-      spent: 0,
+      spent: expensesByCategory[newBudget.name] || 0,
       icon: newBudget.icon
     };
 
@@ -82,8 +96,8 @@ export const Budget = () => {
     });
   };
 
-  const totalBudget = budgets.reduce((sum, budget) => sum + budget.limit, 0);
-  const totalSpent = budgets.reduce((sum, budget) => sum + budget.spent, 0);
+  const totalBudget = updatedBudgets.reduce((sum, budget) => sum + budget.limit, 0);
+  const totalSpent = updatedBudgets.reduce((sum, budget) => sum + budget.spent, 0);
   const remainingBudget = totalBudget - totalSpent;
 
   return (
@@ -191,75 +205,89 @@ export const Budget = () => {
 
       {/* Budget Categories */}
       <div className="space-y-4">
-        {budgets.map((budget) => {
-          const progressPercentage = getProgressPercentage(budget.spent, budget.limit);
-          const remaining = budget.limit - budget.spent;
-          
-          return (
-            <Card key={budget.id}>
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{budget.icon}</span>
-                      <div>
-                        <h3 className="font-medium">{budget.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          ₹{budget.spent.toLocaleString()} of ₹{budget.limit.toLocaleString()}
-                        </p>
+        {updatedBudgets.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <div className="text-muted-foreground">
+                <div className="text-4xl mb-2">📊</div>
+                <p className="text-lg font-medium mb-1">No budgets set yet</p>
+                <p className="text-sm">Create your first budget to start tracking your spending</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          updatedBudgets.map((budget) => {
+            const progressPercentage = getProgressPercentage(budget.spent, budget.limit);
+            const remaining = budget.limit - budget.spent;
+            
+            return (
+              <Card key={budget.id}>
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{budget.icon}</span>
+                        <div>
+                          <h3 className="font-medium">{budget.name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            ₹{budget.spent.toLocaleString()} of ₹{budget.limit.toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(budget.spent, budget.limit)}
+                        <Badge 
+                          variant={progressPercentage >= 100 ? "destructive" : progressPercentage >= 80 ? "secondary" : "default"}
+                        >
+                          {progressPercentage.toFixed(0)}%
+                        </Badge>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {getStatusIcon(budget.spent, budget.limit)}
-                      <Badge 
-                        variant={progressPercentage >= 100 ? "destructive" : progressPercentage >= 80 ? "secondary" : "default"}
-                      >
-                        {progressPercentage.toFixed(0)}%
-                      </Badge>
+                    
+                    <Progress 
+                      value={progressPercentage} 
+                      className="h-2"
+                    />
+                    
+                    <div className="flex justify-between text-sm">
+                      <span className={getStatusColor(budget.spent, budget.limit)}>
+                        {remaining >= 0 ? `₹${remaining.toLocaleString()} remaining` : `₹${Math.abs(remaining).toLocaleString()} over budget`}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {Math.round((new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()) * 100)}% of month passed
+                      </span>
                     </div>
                   </div>
-                  
-                  <Progress 
-                    value={progressPercentage} 
-                    className="h-2"
-                  />
-                  
-                  <div className="flex justify-between text-sm">
-                    <span className={getStatusColor(budget.spent, budget.limit)}>
-                      {remaining >= 0 ? `₹${remaining.toLocaleString()} remaining` : `₹${Math.abs(remaining).toLocaleString()} over budget`}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {Math.round((new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()) * 100)}% of month passed
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
       </div>
 
-      {/* AI Insights */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            🧠 AI Budget Insights
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              • You're spending 15% more on Food this month compared to last month
-            </p>
-            <p className="text-sm text-muted-foreground">
-              • Transportation budget is almost exhausted. Consider using public transport
-            </p>
-            <p className="text-sm text-muted-foreground">
-              • Great job! You're under budget for Shopping and Entertainment
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Insights based on real data */}
+      {data.expenses.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              🧠 Budget Insights
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                • You have {data.expenses.length} expense entries this month
+              </p>
+              <p className="text-sm text-muted-foreground">
+                • Total expenses: ₹{data.expenses.reduce((sum, expense) => sum + expense.amount, 0).toLocaleString()}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                • Set budgets for better spending control
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

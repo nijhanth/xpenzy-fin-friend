@@ -14,8 +14,8 @@ export const incomeService = {
       id: item.id,
       amount: item.amount,
       date: item.date,
-      category: item.category,
-      paymentMode: item.payment_mode,
+      category: item.category as any,
+      paymentMode: item.payment_mode as any,
       notes: item.notes,
       customCategory: item.custom_category
     })) || [];
@@ -41,8 +41,8 @@ export const incomeService = {
       id: data.id,
       amount: data.amount,
       date: data.date,
-      category: data.category,
-      paymentMode: data.payment_mode,
+      category: data.category as any,
+      paymentMode: data.payment_mode as any,
       notes: data.notes,
       customCategory: data.custom_category
     };
@@ -68,8 +68,8 @@ export const incomeService = {
       id: data.id,
       amount: data.amount,
       date: data.date,
-      category: data.category,
-      paymentMode: data.payment_mode,
+      category: data.category as any,
+      paymentMode: data.payment_mode as any,
       notes: data.notes,
       customCategory: data.custom_category
     };
@@ -98,9 +98,9 @@ export const expenseService = {
       id: item.id,
       amount: item.amount,
       date: item.date,
-      category: item.category,
+      category: item.category as any,
       subcategory: item.subcategory,
-      paymentMode: item.payment_mode,
+      paymentMode: item.payment_mode as any,
       notes: item.notes,
       customCategory: item.custom_category
     })) || [];
@@ -127,9 +127,9 @@ export const expenseService = {
       id: data.id,
       amount: data.amount,
       date: data.date,
-      category: data.category,
+      category: data.category as any,
       subcategory: data.subcategory,
-      paymentMode: data.payment_mode,
+      paymentMode: data.payment_mode as any,
       notes: data.notes,
       customCategory: data.custom_category
     };
@@ -156,9 +156,9 @@ export const expenseService = {
       id: data.id,
       amount: data.amount,
       date: data.date,
-      category: data.category,
+      category: data.category as any,
       subcategory: data.subcategory,
-      paymentMode: data.payment_mode,
+      paymentMode: data.payment_mode as any,
       notes: data.notes,
       customCategory: data.custom_category
     };
@@ -237,7 +237,7 @@ export const investmentService = {
     if (error) throw error;
     return data?.map(item => ({
       id: item.id,
-      type: item.type,
+      type: item.type as any,
       name: item.name,
       invested: item.invested,
       current: item.current,
@@ -266,7 +266,7 @@ export const investmentService = {
     if (error) throw error;
     return {
       id: data.id,
-      type: data.type,
+      type: data.type as any,
       name: data.name,
       invested: data.invested,
       current: data.current,
@@ -295,7 +295,7 @@ export const investmentService = {
     if (error) throw error;
     return {
       id: data.id,
-      type: data.type,
+      type: data.type as any,
       name: data.name,
       invested: data.invested,
       current: data.current,

@@ -62,11 +62,11 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
 
   const onSubmit = async (formData: SavingsFormData) => {
     const savingsData = {
-      name: data.name,
-      target: data.target,
-      current: data.current,
-      date: data.date,
-      notes: data.notes || ''
+      name: formData.name,
+      target: formData.target,
+      current: formData.current,
+      date: formData.date,
+      notes: formData.notes || ''
     };
 
     if (isEditing && editingId) {

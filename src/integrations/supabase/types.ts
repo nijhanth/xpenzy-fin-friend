@@ -14,6 +14,129 @@ export type Database = {
   }
   public: {
     Tables: {
+      expense_entries: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string | null
+          custom_category: string | null
+          date: string
+          id: string
+          notes: string | null
+          payment_mode: string
+          subcategory: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string | null
+          custom_category?: string | null
+          date: string
+          id?: string
+          notes?: string | null
+          payment_mode: string
+          subcategory: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string | null
+          custom_category?: string | null
+          date?: string
+          id?: string
+          notes?: string | null
+          payment_mode?: string
+          subcategory?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      income_entries: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string | null
+          custom_category: string | null
+          date: string
+          id: string
+          notes: string | null
+          payment_mode: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string | null
+          custom_category?: string | null
+          date: string
+          id?: string
+          notes?: string | null
+          payment_mode: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string | null
+          custom_category?: string | null
+          date?: string
+          id?: string
+          notes?: string | null
+          payment_mode?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      investment_entries: {
+        Row: {
+          created_at: string | null
+          current: number | null
+          custom_type: string | null
+          date: string
+          id: string
+          invested: number
+          name: string
+          notes: string | null
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          current?: number | null
+          custom_type?: string | null
+          date: string
+          id?: string
+          invested: number
+          name: string
+          notes?: string | null
+          type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          current?: number | null
+          custom_type?: string | null
+          date?: string
+          id?: string
+          invested?: number
+          name?: string
+          notes?: string | null
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -34,6 +157,42 @@ export type Database = {
           display_name?: string | null
           id?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      savings_goals: {
+        Row: {
+          created_at: string | null
+          current: number | null
+          date: string
+          id: string
+          name: string
+          notes: string | null
+          target: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          current?: number | null
+          date: string
+          id?: string
+          name: string
+          notes?: string | null
+          target: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          current?: number | null
+          date?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          target?: number
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []
