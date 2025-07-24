@@ -11,7 +11,7 @@ interface AppLayoutProps {
 
 export const AppLayout = ({ children, className, activeTab, onTabChange }: AppLayoutProps) => {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-auth-bg relative font-xpenzy">
       {/* Main Content */}
       <main className={cn(
         "pb-20 min-h-screen",

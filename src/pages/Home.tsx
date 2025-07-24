@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { Wallet, TrendingUp, TrendingDown, PiggyBank, Bell, Plus } from 'lucide-react';
+import { AudioWaveform, TrendingUp, TrendingDown, PiggyBank, Bell, Plus, BarChart3, LineChart as LineChartIcon, Activity, Target, DollarSign, CreditCard } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,17 +89,38 @@ export const Home = () => {
     return last7Days;
   }, [totals.remainingBalance]);
   return (
-    <div className="p-4 space-y-6 animate-fade-in">
+    <div className="relative p-4 space-y-6 animate-fade-in font-xpenzy overflow-hidden">
+      {/* Background Motion Graphics */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-10 right-10 opacity-10">
+          <BarChart3 className="w-32 h-32 text-primary animate-float" />
+        </div>
+        <div className="absolute bottom-20 left-10 opacity-10">
+          <LineChartIcon className="w-24 h-24 text-accent animate-float-delayed" />
+        </div>
+        <div className="absolute top-1/3 left-20 opacity-10">
+          <Activity className="w-28 h-28 text-success animate-float-slow" />
+        </div>
+        <div className="absolute bottom-1/3 right-20 opacity-10">
+          <Target className="w-20 h-20 text-investment animate-float" />
+        </div>
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 opacity-10">
+          <AudioWaveform className="w-36 h-36 text-primary animate-pulse-glow" />
+        </div>
+      </div>
+      
+      {/* Content with higher z-index */}
+      <div className="relative z-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-3xl font-bold text-foreground font-outfit bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Good Morning, {getSecureDisplayName()}! 👋
           </h1>
-          <p className="text-sm text-muted-foreground">December 2024</p>
+          <p className="text-sm text-muted-foreground font-inter">December 2024</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="rounded-full">
+          <Button variant="ghost" size="icon" className="rounded-full glass-card">
             <Bell className="w-5 h-5" />
           </Button>
           <UserMenu />
@@ -128,7 +149,7 @@ export const Home = () => {
           title="Remaining Balance"
           value={`₹${totals.remainingBalance.toLocaleString()}`}
           subtitle="Available"
-          icon={Wallet}
+          icon={AudioWaveform}
           variant="default"
           trend={{ value: totals.remainingBalance >= 0 ? "Positive" : "Deficit", isPositive: totals.remainingBalance >= 0 }}
         />
@@ -145,7 +166,7 @@ export const Home = () => {
       {/* Charts Section */}
       <div className="space-y-6">
         {/* Balance Overview Pie Chart */}
-        <Card className="bg-gradient-card border-border shadow-card">
+        <Card className="glass-card bg-gradient-card border-border shadow-elevated backdrop-blur-xl">
           <CardHeader>
             <CardTitle className="text-lg font-semibold">Balance Overview</CardTitle>
           </CardHeader>
@@ -194,7 +215,7 @@ export const Home = () => {
         </Card>
 
         {/* Weekly Trend Line Chart */}
-        <Card className="bg-gradient-card border-border shadow-card">
+        <Card className="glass-card bg-gradient-card border-border shadow-elevated backdrop-blur-xl">
           <CardHeader>
             <CardTitle className="text-lg font-semibold">Daily Balance Trend</CardTitle>
           </CardHeader>
@@ -225,7 +246,7 @@ export const Home = () => {
       </div>
 
       {/* Enhanced Quick Actions */}
-      <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
+      <Card className="glass-card bg-gradient-card border-border shadow-elevated backdrop-blur-xl overflow-hidden">
         <CardHeader className="pb-4">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Plus className="w-5 h-5 text-primary" />
@@ -278,7 +299,7 @@ export const Home = () => {
             >
               <div className="flex flex-col items-center gap-2">
                 <div className="p-2 bg-investment/20 rounded-full group-hover:bg-investment/30 transition-colors">
-                  <Wallet className="w-6 h-6 text-investment" />
+                  <AudioWaveform className="w-6 h-6 text-investment" />
                 </div>
                 <span className="text-sm font-medium text-investment">Add Investment</span>
               </div>
@@ -304,6 +325,7 @@ export const Home = () => {
         open={activeForm === 'investment'} 
         onClose={() => setActiveForm(null)} 
       />
+      </div>
     </div>
   );
 };
