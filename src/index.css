@@ -204,7 +204,7 @@
   }
   
   .glass-card.dark {
-    @apply from-white/10 to-white/2 border-white/10;
+    @apply from-white/10 to-white/5 border-white/10;
   }
 
   /* Floating Animation Elements */
