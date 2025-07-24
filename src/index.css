@@ -200,11 +200,11 @@
 @layer components {
   /* Glass Morphism Effects */
   .glass-card {
-    @apply backdrop-blur-2xl bg-gradient-to-br from-white/15 to-white/3 border border-white/30 shadow-glass;
+    @apply backdrop-blur-2xl bg-gradient-to-br from-white/15 to-white/5 border border-white/30 shadow-glass;
   }
   
   .glass-card.dark {
-    @apply from-white/8 to-white/2 border-white/15;
+    @apply from-white/5 to-white/5 border-white/15;
   }
 
   /* Floating Animation Elements */
