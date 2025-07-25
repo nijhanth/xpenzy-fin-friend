@@ -1,10 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3, Edit } from 'lucide-react';
+import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3, Edit, Wallet } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { SavingsForm } from '@/components/forms/SavingsForm';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
@@ -22,8 +25,14 @@ export const Savings = () => {
   const { data } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
-  const { deleteSavings } = useFinancial();
+  const { deleteSavings, updateSavings } = useFinancial();
   const { toast } = useToast();
+  const [addMoneyDialog, setAddMoneyDialog] = useState<{ open: boolean; goalId: string | null; goalName: string }>({
+    open: false,
+    goalId: null,
+    goalName: ''
+  });
+  const [addAmount, setAddAmount] = useState('');
   
   const totalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
   const totalTargets = data.savings.reduce((sum, goal) => sum + goal.target, 0);
@@ -54,6 +63,46 @@ export const Savings = () => {
       title: "Savings Goal Deleted",
       description: "Savings goal has been successfully deleted."
     });
+  };
+
+  const handleAddMoney = (goalId: string, goalName: string) => {
+    setAddMoneyDialog({ open: true, goalId, goalName });
+    setAddAmount('');
+  };
+
+  const handleAddMoneySubmit = async () => {
+    if (!addMoneyDialog.goalId || !addAmount) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid amount",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const amount = parseFloat(addAmount);
+    if (amount <= 0) {
+      toast({
+        title: "Error",
+        description: "Amount must be greater than 0",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const goal = data.savings.find(g => g.id === addMoneyDialog.goalId);
+    if (!goal) return;
+
+    const newCurrent = goal.current + amount;
+    await updateSavings(addMoneyDialog.goalId, { current: newCurrent });
+    
+    toast({
+      title: "Money Added!",
+      description: `₹${amount.toLocaleString()} added to ${addMoneyDialog.goalName}`
+    });
+
+    setAddMoneyDialog({ open: false, goalId: null, goalName: '' });
+    setAddAmount('');
   };
 
   return (
@@ -147,6 +196,16 @@ export const Savings = () => {
                         <p className="text-sm text-muted-foreground">
                           ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
                         </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAddMoney(goal.id, goal.name)}
+                          disabled={isCompleted}
+                          className="bg-savings/10 border-savings/30 text-savings hover:bg-savings/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Wallet className="w-3 h-3 mr-1" />
+                          {isCompleted ? 'Completed' : 'Add Money'}
+                        </Button>
                         <EditDeleteMenu
                           onEdit={() => handleEdit(goal.id)}
                           onDelete={() => handleDelete(goal.id)}
@@ -265,6 +324,45 @@ export const Savings = () => {
         }}
         editingId={editingEntry}
       />
+      
+      {/* Add Money Dialog */}
+      <Dialog open={addMoneyDialog.open} onOpenChange={(open) => setAddMoneyDialog({ open, goalId: null, goalName: '' })}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Money to {addMoneyDialog.goalName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="add-amount">Amount to Add (₹)</Label>
+              <Input
+                id="add-amount"
+                type="number"
+                value={addAmount}
+                onChange={(e) => setAddAmount(e.target.value)}
+                placeholder="Enter amount"
+                min="1"
+                step="1"
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setAddMoneyDialog({ open: false, goalId: null, goalName: '' })}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="button" 
+                onClick={handleAddMoneySubmit}
+                className="bg-savings text-white"
+              >
+                Add Money
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
