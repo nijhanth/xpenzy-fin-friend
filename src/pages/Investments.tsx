@@ -1,16 +1,20 @@
 import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Plus, DollarSign, Calendar, Target, BarChart3, Edit } from 'lucide-react';
+import { TrendingUp, Plus, DollarSign, Calendar, Target, BarChart3, Edit, Wallet, History, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { InvestmentForm } from '@/components/forms/InvestmentForm';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 
 export const Investments = () => {
-  const { data } = useFinancial();
+  const { data, addMoneyToInvestment } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   
   const totalInvested = data.investments.reduce((sum, inv) => sum + inv.invested, 0);
@@ -20,6 +24,18 @@ export const Investments = () => {
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
   const { deleteInvestment } = useFinancial();
   const { toast } = useToast();
+  const [addMoneyDialog, setAddMoneyDialog] = useState<{
+    open: boolean;
+    investmentId: string | null;
+    investmentName: string;
+  }>({
+    open: false,
+    investmentId: null,
+    investmentName: ''
+  });
+  const [addAmount, setAddAmount] = useState('1000');
+  const [addDate, setAddDate] = useState(new Date().toISOString().split('T')[0]);
+  const [expandedInvestments, setExpandedInvestments] = useState<Set<string>>(new Set());
 
   // Generate allocation data from investments
   const allocationData = useMemo(() => {
@@ -62,6 +78,63 @@ export const Investments = () => {
       title: "Investment Deleted",
       description: "Investment entry has been successfully deleted."
     });
+  };
+
+  const handleAddMoney = (investmentId: string, investmentName: string) => {
+    setAddMoneyDialog({
+      open: true,
+      investmentId,
+      investmentName
+    });
+    setAddAmount('1000');
+    setAddDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const handleAddMoneySubmit = () => {
+    if (!addMoneyDialog.investmentId || !addAmount) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid amount",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const amount = parseFloat(addAmount);
+    if (amount <= 0) {
+      toast({
+        title: "Error", 
+        description: "Amount must be greater than 0",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    addMoneyToInvestment(addMoneyDialog.investmentId, amount, addDate);
+    
+    toast({
+      title: "Money Added!",
+      description: `₹${amount.toLocaleString()} added to ${addMoneyDialog.investmentName}`
+    });
+
+    setAddMoneyDialog({ open: false, investmentId: null, investmentName: '' });
+  };
+
+  const toggleInvestmentHistory = (investmentId: string) => {
+    const newExpanded = new Set(expandedInvestments);
+    if (newExpanded.has(investmentId)) {
+      newExpanded.delete(investmentId);
+    } else {
+      newExpanded.add(investmentId);
+    }
+    setExpandedInvestments(newExpanded);
+  };
+
+  // Get transactions for a specific investment
+  const getInvestmentTransactions = (investmentId: string) => {
+    return data.investmentTransactions
+      .filter(transaction => transaction.investmentId === investmentId)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
   return (
@@ -235,46 +308,106 @@ export const Investments = () => {
                 return (
                   <div 
                     key={investment.id} 
-                    className="flex items-center justify-between p-4 rounded-xl bg-background/50 border border-border/50 hover:shadow-card transition-all duration-200"
+                    className="p-4 rounded-xl bg-background/50 border border-border/50 hover:shadow-card transition-all duration-200 space-y-4"
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge variant="outline" className="text-xs">
-                          {investment.type}
-                        </Badge>
-                        <Badge 
-                          variant={profitLoss >= 0 ? "default" : "destructive"}
-                          className="text-xs"
-                        >
-                          {profitLoss >= 0 ? '+' : ''}{profitPercent}%
-                        </Badge>
+                    {/* Main Investment Info */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="outline" className="text-xs">
+                            {investment.type}
+                          </Badge>
+                          <Badge 
+                            variant={profitLoss >= 0 ? "default" : "destructive"}
+                            className="text-xs"
+                          >
+                            {profitLoss >= 0 ? '+' : ''}{profitPercent}%
+                          </Badge>
+                        </div>
+                        <p className="font-medium text-foreground mb-1">{investment.name}</p>
+                        <div className="flex items-center gap-4 text-sm">
+                          <span className="text-muted-foreground">
+                            Invested: ₹{investment.invested.toLocaleString()}
+                          </span>
+                          <span className={profitLoss >= 0 ? 'text-success' : 'text-destructive'}>
+                            Current: ₹{investment.current.toLocaleString()}
+                          </span>
+                        </div>
                       </div>
-                      <p className="font-medium text-foreground mb-1">{investment.name}</p>
-                      <div className="flex items-center gap-4 text-sm">
-                        <span className="text-muted-foreground">
-                          Invested: ₹{investment.invested.toLocaleString()}
-                        </span>
-                        <span className={profitLoss >= 0 ? 'text-success' : 'text-destructive'}>
-                          Current: ₹{investment.current.toLocaleString()}
-                        </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleAddMoney(investment.id, investment.name)}
+                          className="bg-investment/10 border-investment/30 text-investment hover:bg-investment/20"
+                          variant="outline"
+                        >
+                          <Wallet className="w-3 h-3 mr-1" />
+                          Add Money
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => toggleInvestmentHistory(investment.id)}
+                        >
+                          <History className="w-3 h-3 mr-1" />
+                          {expandedInvestments.has(investment.id) ? (
+                            <ChevronUp className="w-3 h-3" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3" />
+                          )}
+                        </Button>
+                        <EditDeleteMenu
+                          onEdit={() => handleEdit(investment.id)}
+                          onDelete={() => handleDelete(investment.id)}
+                          itemName="investment entry"
+                          deleteTitle="Delete Investment Entry"
+                          deleteDescription="Are you sure you want to delete this investment entry? This action cannot be undone."
+                        />
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+
+                    {/* Investment Summary */}
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-1 text-muted-foreground">
                         <Calendar className="w-3 h-3" />
-                        {new Date(investment.date).toLocaleDateString()}
+                        Started: {new Date(investment.date).toLocaleDateString()}
                       </div>
                       <p className={`text-sm font-medium ${profitLoss >= 0 ? 'text-success' : 'text-destructive'}`}>
                         {profitLoss >= 0 ? '+' : ''}₹{profitLoss.toLocaleString()}
                       </p>
-                      <EditDeleteMenu
-                        onEdit={() => handleEdit(investment.id)}
-                        onDelete={() => handleDelete(investment.id)}
-                        itemName="investment entry"
-                        deleteTitle="Delete Investment Entry"
-                        deleteDescription="Are you sure you want to delete this investment entry? This action cannot be undone."
-                      />
                     </div>
+
+                    {/* Transaction History */}
+                    {expandedInvestments.has(investment.id) && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <History className="w-3 h-3" />
+                            Transaction History
+                          </h4>
+                          {getInvestmentTransactions(investment.id).length > 0 ? (
+                            <div className="space-y-2 max-h-32 overflow-y-auto">
+                              {getInvestmentTransactions(investment.id).map((transaction) => (
+                                <div key={transaction.id} className="flex items-center justify-between text-xs p-2 bg-secondary/30 rounded">
+                                  <div>
+                                    <span className="font-medium">
+                                      {transaction.type === 'initial' ? 'Initial Investment' : 'Money Added'}
+                                    </span>
+                                    <p className="text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</p>
+                                  </div>
+                                  <span className="font-semibold text-investment">
+                                    +₹{transaction.amount.toLocaleString()}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No additional transactions yet</p>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -301,6 +434,54 @@ export const Investments = () => {
         }}
         editingId={editingEntry}
       />
+      
+      {/* Add Money Dialog */}
+      <Dialog open={addMoneyDialog.open} onOpenChange={(open) => setAddMoneyDialog({ open, investmentId: null, investmentName: '' })}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Money to {addMoneyDialog.investmentName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="add-amount">Amount to Add (₹)</Label>
+              <Input
+                id="add-amount"
+                type="number"
+                value={addAmount}
+                onChange={(e) => setAddAmount(e.target.value)}
+                placeholder="1000"
+                min="1"
+                step="1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="add-date">Date</Label>
+              <Input
+                id="add-date"
+                type="date"
+                value={addDate}
+                onChange={(e) => setAddDate(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setAddMoneyDialog({ open: false, investmentId: null, investmentName: '' })}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="button" 
+                onClick={handleAddMoneySubmit}
+                className="bg-investment text-white"
+              >
+                Add Money
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

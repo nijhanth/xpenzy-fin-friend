@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { FinancialData, IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry } from '@/types/financial';
+import { FinancialData, IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, InvestmentTransaction } from '@/types/financial';
 import { incomeService, expenseService, savingsService, investmentService } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
 
@@ -10,8 +10,10 @@ interface FinancialContextType {
   addExpense: (expense: Omit<ExpenseEntry, 'id'>) => void;
   addSavingsGoal: (savings: Omit<SavingsGoal, 'id'>) => void;
   addInvestment: (investment: Omit<InvestmentEntry, 'id'>) => void;
+  addInvestmentTransaction: (transaction: Omit<InvestmentTransaction, 'id'>) => void;
   updateSavingsGoal: (id: string, current: number) => void;
   updateInvestment: (id: string, current: number) => void;
+  addMoneyToInvestment: (investmentId: string, amount: number, date: string) => void;
   updateIncome: (id: string, income: Partial<Omit<IncomeEntry, 'id'>>) => void;
   updateExpense: (id: string, expense: Partial<Omit<ExpenseEntry, 'id'>>) => void;
   updateSavings: (id: string, savings: Partial<Omit<SavingsGoal, 'id'>>) => void;
@@ -37,7 +39,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     income: [],
     expenses: [],
     savings: [],
-    investments: []
+    investments: [],
+    investmentTransactions: []
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -58,7 +61,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           income: incomeData,
           expenses: expenseData,
           savings: savingsData,
-          investments: investmentData
+          investments: investmentData,
+          investmentTransactions: [] // Initialize empty for now
         });
       } catch (error) {
         console.error('Error loading financial data:', error);
@@ -153,9 +157,21 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   const addInvestment = async (investment: Omit<InvestmentEntry, 'id'>) => {
     try {
       const newInvestment = await investmentService.create(investment);
+      
+      // Add initial transaction record
+      const initialTransaction: InvestmentTransaction = {
+        id: Date.now().toString(),
+        investmentId: newInvestment.id,
+        amount: newInvestment.invested,
+        date: newInvestment.date,
+        type: 'initial',
+        notes: `Initial investment in ${newInvestment.name}`
+      };
+      
       setData(prev => ({
         ...prev,
-        investments: [newInvestment, ...prev.investments]
+        investments: [newInvestment, ...prev.investments],
+        investmentTransactions: [initialTransaction, ...prev.investmentTransactions]
       }));
     } catch (error) {
       console.error('Error adding investment:', error);
@@ -163,9 +179,21 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       ...investment,
       id: Date.now().toString()
     };
+    
+    // Add initial transaction record for local storage
+    const initialTransaction: InvestmentTransaction = {
+      id: (Date.now() + 1).toString(),
+      investmentId: newInvestment.id,
+      amount: newInvestment.invested,
+      date: newInvestment.date,
+      type: 'initial',
+      notes: `Initial investment in ${newInvestment.name}`
+    };
+    
     setData(prev => ({
       ...prev,
-      investments: [...prev.investments, newInvestment]
+      investments: [...prev.investments, newInvestment],
+      investmentTransactions: [initialTransaction, ...prev.investmentTransactions]
     }));
       toast({
         variant: "destructive",
@@ -173,6 +201,38 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         description: "Failed to save investment to database. Saved locally instead."
       });
     }
+  };
+
+  const addInvestmentTransaction = (transaction: Omit<InvestmentTransaction, 'id'>) => {
+    const newTransaction: InvestmentTransaction = {
+      ...transaction,
+      id: Date.now().toString()
+    };
+    setData(prev => ({
+      ...prev,
+      investmentTransactions: [newTransaction, ...prev.investmentTransactions]
+    }));
+  };
+
+  const addMoneyToInvestment = (investmentId: string, amount: number, date: string) => {
+    // Update the investment current amount
+    setData(prev => ({
+      ...prev,
+      investments: prev.investments.map(inv =>
+        inv.id === investmentId 
+          ? { ...inv, current: inv.current + amount }
+          : inv
+      )
+    }));
+
+    // Add transaction record
+    addInvestmentTransaction({
+      investmentId,
+      amount,
+      date,
+      type: 'addition',
+      notes: `Added ₹${amount.toLocaleString()} to investment`
+    });
   };
 
   const updateSavingsGoal = (id: string, current: number) => {
@@ -345,6 +405,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       addExpense,
       addSavingsGoal,
       addInvestment,
+      addInvestmentTransaction,
+      addMoneyToInvestment,
       updateSavingsGoal,
       updateInvestment,
       updateIncome,

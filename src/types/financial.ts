@@ -39,9 +39,19 @@ export interface InvestmentEntry {
   customType?: string;
 }
 
+export interface InvestmentTransaction {
+  id: string;
+  investmentId: string;
+  amount: number;
+  date: string;
+  type: 'initial' | 'addition';
+  notes?: string;
+}
+
 export interface FinancialData {
   income: IncomeEntry[];
   expenses: ExpenseEntry[];
   savings: SavingsGoal[];
   investments: InvestmentEntry[];
+  investmentTransactions: InvestmentTransaction[];
 }
