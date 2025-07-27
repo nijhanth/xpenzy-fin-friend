@@ -314,3 +314,44 @@ export const investmentService = {
     if (error) throw error;
   }
 };
+
+// Budget CRUD operations
+export const budgetService = {
+  async getAll(): Promise<BudgetCategory[]> {
+    // For now, use localStorage since we don't have budget table in Supabase
+    const stored = localStorage.getItem('budgets');
+    return stored ? JSON.parse(stored) : [];
+  },
+
+  async create(budget: Omit<BudgetCategory, 'id'>): Promise<BudgetCategory> {
+    const newBudget: BudgetCategory = {
+      ...budget,
+      id: Date.now().toString()
+    };
+    
+    const existing = await this.getAll();
+    const updated = [newBudget, ...existing];
+    localStorage.setItem('budgets', JSON.stringify(updated));
+    
+    return newBudget;
+  },
+
+  async update(id: string, budget: Partial<Omit<BudgetCategory, 'id'>>): Promise<BudgetCategory> {
+    const existing = await this.getAll();
+    const index = existing.findIndex(b => b.id === id);
+    
+    if (index === -1) throw new Error('Budget not found');
+    
+    const updated = { ...existing[index], ...budget };
+    existing[index] = updated;
+    localStorage.setItem('budgets', JSON.stringify(existing));
+    
+    return updated;
+  },
+
+  async delete(id: string): Promise<void> {
+    const existing = await this.getAll();
+    const filtered = existing.filter(b => b.id !== id);
+    localStorage.setItem('budgets', JSON.stringify(filtered));
+  }
+};

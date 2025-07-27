@@ -329,6 +329,25 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  const updateBudget = async (id: string, budget: Partial<Omit<BudgetCategory, 'id'>>) => {
+    try {
+      const updatedBudget = await budgetService.update(id, budget);
+      setData(prev => ({
+        ...prev,
+        budgets: prev.budgets.map(item =>
+          item.id === id ? updatedBudget : item
+        )
+      }));
+    } catch (error) {
+      console.error('Error updating budget:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update budget in database."
+      });
+    }
+  };
+
   const deleteIncome = async (id: string) => {
     try {
       await incomeService.delete(id);
@@ -397,6 +416,23 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  const deleteBudget = async (id: string) => {
+    try {
+      await budgetService.delete(id);
+      setData(prev => ({
+        ...prev,
+        budgets: prev.budgets.filter(item => item.id !== id)
+      }));
+    } catch (error) {
+      console.error('Error deleting budget:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete budget from database."
+      });
+    }
+  };
+
   return (
     <FinancialContext.Provider value={{
       data,
@@ -406,6 +442,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       addSavingsGoal,
       addInvestment,
       addInvestmentTransaction,
+      addBudget,
       addMoneyToInvestment,
       updateSavingsGoal,
       updateInvestment,
@@ -413,10 +450,12 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       updateExpense,
       updateSavings,
       updateInvestmentEntry,
+      updateBudget,
       deleteIncome,
       deleteExpense,
       deleteSavings,
-      deleteInvestment
+      deleteInvestment,
+      deleteBudget
     }}>
       {children}
     </FinancialContext.Provider>

@@ -7,30 +7,25 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, TrendingUp, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFinancial } from '@/contexts/FinancialContext';
-
-interface BudgetCategory {
-  id: string;
-  name: string;
-  limit: number;
-  spent: number;
-  icon: string;
-}
+import { BudgetCategory } from '@/types/financial';
+import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 
 export const Budget = () => {
   const { toast } = useToast();
-  const { data } = useFinancial();
-  const [budgets, setBudgets] = useState<BudgetCategory[]>([]);
+  const { data, addBudget, updateBudget, deleteBudget } = useFinancial();
 
   const [newBudget, setNewBudget] = useState({
     name: '',
     limit: '',
-    icon: '💰'
+    icon: '💰',
+    period: 'monthly' as const
   });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<BudgetCategory | null>(null);
 
   // Calculate spent amounts from real expense data
   const expensesByCategory = useMemo(() => {
@@ -43,12 +38,12 @@ export const Budget = () => {
   }, [data.expenses]);
 
   // Update budget spent amounts based on real data
-  const updatedBudgets = useMemo(() => {
-    return budgets.map(budget => ({
+  const budgetsWithSpent = useMemo(() => {
+    return data.budgets.map(budget => ({
       ...budget,
       spent: expensesByCategory[budget.name] || 0
     }));
-  }, [budgets, expensesByCategory]);
+  }, [data.budgets, expensesByCategory]);
 
   const getProgressPercentage = (spent: number, limit: number) => {
     return Math.min((spent / limit) * 100, 100);
@@ -78,26 +73,54 @@ export const Budget = () => {
       return;
     }
 
-    const budget: BudgetCategory = {
-      id: Date.now().toString(),
+    const budgetData: Omit<BudgetCategory, 'id'> = {
       name: newBudget.name,
       limit: parseFloat(newBudget.limit),
       spent: expensesByCategory[newBudget.name] || 0,
-      icon: newBudget.icon
+      icon: newBudget.icon,
+      period: newBudget.period
     };
 
-    setBudgets([...budgets, budget]);
-    setNewBudget({ name: '', limit: '', icon: '💰' });
-    setIsDialogOpen(false);
+    if (editingBudget) {
+      updateBudget(editingBudget.id, budgetData);
+      toast({
+        title: "Budget Updated",
+        description: `Budget for ${newBudget.name} has been updated`,
+      });
+      setEditingBudget(null);
+    } else {
+      addBudget(budgetData);
+      toast({
+        title: "Budget Added",
+        description: `Budget for ${newBudget.name} has been created`,
+      });
+    }
     
+    setNewBudget({ name: '', limit: '', icon: '💰', period: 'monthly' });
+    setIsDialogOpen(false);
+  };
+
+  const handleEditBudget = (budget: BudgetCategory) => {
+    setEditingBudget(budget);
+    setNewBudget({
+      name: budget.name,
+      limit: budget.limit.toString(),
+      icon: budget.icon,
+      period: budget.period
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleDeleteBudget = async (budgetId: string) => {
+    await deleteBudget(budgetId);
     toast({
-      title: "Budget Added",
-      description: `Budget for ${newBudget.name} has been created`,
+      title: "Budget Deleted",
+      description: "Budget has been successfully deleted."
     });
   };
 
-  const totalBudget = updatedBudgets.reduce((sum, budget) => sum + budget.limit, 0);
-  const totalSpent = updatedBudgets.reduce((sum, budget) => sum + budget.spent, 0);
+  const totalBudget = budgetsWithSpent.reduce((sum, budget) => sum + budget.limit, 0);
+  const totalSpent = budgetsWithSpent.reduce((sum, budget) => sum + budget.spent, 0);
   const remainingBudget = totalBudget - totalSpent;
 
   return (
@@ -155,7 +178,7 @@ export const Budget = () => {
           </DialogTrigger>
           <DialogContent className="bg-background border-border">
             <DialogHeader>
-              <DialogTitle>Add New Budget</DialogTitle>
+              <DialogTitle>{editingBudget ? 'Edit Budget' : 'Add New Budget'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -168,7 +191,7 @@ export const Budget = () => {
                 />
               </div>
               <div>
-                <Label htmlFor="limit">Monthly Limit (₹)</Label>
+                <Label htmlFor="limit">Budget Limit (₹)</Label>
                 <Input
                   id="limit"
                   type="number"
@@ -176,6 +199,19 @@ export const Budget = () => {
                   onChange={(e) => setNewBudget({...newBudget, limit: e.target.value})}
                   placeholder="5000"
                 />
+              </div>
+              <div>
+                <Label htmlFor="period">Period</Label>
+                <Select value={newBudget.period} onValueChange={(value: 'monthly' | 'weekly' | 'yearly') => setNewBudget({...newBudget, period: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background border-border z-50">
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="yearly">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="icon">Icon</Label>
@@ -196,7 +232,7 @@ export const Budget = () => {
                 </Select>
               </div>
               <Button onClick={handleAddBudget} className="w-full">
-                Add Budget
+                {editingBudget ? 'Update Budget' : 'Add Budget'}
               </Button>
             </div>
           </DialogContent>
@@ -205,7 +241,7 @@ export const Budget = () => {
 
       {/* Budget Categories */}
       <div className="space-y-4">
-        {updatedBudgets.length === 0 ? (
+        {budgetsWithSpent.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <div className="text-muted-foreground">
@@ -216,7 +252,7 @@ export const Budget = () => {
             </CardContent>
           </Card>
         ) : (
-          updatedBudgets.map((budget) => {
+          budgetsWithSpent.map((budget) => {
             const progressPercentage = getProgressPercentage(budget.spent, budget.limit);
             const remaining = budget.limit - budget.spent;
             
@@ -232,6 +268,9 @@ export const Budget = () => {
                           <p className="text-sm text-muted-foreground">
                             ₹{budget.spent.toLocaleString()} of ₹{budget.limit.toLocaleString()}
                           </p>
+                          <Badge variant="outline" className="text-xs mt-1">
+                            {budget.period}
+                          </Badge>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -241,6 +280,13 @@ export const Budget = () => {
                         >
                           {progressPercentage.toFixed(0)}%
                         </Badge>
+                        <EditDeleteMenu
+                          onEdit={() => handleEditBudget(budget)}
+                          onDelete={() => handleDeleteBudget(budget.id)}
+                          itemName="budget"
+                          deleteTitle="Delete Budget"
+                          deleteDescription="Are you sure you want to delete this budget? This action cannot be undone."
+                        />
                       </div>
                     </div>
                     
@@ -254,7 +300,9 @@ export const Budget = () => {
                         {remaining >= 0 ? `₹${remaining.toLocaleString()} remaining` : `₹${Math.abs(remaining).toLocaleString()} over budget`}
                       </span>
                       <span className="text-muted-foreground">
-                        {Math.round((new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()) * 100)}% of month passed
+                        {budget.period === 'monthly' && `${Math.round((new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()) * 100)}% of month passed`}
+                        {budget.period === 'weekly' && `${Math.round(((new Date().getDay() + 1) / 7) * 100)}% of week passed`}
+                        {budget.period === 'yearly' && `${Math.round(((new Date().getMonth() + 1) / 12) * 100)}% of year passed`}
                       </span>
                     </div>
                   </div>
@@ -282,7 +330,15 @@ export const Budget = () => {
                 • Total expenses: ₹{data.expenses.reduce((sum, expense) => sum + expense.amount, 0).toLocaleString()}
               </p>
               <p className="text-sm text-muted-foreground">
-                • Set budgets for better spending control
+                • {budgetsWithSpent.length} budget categories set
+              </p>
+              {budgetsWithSpent.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  • {budgetsWithSpent.filter(b => b.spent > b.limit).length} budgets exceeded
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                • Budget amounts automatically update when you add expenses
               </p>
             </div>
           </CardContent>

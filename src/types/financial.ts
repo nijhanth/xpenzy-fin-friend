@@ -48,10 +48,21 @@ export interface InvestmentTransaction {
   notes?: string;
 }
 
+export interface BudgetCategory {
+  id: string;
+  name: string;
+  limit: number;
+  spent: number;
+  icon: string;
+  period: 'monthly' | 'weekly' | 'yearly';
+  userId?: string;
+}
+
 export interface FinancialData {
   income: IncomeEntry[];
   expenses: ExpenseEntry[];
   savings: SavingsGoal[];
   investments: InvestmentEntry[];
   investmentTransactions: InvestmentTransaction[];
+  budgets: BudgetCategory[];
 }
