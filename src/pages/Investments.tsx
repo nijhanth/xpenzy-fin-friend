@@ -14,7 +14,7 @@ import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 
 export const Investments = () => {
-  const { data, addMoneyToInvestment } = useFinancial();
+  const { data, addMoneyToInvestment, getInvestmentTransactions: getTransactions, deleteInvestment, deleteInvestmentTransaction } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   
   const totalInvested = data.investments.reduce((sum, inv) => sum + inv.invested, 0);
@@ -22,7 +22,7 @@ export const Investments = () => {
   const totalProfit = totalCurrent - totalInvested;
   const totalProfitPercent = totalInvested > 0 ? ((totalProfit / totalInvested) * 100).toFixed(1) : '0.0';
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
-  const { deleteInvestment } = useFinancial();
+  
   const { toast } = useToast();
   const [addMoneyDialog, setAddMoneyDialog] = useState<{
     open: boolean;
@@ -130,11 +130,34 @@ export const Investments = () => {
     setExpandedInvestments(newExpanded);
   };
 
+  const handleEditTransaction = (transactionId: string, investment: any) => {
+    // This would open a transaction edit form
+    toast({
+      title: "Edit Transaction",
+      description: "Transaction editing functionality will be available soon",
+    });
+  };
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    try {
+      await deleteInvestmentTransaction(transactionId);
+      toast({
+        title: "Success",
+        description: "Investment transaction deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete investment transaction",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Get transactions for a specific investment
   const getInvestmentTransactions = (investmentId: string) => {
-    return data.investmentTransactions
-      .filter(transaction => transaction.investmentId === investmentId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return getTransactions(investmentId);
   };
 
   return (
@@ -390,15 +413,25 @@ export const Investments = () => {
                             <div className="space-y-2 max-h-32 overflow-y-auto">
                               {getInvestmentTransactions(investment.id).map((transaction) => (
                                 <div key={transaction.id} className="flex items-center justify-between text-xs p-2 bg-secondary/30 rounded">
-                                  <div>
-                                    <span className="font-medium">
-                                      {transaction.type === 'initial' ? 'Initial Investment' : 'Money Added'}
-                                    </span>
+                                  <div className="flex-1">
+                                    <span className="font-medium">Money Added</span>
                                     <p className="text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</p>
+                                    {transaction.notes && (
+                                      <p className="text-muted-foreground text-xs mt-1">{transaction.notes}</p>
+                                    )}
                                   </div>
-                                  <span className="font-semibold text-investment">
-                                    +₹{transaction.amount.toLocaleString()}
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-investment">
+                                      +₹{transaction.amount.toLocaleString()}
+                                    </span>
+                                    <EditDeleteMenu
+                                      onEdit={() => handleEditTransaction(transaction.id, investment)}
+                                      onDelete={() => handleDeleteTransaction(transaction.id)}
+                                      itemName="transaction"
+                                      deleteTitle="Delete Transaction"
+                                      deleteDescription="Are you sure you want to delete this transaction? This will affect the total invested amount."
+                                    />
+                                  </div>
                                 </div>
                               ))}
                             </div>

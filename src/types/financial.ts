@@ -42,11 +42,11 @@ export interface InvestmentEntry {
 
 export interface InvestmentTransaction {
   id: string;
-  investmentId: string;
+  investment_id: string;
   amount: number;
   date: string;
-  type: 'initial' | 'addition';
   notes?: string;
+  user_id?: string;
 }
 
 export interface BudgetCategory {

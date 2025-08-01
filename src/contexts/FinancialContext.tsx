@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { FinancialData, IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, InvestmentTransaction, BudgetCategory } from '@/types/financial';
-import { incomeService, expenseService, savingsService, investmentService, budgetService } from '@/lib/database';
+import { incomeService, expenseService, savingsService, investmentService, budgetService, investmentTransactionService } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
 
 interface FinancialContextType {
@@ -10,7 +10,10 @@ interface FinancialContextType {
   addExpense: (expense: Omit<ExpenseEntry, 'id'>) => void;
   addSavingsGoal: (savings: Omit<SavingsGoal, 'id'>) => void;
   addInvestment: (investment: Omit<InvestmentEntry, 'id'>) => void;
-  addInvestmentTransaction: (transaction: Omit<InvestmentTransaction, 'id'>) => void;
+  addInvestmentTransaction: (transaction: Omit<InvestmentTransaction, 'id'>) => Promise<void>;
+  updateInvestmentTransaction: (id: string, transaction: Partial<InvestmentTransaction>) => Promise<void>;
+  deleteInvestmentTransaction: (id: string) => Promise<void>;
+  getInvestmentTransactions: (investmentId: string) => InvestmentTransaction[];
   addBudget: (budget: Omit<BudgetCategory, 'id'>) => void;
   updateSavingsGoal: (id: string, current: number) => void;
   updateInvestment: (id: string, current: number) => void;
@@ -54,12 +57,13 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   React.useEffect(() => {
     const loadAllData = async () => {
       try {
-        const [incomeData, expenseData, savingsData, investmentData, budgetData] = await Promise.all([
+        const [incomeData, expenseData, savingsData, investmentData, budgetData, transactionData] = await Promise.all([
           incomeService.getAll(),
           expenseService.getAll(),
           savingsService.getAll(),
           investmentService.getAll(),
-          budgetService.getAll()
+          budgetService.getAll(),
+          investmentTransactionService.getAll()
         ]);
 
         setData({
@@ -67,7 +71,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           expenses: expenseData,
           savings: savingsData,
           investments: investmentData,
-          investmentTransactions: [], // Initialize empty for now
+          investmentTransactions: transactionData,
           budgets: budgetData
         });
       } catch (error) {
@@ -165,19 +169,20 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       const newInvestment = await investmentService.create(investment);
       
       // Add initial transaction record
-      const initialTransaction: InvestmentTransaction = {
-        id: Date.now().toString(),
-        investmentId: newInvestment.id,
-        amount: newInvestment.invested,
-        date: newInvestment.date,
-        type: 'initial',
-        notes: `Initial investment in ${newInvestment.name}`
-      };
+      try {
+        await addInvestmentTransaction({
+          investment_id: newInvestment.id,
+          amount: newInvestment.invested,
+          date: newInvestment.date,
+          notes: `Initial investment in ${newInvestment.name}`
+        });
+      } catch (error) {
+        console.error('Error creating initial transaction:', error);
+      }
       
       setData(prev => ({
         ...prev,
-        investments: [newInvestment, ...prev.investments],
-        investmentTransactions: [initialTransaction, ...prev.investmentTransactions]
+        investments: [newInvestment, ...prev.investments]
       }));
     } catch (error) {
       console.error('Error adding investment:', error);
@@ -186,20 +191,9 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       id: Date.now().toString()
     };
     
-    // Add initial transaction record for local storage
-    const initialTransaction: InvestmentTransaction = {
-      id: (Date.now() + 1).toString(),
-      investmentId: newInvestment.id,
-      amount: newInvestment.invested,
-      date: newInvestment.date,
-      type: 'initial',
-      notes: `Initial investment in ${newInvestment.name}`
-    };
-    
     setData(prev => ({
       ...prev,
-      investments: [...prev.investments, newInvestment],
-      investmentTransactions: [initialTransaction, ...prev.investmentTransactions]
+      investments: [...prev.investments, newInvestment]
     }));
       toast({
         variant: "destructive",
@@ -209,34 +203,81 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const addInvestmentTransaction = (transaction: Omit<InvestmentTransaction, 'id'>) => {
-    const newTransaction: InvestmentTransaction = {
-      ...transaction,
-      id: Date.now().toString()
-    };
-    setData(prev => ({
-      ...prev,
-      investmentTransactions: [newTransaction, ...prev.investmentTransactions]
-    }));
+  const addInvestmentTransaction = async (transaction: Omit<InvestmentTransaction, 'id'>) => {
+    try {
+      const newTransaction = await investmentTransactionService.create(transaction);
+      setData(prev => ({
+        ...prev,
+        investmentTransactions: [newTransaction, ...prev.investmentTransactions]
+      }));
+      toast({
+        title: "Success",
+        description: "Money added to investment successfully",
+      });
+    } catch (error) {
+      console.error('Error adding investment transaction:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add money to investment",
+        variant: "destructive",
+      });
+    }
   };
 
-  const addMoneyToInvestment = (investmentId: string, amount: number, date: string) => {
-    // Update the investment current amount
-    setData(prev => ({
-      ...prev,
-      investments: prev.investments.map(inv =>
-        inv.id === investmentId 
-          ? { ...inv, current: inv.current + amount }
-          : inv
-      )
-    }));
+  const updateInvestmentTransaction = async (id: string, transaction: Partial<InvestmentTransaction>) => {
+    try {
+      const updatedTransaction = await investmentTransactionService.update(id, transaction);
+      setData(prev => ({
+        ...prev,
+        investmentTransactions: prev.investmentTransactions.map(t => 
+          t.id === id ? updatedTransaction : t
+        )
+      }));
+      toast({
+        title: "Success",
+        description: "Investment transaction updated successfully",
+      });
+    } catch (error) {
+      console.error('Error updating investment transaction:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update investment transaction",
+        variant: "destructive",
+      });
+    }
+  };
 
+  const deleteInvestmentTransaction = async (id: string) => {
+    try {
+      await investmentTransactionService.delete(id);
+      setData(prev => ({
+        ...prev,
+        investmentTransactions: prev.investmentTransactions.filter(t => t.id !== id)
+      }));
+      toast({
+        title: "Success",
+        description: "Investment transaction deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting investment transaction:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete investment transaction",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getInvestmentTransactions = (investmentId: string): InvestmentTransaction[] => {
+    return data.investmentTransactions.filter(t => t.investment_id === investmentId);
+  };
+
+  const addMoneyToInvestment = async (investmentId: string, amount: number, date: string) => {
     // Add transaction record
-    addInvestmentTransaction({
-      investmentId,
+    await addInvestmentTransaction({
+      investment_id: investmentId,
       amount,
       date,
-      type: 'addition',
       notes: `Added ₹${amount.toLocaleString()} to investment`
     });
   };
@@ -475,6 +516,9 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       addSavingsGoal,
       addInvestment,
       addInvestmentTransaction,
+      updateInvestmentTransaction,
+      deleteInvestmentTransaction,
+      getInvestmentTransactions,
       addBudget,
       addMoneyToInvestment,
       updateSavingsGoal,

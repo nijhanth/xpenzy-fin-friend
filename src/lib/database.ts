@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, BudgetCategory } from '@/types/financial';
+import { IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, BudgetCategory, InvestmentTransaction } from '@/types/financial';
 
 // Income CRUD operations
 export const incomeService = {
@@ -354,4 +354,80 @@ export const budgetService = {
     const filtered = existing.filter(b => b.id !== id);
     localStorage.setItem('budgets', JSON.stringify(filtered));
   }
+};
+
+// Investment Transactions Service
+export const investmentTransactionService = {
+  async getAll(): Promise<InvestmentTransaction[]> {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('investment_transactions')
+      .select('*')
+      .eq('user_id', user.user.id)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(transaction: Omit<InvestmentTransaction, 'id'>): Promise<InvestmentTransaction> {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('investment_transactions')
+      .insert([{ ...transaction, user_id: user.user.id }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, transaction: Partial<Omit<InvestmentTransaction, 'id'>>): Promise<InvestmentTransaction> {
+    const { data, error } = await supabase
+      .from('investment_transactions')
+      .update(transaction)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('investment_transactions')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async getByInvestmentId(investmentId: string): Promise<InvestmentTransaction[]> {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('investment_transactions')
+      .select('*')
+      .eq('investment_id', investmentId)
+      .eq('user_id', user.user.id)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+};
+
+export const database = {
+  income: incomeService,
+  expenses: expenseService,
+  savings: savingsService,
+  investments: investmentService,
+  investmentTransactions: investmentTransactionService,
+  budgets: budgetService,
 };
