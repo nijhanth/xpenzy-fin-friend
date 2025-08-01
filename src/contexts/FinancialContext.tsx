@@ -423,6 +423,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const addBudget = async (budget: Omit<BudgetCategory, 'id'>) => {
+    console.log('addBudget function called', budget);
     try {
       const newBudget = await budgetService.create(budget);
       setData(prev => ({
@@ -464,6 +465,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  console.log('FinancialProvider rendering, addBudget exists:', typeof addBudget);
   return (
     <FinancialContext.Provider value={{
       data,
