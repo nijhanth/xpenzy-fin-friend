@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry } from '@/types/financial';
+import { IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, BudgetCategory } from '@/types/financial';
 
 // Income CRUD operations
 export const incomeService = {

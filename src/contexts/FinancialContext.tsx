@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { FinancialData, IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, InvestmentTransaction } from '@/types/financial';
-import { incomeService, expenseService, savingsService, investmentService } from '@/lib/database';
+import { FinancialData, IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, InvestmentTransaction, BudgetCategory } from '@/types/financial';
+import { incomeService, expenseService, savingsService, investmentService, budgetService } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
 
 interface FinancialContextType {
@@ -11,6 +11,7 @@ interface FinancialContextType {
   addSavingsGoal: (savings: Omit<SavingsGoal, 'id'>) => void;
   addInvestment: (investment: Omit<InvestmentEntry, 'id'>) => void;
   addInvestmentTransaction: (transaction: Omit<InvestmentTransaction, 'id'>) => void;
+  addBudget: (budget: Omit<BudgetCategory, 'id'>) => void;
   updateSavingsGoal: (id: string, current: number) => void;
   updateInvestment: (id: string, current: number) => void;
   addMoneyToInvestment: (investmentId: string, amount: number, date: string) => void;
@@ -18,10 +19,12 @@ interface FinancialContextType {
   updateExpense: (id: string, expense: Partial<Omit<ExpenseEntry, 'id'>>) => void;
   updateSavings: (id: string, savings: Partial<Omit<SavingsGoal, 'id'>>) => void;
   updateInvestmentEntry: (id: string, investment: Partial<Omit<InvestmentEntry, 'id'>>) => void;
+  updateBudget: (id: string, budget: Partial<Omit<BudgetCategory, 'id'>>) => void;
   deleteIncome: (id: string) => void;
   deleteExpense: (id: string) => void;
   deleteSavings: (id: string) => void;
   deleteInvestment: (id: string) => void;
+  deleteBudget: (id: string) => void;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
@@ -40,7 +43,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     expenses: [],
     savings: [],
     investments: [],
-    investmentTransactions: []
+    investmentTransactions: [],
+    budgets: []
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -50,11 +54,12 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   React.useEffect(() => {
     const loadAllData = async () => {
       try {
-        const [incomeData, expenseData, savingsData, investmentData] = await Promise.all([
+        const [incomeData, expenseData, savingsData, investmentData, budgetData] = await Promise.all([
           incomeService.getAll(),
           expenseService.getAll(),
           savingsService.getAll(),
-          investmentService.getAll()
+          investmentService.getAll(),
+          budgetService.getAll()
         ]);
 
         setData({
@@ -62,7 +67,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           expenses: expenseData,
           savings: savingsData,
           investments: investmentData,
-          investmentTransactions: [] // Initialize empty for now
+          investmentTransactions: [], // Initialize empty for now
+          budgets: budgetData
         });
       } catch (error) {
         console.error('Error loading financial data:', error);
@@ -412,6 +418,31 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         variant: "destructive",
         title: "Error",
         description: "Failed to delete investment from database."
+      });
+    }
+  };
+
+  const addBudget = async (budget: Omit<BudgetCategory, 'id'>) => {
+    try {
+      const newBudget = await budgetService.create(budget);
+      setData(prev => ({
+        ...prev,
+        budgets: [newBudget, ...prev.budgets]
+      }));
+    } catch (error) {
+      console.error('Error adding budget:', error);
+      const newBudget: BudgetCategory = {
+        ...budget,
+        id: Date.now().toString()
+      };
+      setData(prev => ({
+        ...prev,
+        budgets: [...prev.budgets, newBudget]
+      }));
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to save budget to database. Saved locally instead."
       });
     }
   };

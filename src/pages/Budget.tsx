@@ -17,11 +17,16 @@ export const Budget = () => {
   const { toast } = useToast();
   const { data, addBudget, updateBudget, deleteBudget } = useFinancial();
 
-  const [newBudget, setNewBudget] = useState({
+  const [newBudget, setNewBudget] = useState<{
+    name: string;
+    limit: string;
+    icon: string;
+    period: 'monthly' | 'weekly' | 'yearly';
+  }>({
     name: '',
     limit: '',
     icon: '💰',
-    period: 'monthly' as const
+    period: 'monthly'
   });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
