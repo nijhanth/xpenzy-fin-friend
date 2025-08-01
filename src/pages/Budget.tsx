@@ -1,3 +1,4 @@
+
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, AlertTriangle, CheckCircle, TrendingUp, Edit, Trash2 } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { BudgetCategory } from '@/types/financial';
@@ -32,23 +33,28 @@ export const Budget = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<BudgetCategory | null>(null);
 
-  // Calculate spent amounts from real expense data
-  const expensesByCategory = useMemo(() => {
-    const categoryTotals: Record<string, number> = {};
-    data.expenses.forEach(expense => {
-      const category = expense.customCategory || expense.category;
-      categoryTotals[category] = (categoryTotals[category] || 0) + expense.amount;
+  // Calculate spent amounts from real expense data automatically
+  const budgetsWithRealSpent = useMemo(() => {
+    return data.budgets.map(budget => {
+      // Calculate spent from actual expenses matching this budget category
+      const spent = data.expenses
+        .filter(expense => expense.category === budget.name)
+        .reduce((sum, expense) => sum + expense.amount, 0);
+      
+      return {
+        ...budget,
+        spent
+      };
     });
-    return categoryTotals;
-  }, [data.expenses]);
+  }, [data.budgets, data.expenses]);
 
-  // Update budget spent amounts based on real data
-  const budgetsWithSpent = useMemo(() => {
-    return data.budgets.map(budget => ({
-      ...budget,
-      spent: expensesByCategory[budget.name] || 0
-    }));
-  }, [data.budgets, expensesByCategory]);
+  // Calculate expenses that don't have budgets (Others/Unbudgeted)
+  const unbudgetedExpenses = useMemo(() => {
+    const budgetCategoryNames = data.budgets.map(b => b.name);
+    return data.expenses
+      .filter(expense => !budgetCategoryNames.includes(expense.category))
+      .reduce((sum, expense) => sum + expense.amount, 0);
+  }, [data.budgets, data.expenses]);
 
   const getProgressPercentage = (spent: number, limit: number) => {
     return Math.min((spent / limit) * 100, 100);
@@ -78,10 +84,15 @@ export const Budget = () => {
       return;
     }
 
+    // Calculate current spending for this category
+    const currentSpent = data.expenses
+      .filter(expense => expense.category === newBudget.name)
+      .reduce((sum, expense) => sum + expense.amount, 0);
+
     const budgetData: Omit<BudgetCategory, 'id'> = {
       name: newBudget.name,
       limit: parseFloat(newBudget.limit),
-      spent: expensesByCategory[newBudget.name] || 0,
+      spent: currentSpent, // Set actual spent amount
       icon: newBudget.icon,
       period: newBudget.period
     };
@@ -97,7 +108,7 @@ export const Budget = () => {
       addBudget(budgetData);
       toast({
         title: "Budget Added",
-        description: `Budget for ${newBudget.name} has been created`,
+        description: `Budget for ${newBudget.name} has been created with current spending of ₹${currentSpent.toLocaleString()}`,
       });
     }
     
@@ -124,14 +135,14 @@ export const Budget = () => {
     });
   };
 
-  const totalBudget = budgetsWithSpent.reduce((sum, budget) => sum + budget.limit, 0);
-  const totalSpent = budgetsWithSpent.reduce((sum, budget) => sum + budget.spent, 0);
+  const totalBudget = budgetsWithRealSpent.reduce((sum, budget) => sum + budget.limit, 0);
+  const totalSpent = budgetsWithRealSpent.reduce((sum, budget) => sum + budget.spent, 0);
   const remainingBudget = totalBudget - totalSpent;
 
   return (
     <div className="p-4 space-y-6">
       {/* Header Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -169,6 +180,18 @@ export const Budget = () => {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Unbudgeted</p>
+                <p className="text-2xl font-bold text-orange-500">₹{unbudgetedExpenses.toLocaleString()}</p>
+              </div>
+              <div className="text-3xl">📊</div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Add Budget Button */}
@@ -192,7 +215,7 @@ export const Budget = () => {
                   id="category"
                   value={newBudget.name}
                   onChange={(e) => setNewBudget({...newBudget, name: e.target.value})}
-                  placeholder="e.g., Food & Dining"
+                  placeholder="e.g., Petrol, Groceries, Entertainment"
                 />
               </div>
               <div>
@@ -227,6 +250,7 @@ export const Budget = () => {
                   <SelectContent className="bg-background border-border z-50">
                     <SelectItem value="🍽️">🍽️ Food</SelectItem>
                     <SelectItem value="🚗">🚗 Transport</SelectItem>
+                    <SelectItem value="⛽">⛽ Petrol</SelectItem>
                     <SelectItem value="🛍️">🛍️ Shopping</SelectItem>
                     <SelectItem value="🎬">🎬 Entertainment</SelectItem>
                     <SelectItem value="⚡">⚡ Bills</SelectItem>
@@ -246,18 +270,21 @@ export const Budget = () => {
 
       {/* Budget Categories */}
       <div className="space-y-4">
-        {budgetsWithSpent.length === 0 ? (
+        {budgetsWithRealSpent.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <div className="text-muted-foreground">
                 <div className="text-4xl mb-2">📊</div>
                 <p className="text-lg font-medium mb-1">No budgets set yet</p>
                 <p className="text-sm">Create your first budget to start tracking your spending</p>
+                <p className="text-xs mt-2 text-orange-500">
+                  Categories from your budgets will appear in expense forms automatically
+                </p>
               </div>
             </CardContent>
           </Card>
         ) : (
-          budgetsWithSpent.map((budget) => {
+          budgetsWithRealSpent.map((budget) => {
             const progressPercentage = getProgressPercentage(budget.spent, budget.limit);
             const remaining = budget.limit - budget.spent;
             
@@ -305,9 +332,7 @@ export const Budget = () => {
                         {remaining >= 0 ? `₹${remaining.toLocaleString()} remaining` : `₹${Math.abs(remaining).toLocaleString()} over budget`}
                       </span>
                       <span className="text-muted-foreground">
-                        {budget.period === 'monthly' && `${Math.round((new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()) * 100)}% of month passed`}
-                        {budget.period === 'weekly' && `${Math.round(((new Date().getDay() + 1) / 7) * 100)}% of week passed`}
-                        {budget.period === 'yearly' && `${Math.round(((new Date().getMonth() + 1) / 12) * 100)}% of year passed`}
+                        Auto-updated from expenses
                       </span>
                     </div>
                   </div>
@@ -318,37 +343,51 @@ export const Budget = () => {
         )}
       </div>
 
-      {/* Insights based on real data */}
-      {data.expenses.length > 0 && (
-        <Card>
+      {/* Unbudgeted Expenses Warning */}
+      {unbudgetedExpenses > 0 && (
+        <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/10">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              🧠 Budget Insights
+            <CardTitle className="flex items-center gap-2 text-orange-600">
+              📊 Unbudgeted Expenses
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                • You have {data.expenses.length} expense entries this month
+                You have ₹{unbudgetedExpenses.toLocaleString()} in expenses that don't match any budget category.
               </p>
-              <p className="text-sm text-muted-foreground">
-                • Total expenses: ₹{data.expenses.reduce((sum, expense) => sum + expense.amount, 0).toLocaleString()}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                • {budgetsWithSpent.length} budget categories set
-              </p>
-              {budgetsWithSpent.length > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  • {budgetsWithSpent.filter(b => b.spent > b.limit).length} budgets exceeded
-                </p>
-              )}
-              <p className="text-sm text-muted-foreground">
-                • Budget amounts automatically update when you add expenses
+              <p className="text-xs text-muted-foreground">
+                Consider creating budgets for these expense categories or they will be classified as "Others".
               </p>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Integration Info */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            🔄 Budget Integration
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              • Budget categories automatically appear in expense forms
+            </p>
+            <p className="text-sm text-muted-foreground">
+              • Spent amounts are calculated from your actual expenses
+            </p>
+            <p className="text-sm text-muted-foreground">
+              • Expenses without matching budgets are classified as "Others"
+            </p>
+            <p className="text-sm text-muted-foreground">
+              • Budget status updates in real-time when you add expenses
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

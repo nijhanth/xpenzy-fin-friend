@@ -1,3 +1,4 @@
+
 export interface IncomeEntry {
   id: string;
   amount: number;
@@ -12,7 +13,7 @@ export interface ExpenseEntry {
   id: string;
   amount: number;
   date: string;
-  category: 'Food & Dining' | 'Transportation' | 'Shopping' | 'Bills & Utilities' | 'Entertainment' | 'Healthcare' | 'Education' | 'Custom';
+  category: string; // Changed to string to allow budget categories
   subcategory: string;
   paymentMode: 'Cash' | 'UPI' | 'Card' | 'Bank Transfer' | 'Net Banking';
   notes: string;
