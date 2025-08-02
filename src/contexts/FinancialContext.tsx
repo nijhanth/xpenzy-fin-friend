@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { FinancialData, IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, InvestmentTransaction, BudgetCategory } from '@/types/financial';
 import { incomeService, expenseService, savingsService, investmentService, budgetService, investmentTransactionService } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface FinancialContextType {
   data: FinancialData;
@@ -53,10 +54,17 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const { toast } = useToast();
 
-  // Load all data on component mount
+  // Load all data on component mount, but only if user is authenticated
   React.useEffect(() => {
     const loadAllData = async () => {
       try {
+        // Check if user is authenticated first
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setIsLoading(false);
+          return;
+        }
+
         const [incomeData, expenseData, savingsData, investmentData, budgetData, transactionData] = await Promise.all([
           incomeService.getAll(),
           expenseService.getAll(),
@@ -76,11 +84,15 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         });
       } catch (error) {
         console.error('Error loading financial data:', error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to load your financial data."
-        });
+        // Only show error toast if user is authenticated (to avoid showing errors on login page)
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Failed to load your financial data."
+          });
+        }
       } finally {
         setIsLoading(false);
       }
@@ -210,6 +222,18 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         ...prev,
         investmentTransactions: [newTransaction, ...prev.investmentTransactions]
       }));
+      
+      // Refresh investment data to get updated totals from the database trigger
+      try {
+        const updatedInvestments = await investmentService.getAll();
+        setData(prev => ({
+          ...prev,
+          investments: updatedInvestments
+        }));
+      } catch (refreshError) {
+        console.error('Error refreshing investment data:', refreshError);
+      }
+      
       toast({
         title: "Success",
         description: "Money added to investment successfully",
@@ -233,6 +257,18 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           t.id === id ? updatedTransaction : t
         )
       }));
+      
+      // Refresh investment data to get updated totals from the database trigger
+      try {
+        const updatedInvestments = await investmentService.getAll();
+        setData(prev => ({
+          ...prev,
+          investments: updatedInvestments
+        }));
+      } catch (refreshError) {
+        console.error('Error refreshing investment data:', refreshError);
+      }
+      
       toast({
         title: "Success",
         description: "Investment transaction updated successfully",
@@ -254,6 +290,18 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         ...prev,
         investmentTransactions: prev.investmentTransactions.filter(t => t.id !== id)
       }));
+      
+      // Refresh investment data to get updated totals from the database trigger
+      try {
+        const updatedInvestments = await investmentService.getAll();
+        setData(prev => ({
+          ...prev,
+          investments: updatedInvestments
+        }));
+      } catch (refreshError) {
+        console.error('Error refreshing investment data:', refreshError);
+      }
+      
       toast({
         title: "Success",
         description: "Investment transaction deleted successfully",
