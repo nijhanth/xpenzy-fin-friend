@@ -14,7 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 const transactionSchema = z.object({
   amount: z.number().min(1, 'Amount must be greater than 0'),
   date: z.string().min(1, 'Date is required'),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  profit_loss: z.number().default(0)
 });
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
@@ -42,7 +43,8 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
     defaultValues: {
       amount: 1000,
       date: new Date().toISOString().split('T')[0],
-      notes: ''
+      notes: '',
+      profit_loss: 0
     }
   });
 
@@ -53,14 +55,16 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
         form.reset({
           amount: transaction.amount,
           date: transaction.date,
-          notes: transaction.notes || ''
+          notes: transaction.notes || '',
+          profit_loss: transaction.profit_loss || 0
         });
       }
     } else if (open && !editingId) {
       form.reset({
         amount: 1000,
         date: new Date().toISOString().split('T')[0],
-        notes: ''
+        notes: '',
+        profit_loss: 0
       });
     }
   }, [editingId, open, form, data.investmentTransactions]);
@@ -74,7 +78,8 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
           investment_id: investmentId,
           amount: data.amount,
           date: data.date,
-          notes: data.notes || `Added ₹${data.amount.toLocaleString()} to ${investmentName}`
+          notes: data.notes || `Added ₹${data.amount.toLocaleString()} to ${investmentName}`,
+          profit_loss: data.profit_loss
         });
       }
       onClose();
@@ -125,6 +130,29 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
                     <Input type="date" {...field} />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="profit_loss"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Profit/Loss (₹)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      placeholder="Enter profit (+) or loss (-)"
+                      {...field}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                      step="1"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  <p className="text-sm text-muted-foreground">
+                    Enter positive value for profit (e.g., +165) or negative for loss (e.g., -200)
+                  </p>
                 </FormItem>
               )}
             />

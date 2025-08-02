@@ -47,6 +47,7 @@ export interface InvestmentTransaction {
   date: string;
   notes?: string;
   user_id?: string;
+  profit_loss?: number;
 }
 
 export interface BudgetCategory {

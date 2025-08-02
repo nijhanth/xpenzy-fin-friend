@@ -10,11 +10,12 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { InvestmentForm } from '@/components/forms/InvestmentForm';
+import { InvestmentTransactionForm } from '@/components/forms/InvestmentTransactionForm';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 
 export const Investments = () => {
-  const { data, addMoneyToInvestment, getInvestmentTransactions: getTransactions, deleteInvestment, deleteInvestmentTransaction } = useFinancial();
+  const { data, getInvestmentTransactions: getTransactions, deleteInvestment, deleteInvestmentTransaction } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   
   const totalInvested = data.investments.reduce((sum, inv) => sum + inv.invested, 0);
@@ -24,17 +25,12 @@ export const Investments = () => {
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
   
   const { toast } = useToast();
-  const [addMoneyDialog, setAddMoneyDialog] = useState<{
-    open: boolean;
-    investmentId: string | null;
-    investmentName: string;
-  }>({
-    open: false,
-    investmentId: null,
-    investmentName: ''
-  });
-  const [addAmount, setAddAmount] = useState('1000');
-  const [addDate, setAddDate] = useState(new Date().toISOString().split('T')[0]);
+  const [transactionFormOpen, setTransactionFormOpen] = useState(false);
+  const [currentInvestment, setCurrentInvestment] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [expandedInvestments, setExpandedInvestments] = useState<Set<string>>(new Set());
 
   // Generate allocation data from investments
@@ -81,43 +77,9 @@ export const Investments = () => {
   };
 
   const handleAddMoney = (investmentId: string, investmentName: string) => {
-    setAddMoneyDialog({
-      open: true,
-      investmentId,
-      investmentName
-    });
-    setAddAmount('1000');
-    setAddDate(new Date().toISOString().split('T')[0]);
-  };
-
-  const handleAddMoneySubmit = () => {
-    if (!addMoneyDialog.investmentId || !addAmount) {
-      toast({
-        title: "Error",
-        description: "Please enter a valid amount",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const amount = parseFloat(addAmount);
-    if (amount <= 0) {
-      toast({
-        title: "Error", 
-        description: "Amount must be greater than 0",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    addMoneyToInvestment(addMoneyDialog.investmentId, amount, addDate);
-    
-    toast({
-      title: "Money Added!",
-      description: `₹${amount.toLocaleString()} added to ${addMoneyDialog.investmentName}`
-    });
-
-    setAddMoneyDialog({ open: false, investmentId: null, investmentName: '' });
+    setCurrentInvestment({ id: investmentId, name: investmentName });
+    setEditingTransaction(null);
+    setTransactionFormOpen(true);
   };
 
   const toggleInvestmentHistory = (investmentId: string) => {
@@ -131,11 +93,9 @@ export const Investments = () => {
   };
 
   const handleEditTransaction = (transactionId: string, investment: any) => {
-    // This would open a transaction edit form
-    toast({
-      title: "Edit Transaction",
-      description: "Transaction editing functionality will be available soon",
-    });
+    setCurrentInvestment({ id: investment.id, name: investment.name });
+    setEditingTransaction(transactionId);
+    setTransactionFormOpen(true);
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
@@ -421,9 +381,16 @@ export const Investments = () => {
                                     )}
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-investment">
-                                      +₹{transaction.amount.toLocaleString()}
-                                    </span>
+                                    <div className="text-right">
+                                      <span className="font-semibold text-investment">
+                                        +₹{transaction.amount.toLocaleString()}
+                                      </span>
+                                      {transaction.profit_loss !== undefined && transaction.profit_loss !== 0 && (
+                                        <p className={`text-xs ${transaction.profit_loss >= 0 ? 'text-success' : 'text-destructive'}`}>
+                                          P/L: {transaction.profit_loss >= 0 ? '+' : ''}₹{transaction.profit_loss.toLocaleString()}
+                                        </p>
+                                      )}
+                                    </div>
                                     <EditDeleteMenu
                                       onEdit={() => handleEditTransaction(transaction.id, investment)}
                                       onDelete={() => handleDeleteTransaction(transaction.id)}
@@ -468,53 +435,20 @@ export const Investments = () => {
         editingId={editingEntry}
       />
       
-      {/* Add Money Dialog */}
-      <Dialog open={addMoneyDialog.open} onOpenChange={(open) => setAddMoneyDialog({ open, investmentId: null, investmentName: '' })}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add Money to {addMoneyDialog.investmentName}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="add-amount">Amount to Add (₹)</Label>
-              <Input
-                id="add-amount"
-                type="number"
-                value={addAmount}
-                onChange={(e) => setAddAmount(e.target.value)}
-                placeholder="1000"
-                min="1"
-                step="1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="add-date">Date</Label>
-              <Input
-                id="add-date"
-                type="date"
-                value={addDate}
-                onChange={(e) => setAddDate(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setAddMoneyDialog({ open: false, investmentId: null, investmentName: '' })}
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="button" 
-                onClick={handleAddMoneySubmit}
-                className="bg-investment text-white"
-              >
-                Add Money
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Investment Transaction Form */}
+      {currentInvestment && (
+        <InvestmentTransactionForm
+          open={transactionFormOpen}
+          onClose={() => {
+            setTransactionFormOpen(false);
+            setCurrentInvestment(null);
+            setEditingTransaction(null);
+          }}
+          investmentId={currentInvestment.id}
+          investmentName={currentInvestment.name}
+          editingId={editingTransaction}
+        />
+      )}
     </div>
   );
 };

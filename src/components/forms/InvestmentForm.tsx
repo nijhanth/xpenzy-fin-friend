@@ -14,8 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 const investmentSchema = z.object({
   type: z.enum(['Mutual Fund', 'Stocks', 'FD', 'Crypto', 'Gold', 'Real Estate', 'Custom']),
   name: z.string().min(1, 'Investment name is required'),
-  invested: z.number().min(1, 'Invested amount must be greater than 0'),
-  current: z.number().min(0, 'Current value must be 0 or greater'),
   date: z.string().min(1, 'Date is required'),
   notes: z.string().optional().default(''),
   customType: z.string().optional()
@@ -39,8 +37,6 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
     defaultValues: {
       type: 'Mutual Fund',
       name: '',
-      invested: 0,
-      current: 0,
       date: new Date().toISOString().split('T')[0],
       notes: '',
       customType: ''
@@ -55,8 +51,6 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
         form.reset({
           type: existingEntry.type as any,
           name: existingEntry.name,
-          invested: existingEntry.invested,
-          current: existingEntry.current,
           date: existingEntry.date,
           notes: existingEntry.notes,
           customType: existingEntry.customType || ''
@@ -75,8 +69,8 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
     const investmentData = {
       type: finalType,
       name: formData.name,
-      invested: formData.invested,
-      current: formData.current,
+      invested: 0, // Will be updated through transactions
+      current: 0, // Will be updated through transactions with profit/loss
       date: formData.date,
       notes: formData.notes || '',
       customType: formData.type === 'Custom' ? formData.customType : undefined
@@ -165,43 +159,6 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="invested"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Invested Amount (₹)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Enter invested amount"
-                      {...field}
-                      onChange={e => field.onChange(Number(e.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="current"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Current Value (₹)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Enter current value"
-                      {...field}
-                      onChange={e => field.onChange(Number(e.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

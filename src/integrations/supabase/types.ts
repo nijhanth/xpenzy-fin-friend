@@ -145,6 +145,7 @@ export type Database = {
           id: string
           investment_id: string
           notes: string | null
+          profit_loss: number | null
           updated_at: string
           user_id: string
         }
@@ -155,6 +156,7 @@ export type Database = {
           id?: string
           investment_id: string
           notes?: string | null
+          profit_loss?: number | null
           updated_at?: string
           user_id: string
         }
@@ -165,6 +167,7 @@ export type Database = {
           id?: string
           investment_id?: string
           notes?: string | null
+          profit_loss?: number | null
           updated_at?: string
           user_id?: string
         }
