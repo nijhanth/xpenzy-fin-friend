@@ -8,11 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, TrendingUp, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { BudgetCategory } from '@/types/financial';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, getWeeksInMonth, getYear, getMonth } from 'date-fns';
 
 export const Budget = () => {
   const { toast } = useToast();
@@ -33,11 +34,55 @@ export const Budget = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<BudgetCategory | null>(null);
 
+  // Date selection state
+  const currentDate = new Date();
+  const [selectedYear, setSelectedYear] = useState(getYear(currentDate));
+  const [selectedMonth, setSelectedMonth] = useState(getMonth(currentDate));
+  const [selectedWeek, setSelectedWeek] = useState(1);
+
+  // Generate options for date selectors
+  const yearOptions = Array.from({ length: 5 }, (_, i) => getYear(currentDate) - 2 + i);
+  const monthOptions = Array.from({ length: 12 }, (_, i) => i);
+  const weeksInSelectedMonth = getWeeksInMonth(new Date(selectedYear, selectedMonth));
+  const weekOptions = Array.from({ length: weeksInSelectedMonth }, (_, i) => i + 1);
+
+  // Helper function to filter expenses by selected period
+  const getFilteredExpenses = (period: 'yearly' | 'monthly' | 'weekly') => {
+    const year = selectedYear;
+    const month = selectedMonth;
+    const week = selectedWeek;
+
+    let startDate: Date;
+    let endDate: Date;
+
+    if (period === 'yearly') {
+      startDate = startOfYear(new Date(year, 0));
+      endDate = endOfYear(new Date(year, 0));
+    } else if (period === 'monthly') {
+      startDate = startOfMonth(new Date(year, month));
+      endDate = endOfMonth(new Date(year, month));
+    } else {
+      // weekly
+      const firstDayOfMonth = startOfMonth(new Date(year, month));
+      const startOfTargetWeek = startOfWeek(new Date(firstDayOfMonth.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000));
+      startDate = startOfTargetWeek;
+      endDate = endOfWeek(startOfTargetWeek);
+    }
+
+    return data.expenses.filter(expense => {
+      const expenseDate = new Date(expense.date);
+      return isWithinInterval(expenseDate, { start: startDate, end: endDate });
+    });
+  };
+
   // Calculate spent amounts from real expense data automatically
   const budgetsWithRealSpent = useMemo(() => {
     return data.budgets.map(budget => {
+      // Get filtered expenses based on budget period and selected time frame
+      const filteredExpenses = getFilteredExpenses(budget.period);
+      
       // Calculate spent from actual expenses matching this budget category
-      const spent = data.expenses
+      const spent = filteredExpenses
         .filter(expense => expense.category === budget.name)
         .reduce((sum, expense) => sum + expense.amount, 0);
       
@@ -46,15 +91,20 @@ export const Budget = () => {
         spent
       };
     });
-  }, [data.budgets, data.expenses]);
+  }, [data.budgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
 
   // Calculate expenses that don't have budgets (Others/Unbudgeted)
   const unbudgetedExpenses = useMemo(() => {
     const budgetCategoryNames = data.budgets.map(b => b.name);
-    return data.expenses
+    const allFilteredExpenses = [...getFilteredExpenses('yearly'), ...getFilteredExpenses('monthly'), ...getFilteredExpenses('weekly')];
+    const uniqueExpenses = allFilteredExpenses.filter((expense, index, self) => 
+      index === self.findIndex(e => e.id === expense.id)
+    );
+    
+    return uniqueExpenses
       .filter(expense => !budgetCategoryNames.includes(expense.category))
       .reduce((sum, expense) => sum + expense.amount, 0);
-  }, [data.budgets, data.expenses]);
+  }, [data.budgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
 
   const getProgressPercentage = (spent: number, limit: number) => {
     return Math.min((spent / limit) * 100, 100);
@@ -141,6 +191,64 @@ export const Budget = () => {
 
   return (
     <div className="p-4 space-y-6">
+      {/* Date Selection */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            Period Selection
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="year">Year</Label>
+              <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background border-border">
+                  {yearOptions.map(year => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="month">Month</Label>
+              <Select value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(parseInt(value))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background border-border">
+                  {monthOptions.map(month => (
+                    <SelectItem key={month} value={month.toString()}>
+                      {format(new Date(2024, month), 'MMMM')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="week">Week</Label>
+              <Select value={selectedWeek.toString()} onValueChange={(value) => setSelectedWeek(parseInt(value))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background border-border">
+                  {weekOptions.map(week => (
+                    <SelectItem key={week} value={week.toString()}>Week {week}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground mt-2">
+            Expenses are filtered based on each budget's period (yearly/monthly/weekly) and your selection above.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Header Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
