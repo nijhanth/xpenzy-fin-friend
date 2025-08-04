@@ -17,7 +17,6 @@ const expenseSchema = z.object({
   amount: z.number().min(1, 'Amount must be greater than 0'),
   date: z.string().min(1, 'Date is required'),
   category: z.string().min(1, 'Category is required'),
-  subcategory: z.string().min(1, 'Subcategory is required'),
   paymentMode: z.enum(['Cash', 'UPI', 'Card', 'Bank Transfer', 'Net Banking']),
   notes: z.string().optional().default(''),
   customCategory: z.string().optional()
@@ -31,16 +30,6 @@ interface ExpenseFormProps {
   editingId?: string | null;
 }
 
-const defaultSubcategoryOptions = {
-  'Food & Dining': ['Restaurants', 'Groceries', 'Coffee', 'Takeout', 'Snacks'],
-  'Transportation': ['Petrol', 'Public Transport', 'Taxi/Uber', 'Parking', 'Maintenance'],
-  'Shopping': ['Clothes', 'Electronics', 'Books', 'Gifts', 'Household Items'],
-  'Bills & Utilities': ['Electricity', 'Water', 'Internet', 'Phone', 'Gas', 'Insurance'],
-  'Entertainment': ['Movies', 'Sports', 'Music', 'Games', 'Events'],
-  'Healthcare': ['Doctor', 'Medicine', 'Hospital', 'Dental', 'Fitness'],
-  'Education': ['Courses', 'Books', 'Tuition', 'Workshops', 'Certification'],
-  'Others': ['Miscellaneous', 'Unbudgeted']
-};
 
 export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editingId }) => {
   const { addExpense, updateExpense, updateBudget, data } = useFinancial();
@@ -53,7 +42,6 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       amount: 0,
       date: new Date().toISOString().split('T')[0],
       category: '',
-      subcategory: '',
       paymentMode: 'UPI',
       notes: '',
       customCategory: ''
@@ -62,36 +50,11 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
 
   const selectedCategory = form.watch('category');
 
-  // Create combined category options from budget categories and default categories
+  // Only show budget categories plus "Custom" option
   const categoryOptions = useMemo(() => {
     const budgetCategories = data.budgets.map(budget => budget.name);
-    const defaultCategories = ['Food & Dining', 'Transportation', 'Shopping', 'Bills & Utilities', 'Entertainment', 'Healthcare', 'Education'];
-    
-    // Combine and deduplicate categories
-    const allCategories = [...new Set([...budgetCategories, ...defaultCategories])];
-    
-    // Always add "Others" at the end for unbudgeted expenses
-    if (!allCategories.includes('Others')) {
-      allCategories.push('Others');
-    }
-    
-    return allCategories;
+    return [...budgetCategories, 'Custom'];
   }, [data.budgets]);
-
-  // Get subcategory options based on selected category
-  const subcategoryOptions = useMemo(() => {
-    if (!selectedCategory) return [];
-    
-    // Check if this is a budget category
-    const budgetCategory = data.budgets.find(budget => budget.name === selectedCategory);
-    if (budgetCategory) {
-      // For budget categories, use generic subcategories or create based on category type
-      return ['General', 'Miscellaneous'];
-    }
-    
-    // Use default subcategories for standard categories
-    return defaultSubcategoryOptions[selectedCategory as keyof typeof defaultSubcategoryOptions] || ['General'];
-  }, [selectedCategory, data.budgets]);
 
   // Get budget info for the selected category
   const budgetInfo = useMemo(() => {
@@ -124,7 +87,6 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
           amount: existingEntry.amount,
           date: existingEntry.date,
           category: existingEntry.category,
-          subcategory: existingEntry.subcategory,
           paymentMode: existingEntry.paymentMode as any,
           notes: existingEntry.notes,
           customCategory: existingEntry.customCategory || ''
@@ -135,7 +97,6 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
         amount: 0,
         date: new Date().toISOString().split('T')[0],
         category: '',
-        subcategory: '',
         paymentMode: 'UPI',
         notes: '',
         customCategory: ''
@@ -147,11 +108,11 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     const expenseData = {
       amount: formData.amount,
       date: formData.date,
-      category: formData.category,
-      subcategory: formData.subcategory,
+      category: formData.category === 'Custom' ? formData.customCategory || 'Custom' : formData.category,
+      subcategory: 'General', // Default subcategory since we removed the field
       paymentMode: formData.paymentMode,
       notes: formData.notes || '',
-      customCategory: formData.customCategory
+      customCategory: formData.category === 'Custom' ? formData.customCategory : undefined
     };
 
     if (isEditing && editingId) {
@@ -231,11 +192,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
               name="category"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Category</FormLabel>
-                  <Select onValueChange={(value) => {
-                    field.onChange(value);
-                    form.setValue('subcategory', '');
-                  }} value={field.value}>
+              <FormLabel>Category</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
@@ -283,28 +241,21 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
               </div>
             )}
 
-            <FormField
-              control={form.control}
-              name="subcategory"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Subcategory</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+            {selectedCategory === 'Custom' && (
+              <FormField
+                control={form.control}
+                name="customCategory"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Custom Category Name</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select subcategory" />
-                      </SelectTrigger>
+                      <Input placeholder="Enter category name" {...field} />
                     </FormControl>
-                    <SelectContent className="bg-background border-border z-50">
-                      {subcategoryOptions.map(sub => (
-                        <SelectItem key={sub} value={sub}>{sub}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
