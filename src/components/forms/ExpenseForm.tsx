@@ -52,7 +52,9 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
 
   // Only show budget categories plus "Custom" option
   const categoryOptions = useMemo(() => {
-    const budgetCategories = data.budgets.map(budget => budget.name);
+    const budgetCategories = data.budgets
+      .map(budget => budget.name)
+      .filter(name => name && name.trim() !== '');
     return [...budgetCategories, 'Custom'];
   }, [data.budgets]);
 
