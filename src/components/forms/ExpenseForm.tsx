@@ -41,7 +41,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     defaultValues: {
       amount: 0,
       date: new Date().toISOString().split('T')[0],
-      category: '',
+      category: undefined,
       paymentMode: 'UPI',
       notes: '',
       customCategory: ''
@@ -98,7 +98,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       form.reset({
         amount: 0,
         date: new Date().toISOString().split('T')[0],
-        category: '',
+        category: undefined,
         paymentMode: 'UPI',
         notes: '',
         customCategory: ''
