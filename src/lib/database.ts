@@ -318,9 +318,13 @@ export const investmentService = {
 // Budget CRUD operations
 export const budgetService = {
   async getAll(): Promise<BudgetCategory[]> {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from('budget_categories')
       .select('*')
+      .eq('user_id', user.user.id)
       .order('created_at', { ascending: false });
     
     if (error) throw error;
