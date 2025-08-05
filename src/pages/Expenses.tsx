@@ -23,9 +23,9 @@ export const Expenses = () => {
 
   // Date filter states
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
-  const [selectedWeek, setSelectedWeek] = useState<string>('');
-  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [selectedWeek, setSelectedWeek] = useState<string>('all');
+  const [selectedDate, setSelectedDate] = useState<string>('all');
 
   // Generate years from expenses data
   const availableYears = useMemo(() => {
@@ -49,7 +49,7 @@ export const Expenses = () => {
 
   // Generate weeks for selected month
   const availableWeeks = useMemo(() => {
-    if (!selectedYear || !selectedMonth) return [];
+    if (!selectedYear || selectedMonth === 'all') return [];
     
     const year = parseInt(selectedYear);
     const month = parseInt(selectedMonth) - 1;
@@ -86,12 +86,12 @@ export const Expenses = () => {
     let filtered = data.expenses;
 
     // Filter by specific date first
-    if (selectedDate) {
+    if (selectedDate && selectedDate !== 'all') {
       return filtered.filter(expense => expense.date === selectedDate);
     }
 
     // Filter by week
-    if (selectedWeek && selectedYear && selectedMonth) {
+    if (selectedWeek && selectedWeek !== 'all' && selectedYear && selectedMonth && selectedMonth !== 'all') {
       const week = availableWeeks.find(w => w.value === selectedWeek);
       if (week) {
         filtered = filtered.filter(expense => {
@@ -99,7 +99,7 @@ export const Expenses = () => {
           return isWithinInterval(expenseDate, { start: week.start, end: week.end });
         });
       }
-    } else if (selectedYear && selectedMonth) {
+    } else if (selectedYear && selectedMonth && selectedMonth !== 'all') {
       // Filter by month
       const year = parseInt(selectedYear);
       const month = parseInt(selectedMonth) - 1;
@@ -215,9 +215,9 @@ export const Expenses = () => {
               <label className="text-sm font-medium text-muted-foreground">Year</label>
               <Select value={selectedYear} onValueChange={(value) => {
                 setSelectedYear(value);
-                setSelectedMonth('');
-                setSelectedWeek('');
-                setSelectedDate('');
+                setSelectedMonth('all');
+                setSelectedWeek('all');
+                setSelectedDate('all');
               }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select year" />
@@ -235,14 +235,14 @@ export const Expenses = () => {
               <label className="text-sm font-medium text-muted-foreground">Month</label>
               <Select value={selectedMonth} onValueChange={(value) => {
                 setSelectedMonth(value);
-                setSelectedWeek('');
-                setSelectedDate('');
+                setSelectedWeek('all');
+                setSelectedDate('all');
               }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select month" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All months</SelectItem>
+                  <SelectItem value="all">All months</SelectItem>
                   {availableMonths.map(month => (
                     <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>
                   ))}
@@ -258,7 +258,7 @@ export const Expenses = () => {
                   <SelectValue placeholder="Select week" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All weeks</SelectItem>
+                  <SelectItem value="all">All weeks</SelectItem>
                   {availableWeeks.map(week => (
                     <SelectItem key={week.value} value={week.value}>{week.label}</SelectItem>
                   ))}
@@ -274,7 +274,7 @@ export const Expenses = () => {
                   <SelectValue placeholder="Select date" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All dates</SelectItem>
+                  <SelectItem value="all">All dates</SelectItem>
                   {availableDates.map(date => (
                     <SelectItem key={date} value={date}>
                       {new Date(date).toLocaleDateString('en-US', { 
