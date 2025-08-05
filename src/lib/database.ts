@@ -333,6 +333,7 @@ export const budgetService = {
       category: item.category,
       limit_amount: item.limit_amount,
       period: item.period as 'monthly' | 'weekly' | 'yearly',
+      icon: item.icon || '💰',
       user_id: item.user_id
     })) || [];
   },
@@ -344,6 +345,7 @@ export const budgetService = {
         category: budget.category,
         limit_amount: budget.limit_amount,
         period: budget.period,
+        icon: budget.icon || '💰',
         user_id: (await supabase.auth.getUser()).data.user?.id
       }])
       .select()
@@ -355,6 +357,7 @@ export const budgetService = {
       category: data.category,
       limit_amount: data.limit_amount,
       period: data.period as 'monthly' | 'weekly' | 'yearly',
+      icon: data.icon || '💰',
       user_id: data.user_id
     };
   },
@@ -365,7 +368,8 @@ export const budgetService = {
       .update({
         category: budget.category,
         limit_amount: budget.limit_amount,
-        period: budget.period
+        period: budget.period,
+        icon: budget.icon
       })
       .eq('id', id)
       .select()
@@ -377,6 +381,7 @@ export const budgetService = {
       category: data.category,
       limit_amount: data.limit_amount,
       period: data.period as 'monthly' | 'weekly' | 'yearly',
+      icon: data.icon || '💰',
       user_id: data.user_id
     };
   },
