@@ -23,7 +23,7 @@ export const Expenses = () => {
 
   // Date filter states
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
-  const [selectedMonth, setSelectedMonth] = useState<string>((new Date().getMonth() + 1).toString());
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [selectedWeek, setSelectedWeek] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>('');
 
@@ -213,7 +213,12 @@ export const Expenses = () => {
             {/* Year Filter */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Year</label>
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <Select value={selectedYear} onValueChange={(value) => {
+                setSelectedYear(value);
+                setSelectedMonth('');
+                setSelectedWeek('');
+                setSelectedDate('');
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select year" />
                 </SelectTrigger>
@@ -228,11 +233,16 @@ export const Expenses = () => {
             {/* Month Filter */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Month</label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <Select value={selectedMonth} onValueChange={(value) => {
+                setSelectedMonth(value);
+                setSelectedWeek('');
+                setSelectedDate('');
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select month" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="">All months</SelectItem>
                   {availableMonths.map(month => (
                     <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>
                   ))}
