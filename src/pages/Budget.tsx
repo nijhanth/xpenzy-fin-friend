@@ -1,4 +1,3 @@
-
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -142,7 +141,8 @@ export const Budget = () => {
     const budgetData: Omit<BudgetCategory, 'id'> = {
       category: newBudget.name,
       limit_amount: parseFloat(newBudget.limit),
-      period: newBudget.period
+      period: newBudget.period,
+      icon: newBudget.icon
     };
 
     if (editingBudget) {
@@ -169,7 +169,7 @@ export const Budget = () => {
     setNewBudget({
       name: budget.category,
       limit: budget.limit_amount.toString(),
-      icon: "💰", // Default icon since it's not stored in DB
+      icon: budget.icon || "💰",
       period: budget.period
     });
     setIsDialogOpen(true);
@@ -400,7 +400,7 @@ export const Budget = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">💰</span>
+                        <span className="text-2xl">{budget.icon || '💰'}</span>
                         <div>
                           <h3 className="font-medium">{budget.category}</h3>
                           <p className="text-sm text-muted-foreground">
