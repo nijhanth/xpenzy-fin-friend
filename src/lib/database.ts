@@ -318,41 +318,72 @@ export const investmentService = {
 // Budget CRUD operations
 export const budgetService = {
   async getAll(): Promise<BudgetCategory[]> {
-    // For now, use localStorage since we don't have budget table in Supabase
-    const stored = localStorage.getItem('budgets');
-    return stored ? JSON.parse(stored) : [];
+    const { data, error } = await supabase
+      .from('budget_categories')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data?.map(item => ({
+      id: item.id,
+      category: item.category,
+      limit_amount: item.limit_amount,
+      period: item.period as 'monthly' | 'weekly' | 'yearly',
+      user_id: item.user_id
+    })) || [];
   },
 
   async create(budget: Omit<BudgetCategory, 'id'>): Promise<BudgetCategory> {
-    const newBudget: BudgetCategory = {
-      ...budget,
-      id: Date.now().toString()
+    const { data, error } = await supabase
+      .from('budget_categories')
+      .insert([{
+        category: budget.category,
+        limit_amount: budget.limit_amount,
+        period: budget.period,
+        user_id: (await supabase.auth.getUser()).data.user?.id
+      }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return {
+      id: data.id,
+      category: data.category,
+      limit_amount: data.limit_amount,
+      period: data.period as 'monthly' | 'weekly' | 'yearly',
+      user_id: data.user_id
     };
-    
-    const existing = await this.getAll();
-    const updated = [newBudget, ...existing];
-    localStorage.setItem('budgets', JSON.stringify(updated));
-    
-    return newBudget;
   },
 
   async update(id: string, budget: Partial<Omit<BudgetCategory, 'id'>>): Promise<BudgetCategory> {
-    const existing = await this.getAll();
-    const index = existing.findIndex(b => b.id === id);
+    const { data, error } = await supabase
+      .from('budget_categories')
+      .update({
+        category: budget.category,
+        limit_amount: budget.limit_amount,
+        period: budget.period
+      })
+      .eq('id', id)
+      .select()
+      .single();
     
-    if (index === -1) throw new Error('Budget not found');
-    
-    const updated = { ...existing[index], ...budget };
-    existing[index] = updated;
-    localStorage.setItem('budgets', JSON.stringify(existing));
-    
-    return updated;
+    if (error) throw error;
+    return {
+      id: data.id,
+      category: data.category,
+      limit_amount: data.limit_amount,
+      period: data.period as 'monthly' | 'weekly' | 'yearly',
+      user_id: data.user_id
+    };
   },
 
   async delete(id: string): Promise<void> {
-    const existing = await this.getAll();
-    const filtered = existing.filter(b => b.id !== id);
-    localStorage.setItem('budgets', JSON.stringify(filtered));
+    const { error } = await supabase
+      .from('budget_categories')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
   }
 };
 

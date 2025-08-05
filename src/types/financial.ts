@@ -52,12 +52,10 @@ export interface InvestmentTransaction {
 
 export interface BudgetCategory {
   id: string;
-  name: string;
-  limit: number;
-  spent: number;
-  icon: string;
+  category: string;
+  limit_amount: number;
   period: 'monthly' | 'weekly' | 'yearly';
-  userId?: string;
+  user_id?: string;
 }
 
 export interface FinancialData {

@@ -53,8 +53,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
   // Only show budget categories plus "Custom" option
   const categoryOptions = useMemo(() => {
     const budgetCategories = data.budgets
-      .map(budget => budget.name)
-      .filter(name => name && name.trim() !== '');
+      .map(budget => budget.category)
+      .filter(category => category && category.trim() !== '');
     return [...budgetCategories, 'Custom'];
   }, [data.budgets]);
 
@@ -62,7 +62,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
   const budgetInfo = useMemo(() => {
     if (!selectedCategory) return null;
     
-    const budget = data.budgets.find(b => b.name === selectedCategory);
+    const budget = data.budgets.find(b => b.category === selectedCategory);
     if (!budget) return null;
     
     // Calculate spent amount from expenses
@@ -70,13 +70,13 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       .filter(expense => expense.category === selectedCategory)
       .reduce((sum, expense) => sum + expense.amount, 0);
     
-    const remaining = budget.limit - spent;
+    const remaining = budget.limit_amount - spent;
     
     return {
-      limit: budget.limit,
+      limit: budget.limit_amount,
       spent,
       remaining,
-      percentage: (spent / budget.limit) * 100
+      percentage: (spent / budget.limit_amount) * 100
     };
   }, [selectedCategory, data.budgets, data.expenses]);
 
@@ -126,17 +126,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     } else {
       await addExpense(expenseData);
       
-      // Update budget spent amount if this category has a budget
-      const budget = data.budgets.find(b => b.name === formData.category);
-      if (budget) {
-        const currentSpent = data.expenses
-          .filter(expense => expense.category === formData.category)
-          .reduce((sum, expense) => sum + expense.amount, 0);
-        
-        await updateBudget(budget.id, { 
-          spent: currentSpent + formData.amount 
-        });
-      }
+      // Note: Budget spent amounts are calculated dynamically from expenses
       
       toast({
         title: "Expense Added",
@@ -203,7 +193,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
                     </FormControl>
                     <SelectContent className="bg-background border-border z-50">
                       {categoryOptions.map(category => {
-                        const isBudgetCategory = data.budgets.some(b => b.name === category);
+                        const isBudgetCategory = data.budgets.some(b => b.category === category);
                         return (
                           <SelectItem key={category} value={category}>
                             <div className="flex items-center gap-2">

@@ -83,7 +83,7 @@ export const Budget = () => {
       
       // Calculate spent from actual expenses matching this budget category
       const spent = filteredExpenses
-        .filter(expense => expense.category === budget.name)
+        .filter(expense => expense.category === budget.category)
         .reduce((sum, expense) => sum + expense.amount, 0);
       
       return {
@@ -95,7 +95,7 @@ export const Budget = () => {
 
   // Calculate expenses that don't have budgets (Others/Unbudgeted)
   const unbudgetedExpenses = useMemo(() => {
-    const budgetCategoryNames = data.budgets.map(b => b.name);
+    const budgetCategoryNames = data.budgets.map(b => b.category);
     const allFilteredExpenses = [...getFilteredExpenses('yearly'), ...getFilteredExpenses('monthly'), ...getFilteredExpenses('weekly')];
     const uniqueExpenses = allFilteredExpenses.filter((expense, index, self) => 
       index === self.findIndex(e => e.id === expense.id)
@@ -140,10 +140,8 @@ export const Budget = () => {
       .reduce((sum, expense) => sum + expense.amount, 0);
 
     const budgetData: Omit<BudgetCategory, 'id'> = {
-      name: newBudget.name,
-      limit: parseFloat(newBudget.limit),
-      spent: currentSpent, // Set actual spent amount
-      icon: newBudget.icon,
+      category: newBudget.name,
+      limit_amount: parseFloat(newBudget.limit),
       period: newBudget.period
     };
 
@@ -169,9 +167,9 @@ export const Budget = () => {
   const handleEditBudget = (budget: BudgetCategory) => {
     setEditingBudget(budget);
     setNewBudget({
-      name: budget.name,
-      limit: budget.limit.toString(),
-      icon: budget.icon,
+      name: budget.category,
+      limit: budget.limit_amount.toString(),
+      icon: "💰", // Default icon since it's not stored in DB
       period: budget.period
     });
     setIsDialogOpen(true);
@@ -185,7 +183,7 @@ export const Budget = () => {
     });
   };
 
-  const totalBudget = budgetsWithRealSpent.reduce((sum, budget) => sum + budget.limit, 0);
+  const totalBudget = budgetsWithRealSpent.reduce((sum, budget) => sum + budget.limit_amount, 0);
   const totalSpent = budgetsWithRealSpent.reduce((sum, budget) => sum + budget.spent, 0);
   const remainingBudget = totalBudget - totalSpent;
 
@@ -393,8 +391,8 @@ export const Budget = () => {
           </Card>
         ) : (
           budgetsWithRealSpent.map((budget) => {
-            const progressPercentage = getProgressPercentage(budget.spent, budget.limit);
-            const remaining = budget.limit - budget.spent;
+            const progressPercentage = getProgressPercentage(budget.spent, budget.limit_amount);
+            const remaining = budget.limit_amount - budget.spent;
             
             return (
               <Card key={budget.id}>
@@ -402,11 +400,11 @@ export const Budget = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">{budget.icon}</span>
+                        <span className="text-2xl">💰</span>
                         <div>
-                          <h3 className="font-medium">{budget.name}</h3>
+                          <h3 className="font-medium">{budget.category}</h3>
                           <p className="text-sm text-muted-foreground">
-                            ₹{budget.spent.toLocaleString()} of ₹{budget.limit.toLocaleString()}
+                            ₹{budget.spent.toLocaleString()} of ₹{budget.limit_amount.toLocaleString()}
                           </p>
                           <Badge variant="outline" className="text-xs mt-1">
                             {budget.period}
@@ -414,7 +412,7 @@ export const Budget = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {getStatusIcon(budget.spent, budget.limit)}
+                        {getStatusIcon(budget.spent, budget.limit_amount)}
                         <Badge 
                           variant={progressPercentage >= 100 ? "destructive" : progressPercentage >= 80 ? "secondary" : "default"}
                         >
@@ -436,7 +434,7 @@ export const Budget = () => {
                     />
                     
                     <div className="flex justify-between text-sm">
-                      <span className={getStatusColor(budget.spent, budget.limit)}>
+                      <span className={getStatusColor(budget.spent, budget.limit_amount)}>
                         {remaining >= 0 ? `₹${remaining.toLocaleString()} remaining` : `₹${Math.abs(remaining).toLocaleString()} over budget`}
                       </span>
                       <span className="text-muted-foreground">
