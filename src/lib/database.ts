@@ -333,7 +333,7 @@ export const budgetService = {
       category: item.category,
       limit_amount: item.limit_amount,
       period: item.period as 'monthly' | 'weekly' | 'yearly',
-      icon: item.icon || '💰',
+      icon: (item as any).icon || '💰',
       user_id: item.user_id
     })) || [];
   },
@@ -357,7 +357,7 @@ export const budgetService = {
       category: data.category,
       limit_amount: data.limit_amount,
       period: data.period as 'monthly' | 'weekly' | 'yearly',
-      icon: data.icon || '💰',
+      icon: (data as any).icon || '💰',
       user_id: data.user_id
     };
   },
@@ -381,7 +381,7 @@ export const budgetService = {
       category: data.category,
       limit_amount: data.limit_amount,
       period: data.period as 'monthly' | 'weekly' | 'yearly',
-      icon: data.icon || '💰',
+      icon: (data as any).icon || '💰',
       user_id: data.user_id
     };
   },
