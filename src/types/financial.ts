@@ -57,6 +57,11 @@ export interface BudgetCategory {
   period: 'monthly' | 'weekly' | 'yearly';
   icon?: string;
   user_id?: string;
+  start_date?: string;
+  end_date?: string;
+  year?: number;
+  month?: number;
+  week?: number;
 }
 
 export interface FinancialData {

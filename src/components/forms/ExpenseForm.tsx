@@ -50,13 +50,44 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
 
   const selectedCategory = form.watch('category');
 
-  // Only show budget categories plus "Custom" option
+  // Only show budget categories relevant to the expense date plus "Custom" option
   const categoryOptions = useMemo(() => {
-    const budgetCategories = data.budgets
+    const expenseDate = form.watch('date');
+    if (!expenseDate) {
+      return ['Custom'];
+    }
+
+    const expenseDateObj = new Date(expenseDate);
+    const expenseYear = expenseDateObj.getFullYear();
+    const expenseMonth = expenseDateObj.getMonth();
+    const expenseWeek = Math.ceil(expenseDateObj.getDate() / 7);
+
+    const relevantBudgets = data.budgets.filter(budget => {
+      // Legacy budgets without date fields should always be shown
+      if (!budget.year && !budget.month && !budget.week) {
+        return true;
+      }
+
+      // Check if budget is relevant to the expense date
+      if (budget.period === 'yearly' && budget.year === expenseYear) {
+        return true;
+      }
+      if (budget.period === 'monthly' && budget.year === expenseYear && budget.month === expenseMonth) {
+        return true;
+      }
+      if (budget.period === 'weekly' && budget.year === expenseYear && budget.month === expenseMonth && budget.week === expenseWeek) {
+        return true;
+      }
+      
+      return false;
+    });
+
+    const budgetCategories = relevantBudgets
       .map(budget => budget.category)
       .filter(category => category && category.trim() !== '');
+    
     return [...budgetCategories, 'Custom'];
-  }, [data.budgets]);
+  }, [data.budgets, form.watch('date')]);
 
   // Get budget info for the selected category
   const budgetInfo = useMemo(() => {

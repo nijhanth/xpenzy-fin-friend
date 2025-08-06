@@ -334,7 +334,12 @@ export const budgetService = {
       limit_amount: item.limit_amount,
       period: item.period as 'monthly' | 'weekly' | 'yearly',
       icon: (item as any).icon || '💰',
-      user_id: item.user_id
+      user_id: item.user_id,
+      start_date: (item as any).start_date,
+      end_date: (item as any).end_date,
+      year: (item as any).year,
+      month: (item as any).month,
+      week: (item as any).week
     })) || [];
   },
 
@@ -346,6 +351,11 @@ export const budgetService = {
         limit_amount: budget.limit_amount,
         period: budget.period,
         icon: budget.icon || '💰',
+        start_date: budget.start_date,
+        end_date: budget.end_date,
+        year: budget.year,
+        month: budget.month,
+        week: budget.week,
         user_id: (await supabase.auth.getUser()).data.user?.id
       }])
       .select()
@@ -358,7 +368,12 @@ export const budgetService = {
       limit_amount: data.limit_amount,
       period: data.period as 'monthly' | 'weekly' | 'yearly',
       icon: (data as any).icon || '💰',
-      user_id: data.user_id
+      user_id: data.user_id,
+      start_date: (data as any).start_date,
+      end_date: (data as any).end_date,
+      year: (data as any).year,
+      month: (data as any).month,
+      week: (data as any).week
     };
   },
 
@@ -369,7 +384,12 @@ export const budgetService = {
         category: budget.category,
         limit_amount: budget.limit_amount,
         period: budget.period,
-        icon: budget.icon
+        icon: budget.icon,
+        start_date: budget.start_date,
+        end_date: budget.end_date,
+        year: budget.year,
+        month: budget.month,
+        week: budget.week
       })
       .eq('id', id)
       .select()
@@ -382,7 +402,12 @@ export const budgetService = {
       limit_amount: data.limit_amount,
       period: data.period as 'monthly' | 'weekly' | 'yearly',
       icon: (data as any).icon || '💰',
-      user_id: data.user_id
+      user_id: data.user_id,
+      start_date: (data as any).start_date,
+      end_date: (data as any).end_date,
+      year: (data as any).year,
+      month: (data as any).month,
+      week: (data as any).week
     };
   },
 

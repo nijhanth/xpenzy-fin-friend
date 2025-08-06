@@ -18,32 +18,47 @@ export type Database = {
         Row: {
           category: string
           created_at: string
+          end_date: string | null
           icon: string | null
           id: string
           limit_amount: number
+          month: number | null
           period: string
+          start_date: string | null
           updated_at: string
           user_id: string
+          week: number | null
+          year: number | null
         }
         Insert: {
           category: string
           created_at?: string
+          end_date?: string | null
           icon?: string | null
           id?: string
           limit_amount: number
+          month?: number | null
           period?: string
+          start_date?: string | null
           updated_at?: string
           user_id: string
+          week?: number | null
+          year?: number | null
         }
         Update: {
           category?: string
           created_at?: string
+          end_date?: string | null
           icon?: string | null
           id?: string
           limit_amount?: number
+          month?: number | null
           period?: string
+          start_date?: string | null
           updated_at?: string
           user_id?: string
+          week?: number | null
+          year?: number | null
         }
         Relationships: []
       }

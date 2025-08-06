@@ -74,9 +74,32 @@ export const Budget = () => {
     });
   };
 
+  // Filter budgets to show only those relevant to the selected period
+  const filteredBudgets = useMemo(() => {
+    return data.budgets.filter(budget => {
+      // If budget doesn't have date fields, show it (legacy budgets)
+      if (!budget.year && !budget.month && !budget.week) {
+        return true;
+      }
+
+      // Check if budget matches the selected period
+      if (budget.period === 'yearly' && budget.year === selectedYear) {
+        return true;
+      }
+      if (budget.period === 'monthly' && budget.year === selectedYear && budget.month === selectedMonth) {
+        return true;
+      }
+      if (budget.period === 'weekly' && budget.year === selectedYear && budget.month === selectedMonth && budget.week === selectedWeek) {
+        return true;
+      }
+      
+      return false;
+    });
+  }, [data.budgets, selectedYear, selectedMonth, selectedWeek]);
+
   // Calculate spent amounts from real expense data automatically
   const budgetsWithRealSpent = useMemo(() => {
-    return data.budgets.map(budget => {
+    return filteredBudgets.map(budget => {
       // Get filtered expenses based on budget period and selected time frame
       const filteredExpenses = getFilteredExpenses(budget.period);
       
@@ -90,11 +113,11 @@ export const Budget = () => {
         spent
       };
     });
-  }, [data.budgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
+  }, [filteredBudgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
 
   // Calculate expenses that don't have budgets (Others/Unbudgeted)
   const unbudgetedExpenses = useMemo(() => {
-    const budgetCategoryNames = data.budgets.map(b => b.category);
+    const budgetCategoryNames = filteredBudgets.map(b => b.category);
     const allFilteredExpenses = [...getFilteredExpenses('yearly'), ...getFilteredExpenses('monthly'), ...getFilteredExpenses('weekly')];
     const uniqueExpenses = allFilteredExpenses.filter((expense, index, self) => 
       index === self.findIndex(e => e.id === expense.id)
@@ -103,7 +126,7 @@ export const Budget = () => {
     return uniqueExpenses
       .filter(expense => !budgetCategoryNames.includes(expense.category))
       .reduce((sum, expense) => sum + expense.amount, 0);
-  }, [data.budgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
+  }, [filteredBudgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
 
   const getProgressPercentage = (spent: number, limit: number) => {
     return Math.min((spent / limit) * 100, 100);
@@ -138,11 +161,15 @@ export const Budget = () => {
       .filter(expense => expense.category === newBudget.name)
       .reduce((sum, expense) => sum + expense.amount, 0);
 
+    // Add date-specific fields based on the selected period
     const budgetData: Omit<BudgetCategory, 'id'> = {
       category: newBudget.name,
       limit_amount: parseFloat(newBudget.limit),
       period: newBudget.period,
-      icon: newBudget.icon
+      icon: newBudget.icon,
+      year: selectedYear,
+      month: newBudget.period === 'monthly' || newBudget.period === 'weekly' ? selectedMonth : undefined,
+      week: newBudget.period === 'weekly' ? selectedWeek : undefined
     };
 
     if (editingBudget) {
@@ -313,6 +340,11 @@ export const Budget = () => {
           <DialogContent className="bg-background border-border">
             <DialogHeader>
               <DialogTitle>{editingBudget ? 'Edit Budget' : 'Add New Budget'}</DialogTitle>
+              <div className="text-sm text-muted-foreground">
+                Creating budget for: {newBudget.period === 'yearly' ? `Year ${selectedYear}` : 
+                newBudget.period === 'monthly' ? `${format(new Date(selectedYear, selectedMonth), 'MMMM yyyy')}` : 
+                `Week ${selectedWeek} of ${format(new Date(selectedYear, selectedMonth), 'MMMM yyyy')}`}
+              </div>
             </DialogHeader>
             <div className="space-y-4">
               <div>
