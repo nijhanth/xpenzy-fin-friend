@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { FinancialData, IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, InvestmentTransaction, BudgetCategory } from '@/types/financial';
-import { incomeService, expenseService, savingsService, investmentService, budgetService, investmentTransactionService } from '@/lib/database';
+import { FinancialData, IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, InvestmentTransaction, BudgetCategory, SavingsTransaction } from '@/types/financial';
+import { incomeService, expenseService, savingsService, investmentService, budgetService, investmentTransactionService, savingsTransactionService } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -15,6 +15,10 @@ interface FinancialContextType {
   updateInvestmentTransaction: (id: string, transaction: Partial<InvestmentTransaction>) => Promise<void>;
   deleteInvestmentTransaction: (id: string) => Promise<void>;
   getInvestmentTransactions: (investmentId: string) => InvestmentTransaction[];
+  addSavingsTransaction: (transaction: Omit<SavingsTransaction, 'id'>) => Promise<void>;
+  updateSavingsTransaction: (id: string, transaction: Partial<SavingsTransaction>) => Promise<void>;
+  deleteSavingsTransaction: (id: string) => Promise<void>;
+  getSavingsTransactions: (savingsGoalId: string) => SavingsTransaction[];
   addBudget: (budget: Omit<BudgetCategory, 'id'>) => void;
   updateSavingsGoal: (id: string, current: number) => void;
   updateInvestment: (id: string, current: number) => void;
@@ -48,6 +52,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     savings: [],
     investments: [],
     investmentTransactions: [],
+    savingsTransactions: [],
     budgets: []
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -71,7 +76,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           savingsService.getAll(),
           investmentService.getAll(),
           budgetService.getAll(),
-          investmentTransactionService.getAll()
+          investmentTransactionService.getAll(),
+          savingsTransactionService.getAll()
         ]);
 
         setData({
@@ -80,6 +86,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           savings: savingsData,
           investments: investmentData,
           investmentTransactions: transactionData,
+          savingsTransactions: await savingsTransactionService.getAll(),
           budgets: budgetData
         });
       } catch (error) {
@@ -318,6 +325,111 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const getInvestmentTransactions = (investmentId: string): InvestmentTransaction[] => {
     return data.investmentTransactions.filter(t => t.investment_id === investmentId);
+  };
+
+  const addSavingsTransaction = async (transaction: Omit<SavingsTransaction, 'id'>) => {
+    try {
+      const newTransaction = await savingsTransactionService.create(transaction);
+      setData(prev => ({
+        ...prev,
+        savingsTransactions: [newTransaction, ...prev.savingsTransactions]
+      }));
+      
+      // Refresh savings data to get updated totals from the database trigger
+      try {
+        const updatedSavings = await savingsService.getAll();
+        setData(prev => ({
+          ...prev,
+          savings: updatedSavings
+        }));
+      } catch (refreshError) {
+        console.error('Error refreshing savings data:', refreshError);
+      }
+      
+      toast({
+        title: "Success",
+        description: "Money added to savings goal successfully",
+      });
+    } catch (error) {
+      console.error('Error adding savings transaction:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add money to savings goal",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const updateSavingsTransaction = async (id: string, transaction: Partial<SavingsTransaction>) => {
+    try {
+      const updatedTransaction = await savingsTransactionService.update(id, transaction);
+      setData(prev => ({
+        ...prev,
+        savingsTransactions: prev.savingsTransactions.map(t => 
+          t.id === id ? updatedTransaction : t
+        )
+      }));
+      
+      // Refresh savings data to get updated totals from the database trigger
+      try {
+        const updatedSavings = await savingsService.getAll();
+        setData(prev => ({
+          ...prev,
+          savings: updatedSavings
+        }));
+      } catch (refreshError) {
+        console.error('Error refreshing savings data:', refreshError);
+      }
+      
+      toast({
+        title: "Success",
+        description: "Savings transaction updated successfully",
+      });
+    } catch (error) {
+      console.error('Error updating savings transaction:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update savings transaction",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteSavingsTransaction = async (id: string) => {
+    try {
+      await savingsTransactionService.delete(id);
+      setData(prev => ({
+        ...prev,
+        savingsTransactions: prev.savingsTransactions.filter(t => t.id !== id)
+      }));
+      
+      // Refresh savings data to get updated totals from the database trigger
+      try {
+        const updatedSavings = await savingsService.getAll();
+        setData(prev => ({
+          ...prev,
+          savings: updatedSavings
+        }));
+      } catch (refreshError) {
+        console.error('Error refreshing savings data:', refreshError);
+      }
+      
+      toast({
+        title: "Success",
+        description: "Savings transaction deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting savings transaction:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete savings transaction",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getSavingsTransactions = (savingsGoalId: string): SavingsTransaction[] => {
+    return data.savingsTransactions.filter(t => t.savings_goal_id === savingsGoalId);
   };
 
   const addMoneyToInvestment = async (investmentId: string, amount: number, date: string) => {
@@ -567,6 +679,10 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       updateInvestmentTransaction,
       deleteInvestmentTransaction,
       getInvestmentTransactions,
+      addSavingsTransaction,
+      updateSavingsTransaction,
+      deleteSavingsTransaction,
+      getSavingsTransactions,
       addBudget,
       addMoneyToInvestment,
       updateSavingsGoal,

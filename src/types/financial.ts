@@ -50,6 +50,15 @@ export interface InvestmentTransaction {
   profit_loss?: number;
 }
 
+export interface SavingsTransaction {
+  id: string;
+  savings_goal_id: string;
+  amount: number;
+  date: string;
+  notes?: string;
+  user_id?: string;
+}
+
 export interface BudgetCategory {
   id: string;
   category: string;
@@ -70,5 +79,6 @@ export interface FinancialData {
   savings: SavingsGoal[];
   investments: InvestmentEntry[];
   investmentTransactions: InvestmentTransaction[];
+  savingsTransactions: SavingsTransaction[];
   budgets: BudgetCategory[];
 }

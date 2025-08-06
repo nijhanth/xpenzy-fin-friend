@@ -1,15 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3, Edit, Wallet } from 'lucide-react';
+import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3, Edit, Wallet, History, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { SavingsForm } from '@/components/forms/SavingsForm';
+import { SavingsTransactionForm } from '@/components/forms/SavingsTransactionForm';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 
@@ -22,17 +21,18 @@ const savingsTips = [
 ];
 
 export const Savings = () => {
-  const { data } = useFinancial();
+  const { data, getSavingsTransactions, deleteSavingsTransaction } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
-  const { deleteSavings, updateSavings } = useFinancial();
+  const { deleteSavings } = useFinancial();
   const { toast } = useToast();
-  const [addMoneyDialog, setAddMoneyDialog] = useState<{ open: boolean; goalId: string | null; goalName: string }>({
-    open: false,
-    goalId: null,
-    goalName: ''
-  });
-  const [addAmount, setAddAmount] = useState('');
+  const [transactionFormOpen, setTransactionFormOpen] = useState(false);
+  const [currentSavingsGoal, setCurrentSavingsGoal] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
+  const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
   
   const totalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
   const totalTargets = data.savings.reduce((sum, goal) => sum + goal.target, 0);
@@ -66,43 +66,47 @@ export const Savings = () => {
   };
 
   const handleAddMoney = (goalId: string, goalName: string) => {
-    setAddMoneyDialog({ open: true, goalId, goalName });
-    setAddAmount('');
+    setCurrentSavingsGoal({ id: goalId, name: goalName });
+    setEditingTransaction(null);
+    setTransactionFormOpen(true);
   };
 
-  const handleAddMoneySubmit = async () => {
-    if (!addMoneyDialog.goalId || !addAmount) {
+  const toggleGoalHistory = (goalId: string) => {
+    const newExpanded = new Set(expandedGoals);
+    if (newExpanded.has(goalId)) {
+      newExpanded.delete(goalId);
+    } else {
+      newExpanded.add(goalId);
+    }
+    setExpandedGoals(newExpanded);
+  };
+
+  const handleEditTransaction = (transactionId: string, goal: any) => {
+    setCurrentSavingsGoal({ id: goal.id, name: goal.name });
+    setEditingTransaction(transactionId);
+    setTransactionFormOpen(true);
+  };
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    try {
+      await deleteSavingsTransaction(transactionId);
+      toast({
+        title: "Success",
+        description: "Savings transaction deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
       toast({
         title: "Error",
-        description: "Please enter a valid amount",
-        variant: "destructive"
+        description: "Failed to delete savings transaction",
+        variant: "destructive",
       });
-      return;
     }
+  };
 
-    const amount = parseFloat(addAmount);
-    if (amount <= 0) {
-      toast({
-        title: "Error",
-        description: "Amount must be greater than 0",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const goal = data.savings.find(g => g.id === addMoneyDialog.goalId);
-    if (!goal) return;
-
-    const newCurrent = goal.current + amount;
-    await updateSavings(addMoneyDialog.goalId, { current: newCurrent });
-    
-    toast({
-      title: "Money Added!",
-      description: `₹${amount.toLocaleString()} added to ${addMoneyDialog.goalName}`
-    });
-
-    setAddMoneyDialog({ open: false, goalId: null, goalName: '' });
-    setAddAmount('');
+  // Get transactions for a specific savings goal
+  const getSavingsGoalTransactions = (goalId: string) => {
+    return getSavingsTransactions(goalId);
   };
 
   return (
@@ -206,6 +210,18 @@ export const Savings = () => {
                           <Wallet className="w-3 h-3 mr-1" />
                           {isCompleted ? 'Completed' : 'Add Money'}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => toggleGoalHistory(goal.id)}
+                        >
+                          <History className="w-3 h-3 mr-1" />
+                          {expandedGoals.has(goal.id) ? (
+                            <ChevronUp className="w-3 h-3" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3" />
+                          )}
+                        </Button>
                         <EditDeleteMenu
                           onEdit={() => handleEdit(goal.id)}
                           onDelete={() => handleDelete(goal.id)}
@@ -225,6 +241,50 @@ export const Savings = () => {
                         ₹{Math.max(0, goal.target - goal.current).toLocaleString()} remaining
                       </span>
                     </div>
+
+                    {/* Transaction History */}
+                    {expandedGoals.has(goal.id) && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <History className="w-3 h-3" />
+                            Transaction History
+                          </h4>
+                          {getSavingsGoalTransactions(goal.id).length > 0 ? (
+                            <div className="space-y-2 max-h-32 overflow-y-auto">
+                              {getSavingsGoalTransactions(goal.id).map((transaction) => (
+                                <div key={transaction.id} className="flex items-center justify-between text-xs p-2 bg-secondary/30 rounded">
+                                  <div className="flex-1">
+                                    <span className="font-medium">Money Added</span>
+                                    <p className="text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</p>
+                                    {transaction.notes && (
+                                      <p className="text-muted-foreground text-xs mt-1">{transaction.notes}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-right">
+                                      <span className="font-semibold text-savings">
+                                        +₹{transaction.amount.toLocaleString()}
+                                      </span>
+                                    </div>
+                                    <EditDeleteMenu
+                                      onEdit={() => handleEditTransaction(transaction.id, goal)}
+                                      onDelete={() => handleDeleteTransaction(transaction.id)}
+                                      itemName="transaction"
+                                      deleteTitle="Delete Transaction"
+                                      deleteDescription="Are you sure you want to delete this transaction? This will affect the total saved amount."
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No transactions yet</p>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -325,44 +385,20 @@ export const Savings = () => {
         editingId={editingEntry}
       />
       
-      {/* Add Money Dialog */}
-      <Dialog open={addMoneyDialog.open} onOpenChange={(open) => setAddMoneyDialog({ open, goalId: null, goalName: '' })}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add Money to {addMoneyDialog.goalName}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="add-amount">Amount to Add (₹)</Label>
-              <Input
-                id="add-amount"
-                type="number"
-                value={addAmount}
-                onChange={(e) => setAddAmount(e.target.value)}
-                placeholder="Enter amount"
-                min="1"
-                step="1"
-              />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setAddMoneyDialog({ open: false, goalId: null, goalName: '' })}
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="button" 
-                onClick={handleAddMoneySubmit}
-                className="bg-savings text-white"
-              >
-                Add Money
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Savings Transaction Form */}
+      {currentSavingsGoal && (
+        <SavingsTransactionForm
+          open={transactionFormOpen}
+          onClose={() => {
+            setTransactionFormOpen(false);
+            setCurrentSavingsGoal(null);
+            setEditingTransaction(null);
+          }}
+          savingsGoalId={currentSavingsGoal.id}
+          savingsGoalName={currentSavingsGoal.name}
+          editingId={editingTransaction}
+        />
+      )}
     </div>
   );
 };
