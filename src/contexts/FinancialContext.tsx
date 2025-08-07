@@ -70,7 +70,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           return;
         }
 
-        const [incomeData, expenseData, savingsData, investmentData, budgetData, transactionData] = await Promise.all([
+        const [incomeData, expenseData, savingsData, investmentData, budgetData, investmentTransactionData, savingsTransactionData] = await Promise.all([
           incomeService.getAll(),
           expenseService.getAll(),
           savingsService.getAll(),
@@ -85,8 +85,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           expenses: expenseData,
           savings: savingsData,
           investments: investmentData,
-          investmentTransactions: transactionData,
-          savingsTransactions: await savingsTransactionService.getAll(),
+          investmentTransactions: investmentTransactionData,
+          savingsTransactions: savingsTransactionData,
           budgets: budgetData
         });
       } catch (error) {
