@@ -22,6 +22,8 @@ export type Database = {
           icon: string | null
           id: string
           limit_amount: number
+          linked_id: string | null
+          linked_type: string | null
           month: number | null
           period: string
           start_date: string | null
@@ -37,6 +39,8 @@ export type Database = {
           icon?: string | null
           id?: string
           limit_amount: number
+          linked_id?: string | null
+          linked_type?: string | null
           month?: number | null
           period?: string
           start_date?: string | null
@@ -52,6 +56,8 @@ export type Database = {
           icon?: string | null
           id?: string
           limit_amount?: number
+          linked_id?: string | null
+          linked_type?: string | null
           month?: number | null
           period?: string
           start_date?: string | null

@@ -339,7 +339,9 @@ export const budgetService = {
       end_date: (item as any).end_date,
       year: (item as any).year,
       month: (item as any).month,
-      week: (item as any).week
+      week: (item as any).week,
+      linked_type: (item as any).linked_type as 'expenses' | 'savings' | 'investment' | undefined,
+      linked_id: (item as any).linked_id
     })) || [];
   },
 
@@ -356,6 +358,8 @@ export const budgetService = {
         year: budget.year,
         month: budget.month,
         week: budget.week,
+        linked_type: budget.linked_type || 'expenses',
+        linked_id: budget.linked_id,
         user_id: (await supabase.auth.getUser()).data.user?.id
       }])
       .select()
@@ -373,7 +377,9 @@ export const budgetService = {
       end_date: (data as any).end_date,
       year: (data as any).year,
       month: (data as any).month,
-      week: (data as any).week
+      week: (data as any).week,
+      linked_type: (data as any).linked_type as 'expenses' | 'savings' | 'investment' | undefined,
+      linked_id: (data as any).linked_id
     };
   },
 
@@ -389,7 +395,9 @@ export const budgetService = {
         end_date: budget.end_date,
         year: budget.year,
         month: budget.month,
-        week: budget.week
+        week: budget.week,
+        linked_type: budget.linked_type,
+        linked_id: budget.linked_id
       })
       .eq('id', id)
       .select()
@@ -407,7 +415,9 @@ export const budgetService = {
       end_date: (data as any).end_date,
       year: (data as any).year,
       month: (data as any).month,
-      week: (data as any).week
+      week: (data as any).week,
+      linked_type: (data as any).linked_type as 'expenses' | 'savings' | 'investment' | undefined,
+      linked_id: (data as any).linked_id
     };
   },
 

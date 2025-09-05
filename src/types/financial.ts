@@ -71,6 +71,8 @@ export interface BudgetCategory {
   year?: number;
   month?: number;
   week?: number;
+  linked_type?: 'expenses' | 'savings' | 'investment';
+  linked_id?: string;
 }
 
 export interface FinancialData {

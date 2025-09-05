@@ -23,11 +23,14 @@ export const Budget = () => {
     limit: string;
     icon: string;
     period: 'monthly' | 'weekly' | 'yearly';
+    type: 'expenses' | 'savings' | 'investment';
+    linkedId?: string;
   }>({
     name: '',
     limit: '',
     icon: '💰',
-    period: 'monthly'
+    period: 'monthly',
+    type: 'expenses'
   });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -156,20 +159,33 @@ export const Budget = () => {
       return;
     }
 
-    // Calculate current spending for this category
-    const currentSpent = data.expenses
-      .filter(expense => expense.category === newBudget.name)
-      .reduce((sum, expense) => sum + expense.amount, 0);
+    // Additional validation for savings/investment budgets
+    if ((newBudget.type === 'savings' || newBudget.type === 'investment') && !newBudget.linkedId) {
+      toast({
+        title: "Error",
+        description: `Please select a ${newBudget.type === 'savings' ? 'savings goal' : 'investment'}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Calculate current spending for this category (expenses only)
+    const currentSpent = newBudget.type === 'expenses' ? 
+      data.expenses
+        .filter(expense => expense.category === newBudget.name)
+        .reduce((sum, expense) => sum + expense.amount, 0) : 0;
 
     // Add date-specific fields based on the selected period
     const budgetData: Omit<BudgetCategory, 'id'> = {
       category: newBudget.name,
       limit_amount: parseFloat(newBudget.limit),
       period: newBudget.period,
-      icon: newBudget.icon,
+      icon: newBudget.type === 'expenses' ? newBudget.icon : (newBudget.type === 'savings' ? '🎯' : '📈'),
       year: selectedYear,
       month: newBudget.period === 'monthly' || newBudget.period === 'weekly' ? selectedMonth : undefined,
-      week: newBudget.period === 'weekly' ? selectedWeek : undefined
+      week: newBudget.period === 'weekly' ? selectedWeek : undefined,
+      linked_type: newBudget.type,
+      linked_id: newBudget.linkedId
     };
 
     if (editingBudget) {
@@ -187,7 +203,7 @@ export const Budget = () => {
       });
     }
     
-    setNewBudget({ name: '', limit: '', icon: '💰', period: 'monthly' });
+    setNewBudget({ name: '', limit: '', icon: '💰', period: 'monthly', type: 'expenses' });
     setIsDialogOpen(false);
   };
 
@@ -197,7 +213,9 @@ export const Budget = () => {
       name: budget.category,
       limit: budget.limit_amount.toString(),
       icon: budget.icon || "💰",
-      period: budget.period
+      period: budget.period,
+      type: budget.linked_type || 'expenses',
+      linkedId: budget.linked_id || undefined
     });
     setIsDialogOpen(true);
   };
@@ -348,14 +366,86 @@ export const Budget = () => {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="category">Category Name</Label>
-                <Input
-                  id="category"
-                  value={newBudget.name}
-                  onChange={(e) => setNewBudget({...newBudget, name: e.target.value})}
-                  placeholder="e.g., Petrol, Groceries, Entertainment"
-                />
+                <Label htmlFor="budget-type">Budget Type</Label>
+                <Select value={newBudget.type} onValueChange={(value: 'expenses' | 'savings' | 'investment') => 
+                  setNewBudget({...newBudget, type: value, name: '', linkedId: undefined})
+                }>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background border-border z-50">
+                    <SelectItem value="expenses">Expenses</SelectItem>
+                    <SelectItem value="savings">Savings</SelectItem>
+                    <SelectItem value="investment">Investment</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {newBudget.type === 'expenses' ? (
+                <div>
+                  <Label htmlFor="category">Category Name</Label>
+                  <Input
+                    id="category"
+                    value={newBudget.name}
+                    onChange={(e) => setNewBudget({...newBudget, name: e.target.value})}
+                    placeholder="e.g., Petrol, Groceries, Entertainment"
+                  />
+                </div>
+              ) : newBudget.type === 'savings' ? (
+                <div>
+                  <Label htmlFor="savings-goal">Savings Goal</Label>
+                  <Select value={newBudget.linkedId || ''} onValueChange={(value) => {
+                    const selectedGoal = data.savings.find(s => s.id === value);
+                    setNewBudget({
+                      ...newBudget, 
+                      linkedId: value,
+                      name: selectedGoal ? selectedGoal.name : ''
+                    });
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a savings goal" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background border-border z-50">
+                      {data.savings.length === 0 ? (
+                        <SelectItem value="" disabled>No savings goals available</SelectItem>
+                      ) : (
+                        data.savings.map((goal) => (
+                          <SelectItem key={goal.id} value={goal.id}>
+                            {goal.name} (₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="investment">Investment</Label>
+                  <Select value={newBudget.linkedId || ''} onValueChange={(value) => {
+                    const selectedInvestment = data.investments.find(i => i.id === value);
+                    setNewBudget({
+                      ...newBudget, 
+                      linkedId: value,
+                      name: selectedInvestment ? selectedInvestment.name : ''
+                    });
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an investment" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background border-border z-50">
+                      {data.investments.length === 0 ? (
+                        <SelectItem value="" disabled>No investments available</SelectItem>
+                      ) : (
+                        data.investments.map((investment) => (
+                          <SelectItem key={investment.id} value={investment.id}>
+                            {investment.name} ({investment.type}) - ₹{investment.current.toLocaleString()}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <Label htmlFor="limit">Budget Limit (₹)</Label>
                 <Input
@@ -379,25 +469,27 @@ export const Budget = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="icon">Icon</Label>
-                <Select value={newBudget.icon} onValueChange={(value) => setNewBudget({...newBudget, icon: value})}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background border-border z-50">
-                    <SelectItem value="🍽️">🍽️ Food</SelectItem>
-                    <SelectItem value="🚗">🚗 Transport</SelectItem>
-                    <SelectItem value="⛽">⛽ Petrol</SelectItem>
-                    <SelectItem value="🛍️">🛍️ Shopping</SelectItem>
-                    <SelectItem value="🎬">🎬 Entertainment</SelectItem>
-                    <SelectItem value="⚡">⚡ Bills</SelectItem>
-                    <SelectItem value="🏥">🏥 Healthcare</SelectItem>
-                    <SelectItem value="🎓">🎓 Education</SelectItem>
-                    <SelectItem value="💰">💰 Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {newBudget.type === 'expenses' && (
+                <div>
+                  <Label htmlFor="icon">Icon</Label>
+                  <Select value={newBudget.icon} onValueChange={(value) => setNewBudget({...newBudget, icon: value})}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background border-border z-50">
+                      <SelectItem value="🍽️">🍽️ Food</SelectItem>
+                      <SelectItem value="🚗">🚗 Transport</SelectItem>
+                      <SelectItem value="⛽">⛽ Petrol</SelectItem>
+                      <SelectItem value="🛍️">🛍️ Shopping</SelectItem>
+                      <SelectItem value="🎬">🎬 Entertainment</SelectItem>
+                      <SelectItem value="⚡">⚡ Bills</SelectItem>
+                      <SelectItem value="🏥">🏥 Healthcare</SelectItem>
+                      <SelectItem value="🎓">🎓 Education</SelectItem>
+                      <SelectItem value="💰">💰 Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <Button onClick={handleAddBudget} className="w-full">
                 {editingBudget ? 'Update Budget' : 'Add Budget'}
               </Button>
