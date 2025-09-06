@@ -63,6 +63,11 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     const expenseWeek = Math.ceil(expenseDateObj.getDate() / 7);
 
     const relevantBudgets = data.budgets.filter(budget => {
+      // Only show expense budgets, not savings or investment budgets
+      if (budget.linked_type && budget.linked_type !== 'expenses') {
+        return false;
+      }
+
       // Legacy budgets without date fields should always be shown
       if (!budget.year && !budget.month && !budget.week) {
         return true;
