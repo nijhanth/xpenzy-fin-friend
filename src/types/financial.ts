@@ -63,6 +63,7 @@ export interface BudgetCategory {
   id: string;
   category: string;
   limit_amount: number;
+  current?: number;
   period: 'monthly' | 'weekly' | 'yearly';
   icon?: string;
   user_id?: string;
