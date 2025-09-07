@@ -2,13 +2,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
+import { FinanceLogo } from '@/components/ui/finance-logo';
 import { 
   TrendingUp, 
   PieChart, 
   BarChart3, 
   DollarSign, 
   Smartphone, 
-  Shield, 
   Zap,
   Target,
   ArrowRight,
@@ -31,11 +31,6 @@ const Landing = () => {
       icon: PieChart,
       title: "Portfolio Tracking",
       description: "Monitor your investments, savings, and expenses in real-time with beautiful, interactive charts."
-    },
-    {
-      icon: Shield,
-      title: "Bank-Level Security",
-      description: "Your financial data is protected with enterprise-grade encryption and security protocols."
     },
     {
       icon: Smartphone,
@@ -89,11 +84,7 @@ const Landing = () => {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img 
-                src="/lovable-uploads/e88aa1f4-0c35-4871-9992-7efea8c237ed.png" 
-                alt="Xpenzy Logo" 
-                className="w-10 h-10 object-contain"
-              />
+              <FinanceLogo className="w-10 h-10" />
               <h1 className="text-2xl font-bold font-poppins tracking-tight">
                 Xpenzy
               </h1>
@@ -148,15 +139,8 @@ const Landing = () => {
                   onClick={() => navigate('/auth')}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 py-6 text-lg group"
                 >
-                  Start Free Trial
+                  Get Started
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
-                <Button 
-                  size="lg" 
-                  variant="outline"
-                  className="font-semibold px-8 py-6 text-lg"
-                >
-                  Watch Demo
                 </Button>
               </div>
 
@@ -328,11 +312,7 @@ const Landing = () => {
           <div className="grid md:grid-cols-4 gap-8">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <img 
-                  src="/lovable-uploads/e88aa1f4-0c35-4871-9992-7efea8c237ed.png" 
-                  alt="Xpenzy Logo" 
-                  className="w-8 h-8 object-contain"
-                />
+                <FinanceLogo className="w-8 h-8" />
                 <h3 className="text-xl font-bold font-poppins">Xpenzy</h3>
               </div>
               <p className="text-muted-foreground">
