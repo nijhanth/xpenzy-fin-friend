@@ -21,8 +21,8 @@ const Index = () => {
 
   useEffect(() => {
     if (!loading && !user) {
-      // Redirect to auth page if not authenticated
-      window.location.href = '/auth';
+      // Redirect to landing page if not authenticated
+      window.location.href = '/';
     }
   }, [user, loading]);
 
