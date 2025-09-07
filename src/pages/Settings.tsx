@@ -170,7 +170,14 @@ export const Settings = () => {
       {/* App Info */}
       <Card className="bg-gradient-card border-border shadow-card">
         <CardContent className="pt-6 text-center space-y-2">
-          <p className="text-2xl font-bold text-primary">Xpenzy</p>
+          <div className="flex items-center gap-3">
+            <img 
+              src="/xpenzy-logo.png" 
+              alt="Xpenzy Logo" 
+              className="w-8 h-8 object-contain"
+            />
+            <p className="text-2xl font-bold text-primary font-poppins font-semibold tracking-tight">Xpenzy</p>
+          </div>
           <p className="text-sm text-muted-foreground">Version 1.0.0</p>
           <p className="text-xs text-muted-foreground">Personal Finance Manager</p>
         </CardContent>

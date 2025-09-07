@@ -21,7 +21,8 @@ export default {
 			fontFamily: {
 				'inter': ['Inter', 'sans-serif'],
 				'outfit': ['Outfit', 'sans-serif'],
-				'xpenzy': ['Outfit', 'Inter', 'sans-serif'],
+				'xpenzy': ['Poppins', 'system-ui', 'sans-serif'],
+				'poppins': ['Poppins', 'system-ui', 'sans-serif'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',

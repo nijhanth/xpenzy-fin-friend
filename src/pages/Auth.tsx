@@ -294,10 +294,14 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         <div className="w-full max-w-md animate-scale-in">
           {/* App Logo Section */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-primary rounded-2xl shadow-float pulse-glow mb-4">
-              <AudioWaveform className="w-10 h-10 text-white" />
+            <div className="inline-flex items-center justify-center mb-4">
+              <img 
+                src="/xpenzy-logo.png" 
+                alt="Xpenzy Logo" 
+                className="w-24 h-24 object-contain shadow-float pulse-glow"
+              />
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent font-outfit">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent font-poppins font-semibold tracking-tight">
               Xpenzy
             </h1>
             <p className="text-muted-foreground mt-2 text-lg font-inter">
