@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,6 +32,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
 
   const { signUp, signIn, resetPassword, user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
@@ -180,12 +182,15 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         <div className="w-full max-w-md">
           {/* App Logo Section */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center mb-4">
-              <FinanceLogo className="w-20 h-20" />
-            </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent font-poppins tracking-tight">
-              Xpenzy
-            </h1>
+            <button 
+              onClick={() => navigate('/')} 
+              className="inline-flex flex-col items-center justify-center mb-4 hover:opacity-80 transition-opacity group"
+            >
+              <FinanceLogo className="w-20 h-20 mb-2" />
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent font-poppins tracking-tight">
+                Xpenzy
+              </h1>
+            </button>
             <p className="text-muted-foreground mt-2 text-lg">
               Smart Finance Management
             </p>
