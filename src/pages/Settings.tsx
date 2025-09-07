@@ -172,7 +172,7 @@ export const Settings = () => {
         <CardContent className="pt-6 text-center space-y-2">
           <div className="flex items-center gap-3">
             <img 
-              src="/xpenzy-logo.png" 
+              src="/lovable-uploads/e88aa1f4-0c35-4871-9992-7efea8c237ed.png" 
               alt="Xpenzy Logo" 
               className="w-8 h-8 object-contain"
             />

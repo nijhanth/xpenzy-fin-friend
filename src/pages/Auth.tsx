@@ -296,7 +296,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center mb-4">
               <img 
-                src="/xpenzy-logo.png" 
+                src="/lovable-uploads/e88aa1f4-0c35-4871-9992-7efea8c237ed.png" 
                 alt="Xpenzy Logo" 
                 className="w-24 h-24 object-contain shadow-float pulse-glow"
               />
