@@ -189,20 +189,42 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       
       // Add initial transaction record
       try {
-        await addInvestmentTransaction({
+        const initialTransaction = await investmentTransactionService.create({
           investment_id: newInvestment.id,
           amount: newInvestment.invested,
           date: newInvestment.date,
           notes: `Initial investment in ${newInvestment.name}`
         });
+        
+        // Add transaction to state
+        setData(prev => ({
+          ...prev,
+          investmentTransactions: [initialTransaction, ...prev.investmentTransactions]
+        }));
       } catch (error) {
         console.error('Error creating initial transaction:', error);
       }
       
-      setData(prev => ({
-        ...prev,
-        investments: [newInvestment, ...prev.investments]
-      }));
+      // Refresh investment data to get updated totals from the database trigger
+      try {
+        const updatedInvestments = await investmentService.getAll();
+        setData(prev => ({
+          ...prev,
+          investments: updatedInvestments
+        }));
+      } catch (refreshError) {
+        console.error('Error refreshing investment data:', refreshError);
+        // Fallback to adding the new investment to local state
+        setData(prev => ({
+          ...prev,
+          investments: [newInvestment, ...prev.investments]
+        }));
+      }
+      
+      toast({
+        title: "Success",
+        description: "Investment created successfully",
+      });
     } catch (error) {
       console.error('Error adding investment:', error);
       const newInvestment: InvestmentEntry = {
@@ -222,7 +244,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const addInvestmentTransaction = async (transaction: Omit<InvestmentTransaction, 'id'>) => {
+  const addInvestmentTransaction = async (transaction: Omit<InvestmentTransaction, 'id'>, showToast: boolean = true) => {
     try {
       const newTransaction = await investmentTransactionService.create(transaction);
       setData(prev => ({
@@ -241,10 +263,12 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         console.error('Error refreshing investment data:', refreshError);
       }
       
-      toast({
-        title: "Success",
-        description: "Money added to investment successfully",
-      });
+      if (showToast) {
+        toast({
+          title: "Success",
+          description: "Money added to investment successfully",
+        });
+      }
     } catch (error) {
       console.error('Error adding investment transaction:', error);
       toast({
