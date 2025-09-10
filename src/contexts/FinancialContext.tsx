@@ -187,43 +187,15 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       const newInvestment = await investmentService.create(investment);
       
-      // Add initial transaction record
-      try {
-        const initialTransaction = await investmentTransactionService.create({
-          investment_id: newInvestment.id,
-          amount: newInvestment.invested,
-          date: newInvestment.date,
-          notes: `Initial investment in ${newInvestment.name}`
-        });
-        
-        // Add transaction to state
-        setData(prev => ({
-          ...prev,
-          investmentTransactions: [initialTransaction, ...prev.investmentTransactions]
-        }));
-      } catch (error) {
-        console.error('Error creating initial transaction:', error);
-      }
-      
-      // Refresh investment data to get updated totals from the database trigger
-      try {
-        const updatedInvestments = await investmentService.getAll();
-        setData(prev => ({
-          ...prev,
-          investments: updatedInvestments
-        }));
-      } catch (refreshError) {
-        console.error('Error refreshing investment data:', refreshError);
-        // Fallback to adding the new investment to local state
-        setData(prev => ({
-          ...prev,
-          investments: [newInvestment, ...prev.investments]
-        }));
-      }
+      // Add the new investment to local state
+      setData(prev => ({
+        ...prev,
+        investments: [newInvestment, ...prev.investments]
+      }));
       
       toast({
         title: "Success",
-        description: "Investment created successfully",
+        description: "Investment created successfully. Use 'Add Money' to start investing.",
       });
     } catch (error) {
       console.error('Error adding investment:', error);
