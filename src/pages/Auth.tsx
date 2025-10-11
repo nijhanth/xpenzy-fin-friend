@@ -14,6 +14,43 @@ import {
   Lock, 
   User
 } from 'lucide-react';
+import { z } from 'zod';
+
+// Security: Comprehensive input validation schemas
+const signInSchema = z.object({
+  email: z.string()
+    .trim()
+    .email('Invalid email format')
+    .max(255, 'Email must be less than 255 characters'),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password must be less than 128 characters')
+});
+
+const signUpSchema = z.object({
+  email: z.string()
+    .trim()
+    .email('Invalid email format')
+    .max(255, 'Email must be less than 255 characters'),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password must be less than 128 characters'),
+  confirmPassword: z.string(),
+  displayName: z.string()
+    .trim()
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name must be less than 100 characters')
+}).refine(data => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword']
+});
+
+const resetPasswordSchema = z.object({
+  email: z.string()
+    .trim()
+    .email('Invalid email format')
+    .max(255, 'Email must be less than 255 characters')
+});
 
 interface AuthProps {
   onAuthSuccess: () => void;
@@ -42,17 +79,21 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    
+    // Security: Validate inputs with zod schema
+    const validation = signInSchema.safeParse({ email, password });
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Please fill in all fields"
+        title: "Validation Error",
+        description: firstError.message
       });
       return;
     }
 
     setIsLoading(true);
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(validation.data.email, validation.data.password);
     
     if (error) {
       toast({
@@ -71,35 +112,31 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password || !confirmPassword || !displayName) {
+    
+    // Security: Validate inputs with zod schema
+    const validation = signUpSchema.safeParse({ 
+      email, 
+      password, 
+      confirmPassword, 
+      displayName 
+    });
+    
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Please fill in all fields"
-      });
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Passwords do not match"
-      });
-      return;
-    }
-
-    if (password.length < 6) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Password must be at least 6 characters long"
+        title: "Validation Error",
+        description: firstError.message
       });
       return;
     }
 
     setIsLoading(true);
-    const { error } = await signUp(email, password, displayName);
+    const { error } = await signUp(
+      validation.data.email, 
+      validation.data.password, 
+      validation.data.displayName
+    );
     
     if (error) {
       if (error.message.includes('User already registered')) {
@@ -126,17 +163,21 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetEmail) {
+    
+    // Security: Validate email with zod schema
+    const validation = resetPasswordSchema.safeParse({ email: resetEmail });
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Please enter your email address"
+        title: "Validation Error",
+        description: firstError.message
       });
       return;
     }
 
     setIsLoading(true);
-    const { error } = await resetPassword(resetEmail);
+    const { error } = await resetPassword(validation.data.email);
     
     if (error) {
       toast({
