@@ -29,39 +29,12 @@ export const Investments = () => {
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [expandedInvestments, setExpandedInvestments] = useState<Set<string>>(new Set());
 
-  // Generate allocation data from investments
-  const allocationData = useMemo(() => {
-    const types = data.investments.reduce((acc, inv) => {
-      acc[inv.type] = (acc[inv.type] || 0) + inv.current;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const colors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316'];
-    
-    return Object.entries(types).map(([name, value], index) => ({
-      name,
-      value,
-      color: colors[index % colors.length]
-    }));
-  }, [data.investments]);
-
-  // Generate growth data based on monthly investments
-  const growthData = useMemo(() => {
-    const monthlyData = data.investments.reduce((acc, inv) => {
-      const month = new Date(inv.date).toLocaleDateString('en-US', { month: 'short' });
-      acc[month] = (acc[month] || 0) + inv.current;
-      return acc;
-    }, {} as Record<string, number>);
-
-    return Object.entries(monthlyData).map(([month, value]) => ({
-      month,
-      value
-    }));
-  }, [data.investments]);
-
-  // Get total invested and current values directly from data
-  const totalInvested = data.investments.reduce((sum, inv) => sum + inv.invested, 0);
-  const totalCurrent = data.investments.reduce((sum, inv) => sum + inv.current, 0);
+  const allocationData: any[] = [];
+  const growthData: any[] = [];
+  
+  // Display raw values from database without calculations
+  const totalInvested = data.investments[0]?.invested || 0;
+  const totalCurrent = data.investments[0]?.current || 0;
 
   const handleEdit = (entryId: string) => {
     setEditingEntry(entryId);
