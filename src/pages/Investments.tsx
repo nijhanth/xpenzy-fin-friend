@@ -18,10 +18,6 @@ export const Investments = () => {
   const { data, getInvestmentTransactions: getTransactions, deleteInvestment, deleteInvestmentTransaction } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   
-  const totalInvested = data.investments.reduce((sum, inv) => sum + inv.invested, 0);
-  const totalCurrent = data.investments.reduce((sum, inv) => sum + inv.current, 0);
-  const totalProfit = totalCurrent - totalInvested;
-  const totalProfitPercent = totalInvested > 0 ? ((totalProfit / totalInvested) * 100).toFixed(1) : '0.0';
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
   
   const { toast } = useToast();
@@ -62,6 +58,10 @@ export const Investments = () => {
       value
     }));
   }, [data.investments]);
+
+  // Get total invested and current values directly from data
+  const totalInvested = data.investments.reduce((sum, inv) => sum + inv.invested, 0);
+  const totalCurrent = data.investments.reduce((sum, inv) => sum + inv.current, 0);
 
   const handleEdit = (entryId: string) => {
     setEditingEntry(entryId);
@@ -150,12 +150,9 @@ export const Investments = () => {
         <Card className="bg-gradient-card border-border shadow-card">
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">Total Profit/Loss</p>
-              <p className={`text-2xl font-bold ${totalProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
-                {totalProfit >= 0 ? '+' : ''}₹{totalProfit.toLocaleString()}
-              </p>
-              <p className={`text-sm ${totalProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
-                ({totalProfit >= 0 ? '+' : ''}{totalProfitPercent}%)
+              <p className="text-sm text-muted-foreground mb-1">Total Current Value</p>
+              <p className="text-2xl font-bold text-foreground">
+                ₹{totalCurrent.toLocaleString()}
               </p>
             </div>
           </CardContent>
@@ -285,9 +282,6 @@ export const Investments = () => {
           {data.investments.length > 0 ? (
             <div className="space-y-4">
               {data.investments.map((investment) => {
-                const profitLoss = investment.current - investment.invested;
-                const profitPercent = investment.invested > 0 ? ((profitLoss / investment.invested) * 100).toFixed(1) : '0.0';
-                
                 return (
                   <div 
                     key={investment.id} 
@@ -300,19 +294,13 @@ export const Investments = () => {
                           <Badge variant="outline" className="text-xs">
                             {investment.type}
                           </Badge>
-                          <Badge 
-                            variant={profitLoss >= 0 ? "default" : "destructive"}
-                            className="text-xs"
-                          >
-                            {profitLoss >= 0 ? '+' : ''}{profitPercent}%
-                          </Badge>
                         </div>
                         <p className="font-medium text-foreground mb-1">{investment.name}</p>
                         <div className="flex items-center gap-4 text-sm">
                           <span className="text-muted-foreground">
                             Invested: ₹{investment.invested.toLocaleString()}
                           </span>
-                          <span className={profitLoss >= 0 ? 'text-success' : 'text-destructive'}>
+                          <span className="text-foreground">
                             Current: ₹{investment.current.toLocaleString()}
                           </span>
                         </div>
@@ -355,9 +343,6 @@ export const Investments = () => {
                         <Calendar className="w-3 h-3" />
                         Started: {new Date(investment.date).toLocaleDateString()}
                       </div>
-                      <p className={`text-sm font-medium ${profitLoss >= 0 ? 'text-success' : 'text-destructive'}`}>
-                        {profitLoss >= 0 ? '+' : ''}₹{profitLoss.toLocaleString()}
-                      </p>
                     </div>
 
                     {/* Transaction History */}
