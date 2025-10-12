@@ -69,8 +69,9 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
     const investmentData = {
       type: finalType,
       name: formData.name,
-      invested: 0, // Initial amount is 0, will be updated through transactions
-      current: 0, // Current value is 0, will be updated through transactions
+      initial_invested: 0, // Base investment amount (never changes)
+      invested: 0, // Will be calculated as initial_invested + sum(transactions)
+      current: 0, // Will be calculated as invested + profit/loss
       date: formData.date,
       notes: formData.notes || '',
       customType: formData.type === 'Custom' ? formData.customType : undefined

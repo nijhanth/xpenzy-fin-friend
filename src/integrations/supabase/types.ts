@@ -159,6 +159,7 @@ export type Database = {
           custom_type: string | null
           date: string
           id: string
+          initial_invested: number
           invested: number
           name: string
           notes: string | null
@@ -172,6 +173,7 @@ export type Database = {
           custom_type?: string | null
           date: string
           id?: string
+          initial_invested: number
           invested: number
           name: string
           notes?: string | null
@@ -185,6 +187,7 @@ export type Database = {
           custom_type?: string | null
           date?: string
           id?: string
+          initial_invested?: number
           invested?: number
           name?: string
           notes?: string | null

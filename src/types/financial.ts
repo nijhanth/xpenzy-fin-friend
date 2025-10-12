@@ -33,6 +33,7 @@ export interface InvestmentEntry {
   id: string;
   type: 'Mutual Fund' | 'Stocks' | 'FD' | 'Crypto' | 'Gold' | 'Real Estate' | 'Custom';
   name: string;
+  initial_invested: number;
   invested: number;
   current: number;
   date: string;
