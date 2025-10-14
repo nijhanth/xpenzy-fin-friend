@@ -18,6 +18,7 @@ interface Conversation {
 interface Profile {
   user_id: string;
   display_name: string;
+  email: string;
 }
 
 export const Message = () => {
@@ -130,9 +131,9 @@ export const Message = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('user_id, display_name')
+        .select('user_id, display_name, email')
         .neq('user_id', user.id)
-        .ilike('display_name', `%${searchQuery}%`)
+        .or(`display_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
         .limit(10);
 
       if (error) throw error;
@@ -400,10 +401,13 @@ export const Message = () => {
                 searchResults.map((profile) => (
                   <div
                     key={profile.user_id}
-                    onClick={() => startNewChat(profile.user_id, profile.display_name || 'Unknown')}
+                    onClick={() => startNewChat(profile.user_id, profile.display_name || profile.email || 'Unknown')}
                     className="p-3 hover:bg-accent rounded-lg cursor-pointer transition"
                   >
-                    <p className="font-medium text-foreground">{profile.display_name || 'Unknown'}</p>
+                    <p className="font-medium text-foreground">{profile.display_name || profile.email || 'Unknown'}</p>
+                    {profile.email && profile.display_name && (
+                      <p className="text-xs text-muted-foreground">{profile.email}</p>
+                    )}
                   </div>
                 ))
               )}
