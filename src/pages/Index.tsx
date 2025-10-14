@@ -8,7 +8,7 @@ import { Expenses } from './Expenses';
 import { Budget } from './Budget';
 import { Savings } from './Savings';
 import { Investments } from './Investments';
-import { Group } from './Group';
+import { Message } from './Message';
 import { Calendar } from './Calendar';
 import { Reports } from './Reports';
 import { Notes } from './Notes';
@@ -53,7 +53,7 @@ const Index = () => {
       case 'investments':
         return <Investments />;
       case 'group':
-        return <Group />;
+        return <Message />;
       case 'calendar':
         return <Calendar />;
       case 'budget':
