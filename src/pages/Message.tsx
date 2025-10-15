@@ -170,36 +170,20 @@ export const Message = () => {
         }
       }
 
-      // Create new conversation - use insert without select to avoid RLS issue
-      const { data: conversationData, error: convError } = await supabase
-        .from('conversations')
-        .insert({
-          type: 'individual',
-        })
-        .select('id')
-        .single();
+      // Use the database function to create conversation and add participants atomically
+      const { data: conversationId, error: convError } = await supabase
+        .rpc('create_conversation_with_participants', {
+          p_type: 'individual',
+          p_user1_id: user.id,
+          p_user2_id: otherUserId,
+        });
 
       if (convError) {
         console.error('Error creating conversation:', convError);
         throw convError;
       }
 
-      const conversationId = conversationData.id;
-
-      // Add both users as participants BEFORE trying to access the conversation
-      const { error: partError } = await supabase
-        .from('conversation_participants')
-        .insert([
-          { conversation_id: conversationId, user_id: user.id },
-          { conversation_id: conversationId, user_id: otherUserId },
-        ]);
-
-      if (partError) {
-        console.error('Error adding participants:', partError);
-        throw partError;
-      }
-
-      // Now we can access the conversation since user is a participant
+      // Now we can access the conversation since both users are participants
       setSelectedConversation(conversationId);
       setShowModal(false);
       setSearchQuery('');
