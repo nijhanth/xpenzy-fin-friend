@@ -170,8 +170,8 @@ export const Message = () => {
         }
       }
 
-      // Create new conversation WITHOUT selecting (to avoid RLS issue)
-      const { data: conversation, error: convError } = await supabase
+      // Create new conversation - use insert without select to avoid RLS issue
+      const { data: conversationData, error: convError } = await supabase
         .from('conversations')
         .insert({
           type: 'individual',
@@ -184,12 +184,14 @@ export const Message = () => {
         throw convError;
       }
 
-      // Add both users as participants
+      const conversationId = conversationData.id;
+
+      // Add both users as participants BEFORE trying to access the conversation
       const { error: partError } = await supabase
         .from('conversation_participants')
         .insert([
-          { conversation_id: conversation.id, user_id: user.id },
-          { conversation_id: conversation.id, user_id: otherUserId },
+          { conversation_id: conversationId, user_id: user.id },
+          { conversation_id: conversationId, user_id: otherUserId },
         ]);
 
       if (partError) {
@@ -197,8 +199,8 @@ export const Message = () => {
         throw partError;
       }
 
-      // Now we can select the conversation since user is a participant
-      setSelectedConversation(conversation.id);
+      // Now we can access the conversation since user is a participant
+      setSelectedConversation(conversationId);
       setShowModal(false);
       setSearchQuery('');
       await fetchConversations();
