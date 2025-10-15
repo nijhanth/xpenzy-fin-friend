@@ -33,7 +33,7 @@ export const Message = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { messages, loading, sendMessage, deleteMessage } = useChat(
+  const { messages, loading, sendMessage } = useChat(
     selectedConversation,
     user?.id || ''
   );
@@ -89,7 +89,6 @@ export const Message = () => {
 
         if (convsError) throw convsError;
 
-        // Fetch other participants for individual chats
         const enrichedConvs = await Promise.all(
           (convs || []).map(async (conv) => {
             if (conv.type === 'individual') {
@@ -171,16 +170,19 @@ export const Message = () => {
         }
       }
 
-      // Create new individual conversation
+      // Create new conversation WITHOUT selecting (to avoid RLS issue)
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
         .insert({
           type: 'individual',
         })
-        .select()
+        .select('id')
         .single();
 
-      if (convError) throw convError;
+      if (convError) {
+        console.error('Error creating conversation:', convError);
+        throw convError;
+      }
 
       // Add both users as participants
       const { error: partError } = await supabase
@@ -190,21 +192,26 @@ export const Message = () => {
           { conversation_id: conversation.id, user_id: otherUserId },
         ]);
 
-      if (partError) throw partError;
+      if (partError) {
+        console.error('Error adding participants:', partError);
+        throw partError;
+      }
 
+      // Now we can select the conversation since user is a participant
       setSelectedConversation(conversation.id);
       setShowModal(false);
       setSearchQuery('');
-      fetchConversations();
+      await fetchConversations();
 
       toast({
         title: 'Success',
         description: `Started chat with ${otherUserName}`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error in startNewChat:', error);
       toast({
         title: 'Error',
-        description: 'Failed to start chat',
+        description: error?.message || 'Failed to start chat',
         variant: 'destructive',
       });
     }
