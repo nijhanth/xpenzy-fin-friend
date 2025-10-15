@@ -52,7 +52,7 @@ const Index = () => {
         return <Savings />;
       case 'investments':
         return <Investments />;
-      case 'group':
+      case 'message':
         return <Message />;
       case 'calendar':
         return <Calendar />;
