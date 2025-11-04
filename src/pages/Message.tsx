@@ -60,14 +60,6 @@ export const Message = () => {
     scrollToBottom();
   }, [messages]);
 
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      searchUsers();
-    } else {
-      setSearchResults([]);
-    }
-  }, [searchQuery]);
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -136,21 +128,43 @@ export const Message = () => {
     }
   };
 
-  const searchUsers = async () => {
+  const handleSearch = async () => {
     if (!user) return;
+    
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) {
+      toast({
+        title: 'Error',
+        description: 'Please enter an email to search',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('user_id, display_name, email')
         .neq('user_id', user.id)
-        .or(`display_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
+        .or(`display_name.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%`)
         .limit(10);
 
       if (error) throw error;
       setSearchResults(data || []);
+      
+      if (!data || data.length === 0) {
+        toast({
+          title: 'No results',
+          description: 'No users found matching your search',
+        });
+      }
     } catch (error) {
       console.error('Error searching users:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to search users',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -433,23 +447,37 @@ export const Message = () => {
                 onClick={() => {
                   setShowModal(false);
                   setSearchQuery('');
+                  setSearchResults([]);
                 }}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              type="text"
-              placeholder="Search user by name or email"
-              className="w-full border border-input bg-background rounded-lg px-3 py-2 mb-3 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:outline-none"
-            />
+            <div className="flex gap-2 mb-3">
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearch();
+                  }
+                }}
+                type="text"
+                placeholder="Search user by email or name"
+                className="flex-1 border border-input bg-background rounded-lg px-3 py-2 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+              />
+              <button
+                onClick={handleSearch}
+                className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition font-medium"
+              >
+                Search
+              </button>
+            </div>
             <div className="max-h-60 overflow-y-auto">
               {searchResults.length === 0 ? (
                 <p className="text-center text-muted-foreground py-4 text-sm">
-                  {searchQuery ? 'No users found' : 'Start typing to search'}
+                  Enter an email and click Search to find users
                 </p>
               ) : (
                 searchResults.map((profile) => (
