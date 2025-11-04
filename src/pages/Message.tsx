@@ -301,7 +301,7 @@ export const Message = () => {
   return (
     <div className="flex h-screen bg-gradient-to-br from-background to-secondary/20">
       {/* Sidebar */}
-      <aside className="hidden md:flex md:flex-col w-1/4 bg-card shadow-lg border-r border-border">
+      <aside className={`${selectedConversation ? 'hidden' : 'flex'} md:flex md:flex-col w-full md:w-1/4 bg-card shadow-lg border-r border-border`}>
         <div className="p-4 flex items-center justify-between border-b border-border">
           <h2 className="font-semibold text-lg text-foreground">Chats</h2>
           <button
@@ -350,7 +350,7 @@ export const Message = () => {
       </aside>
 
       {/* Chat Window */}
-      <div className="flex-1 flex flex-col relative">
+      <div className={`${!selectedConversation ? 'hidden md:flex' : 'flex'} flex-1 flex-col relative`}>
         {selectedConversation && currentConversation ? (
           <div className="flex flex-col h-full">
             <header className="bg-card shadow p-4 flex items-center justify-between border-b border-border">
