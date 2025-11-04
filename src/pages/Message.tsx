@@ -299,7 +299,7 @@ export const Message = () => {
   const currentConversation = conversations.find((c) => c.id === selectedConversation);
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-background to-secondary/20">
+    <div className="flex h-screen bg-gradient-to-br from-background to-secondary/20 pb-24 md:pb-0">
       {/* Sidebar */}
       <aside className={`${selectedConversation ? 'hidden' : 'flex'} md:flex md:flex-col w-full md:w-1/4 bg-card shadow-lg border-r border-border`}>
         <div className="p-4 flex items-center justify-between border-b border-border">
