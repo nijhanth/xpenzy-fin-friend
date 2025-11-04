@@ -299,7 +299,7 @@ export const Message = () => {
   const currentConversation = conversations.find((c) => c.id === selectedConversation);
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-background to-secondary/20 pb-24 md:pb-0">
+    <div className="flex h-screen bg-gradient-to-br from-background to-secondary/20">
       {/* Sidebar */}
       <aside className={`${selectedConversation ? 'hidden' : 'flex'} md:flex md:flex-col w-full md:w-1/4 bg-card shadow-lg border-r border-border`}>
         <div className="p-4 flex items-center justify-between border-b border-border">
@@ -350,9 +350,9 @@ export const Message = () => {
       </aside>
 
       {/* Chat Window */}
-      <div className={`${!selectedConversation ? 'hidden md:flex' : 'flex'} flex-1 flex-col relative`}>
+      <div className={`${!selectedConversation ? 'hidden md:flex' : 'flex'} flex-1 flex-col relative h-full`}>
         {selectedConversation && currentConversation ? (
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full max-h-screen md:max-h-full pb-24 md:pb-0">
             <header className="bg-card shadow p-4 flex items-center justify-between border-b border-border">
               <div className="flex items-center space-x-3">
                 <button
