@@ -11,6 +11,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 type DateRange = 'thisMonth' | 'lastMonth' | 'last30Days' | 'last90Days' | 'thisYear' | 'custom';
 
@@ -128,7 +130,7 @@ export const Reports = () => {
   );
 
   // Export function (prepare data)
-  const exportData = (exportFormat: 'csv' | 'json') => {
+  const exportData = (exportFormat: 'csv' | 'json' | 'pdf') => {
     const periodString = `${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`;
     const reportData = {
       period: periodString,
@@ -148,7 +150,7 @@ export const Reports = () => {
       a.href = url;
       a.download = `xpenzy-report-${format(startDate, 'yyyy-MM-dd')}.json`;
       a.click();
-    } else {
+    } else if (exportFormat === 'csv') {
       // CSV format
       const periodRow = `Period: ${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`;
       const csvRows = [
@@ -174,6 +176,93 @@ export const Reports = () => {
       a.href = url;
       a.download = `xpenzy-report-${format(startDate, 'yyyy-MM-dd')}.csv`;
       a.click();
+    } else if (exportFormat === 'pdf') {
+      // PDF format
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      
+      // Title
+      doc.setFontSize(20);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Xpenzy Financial Report', pageWidth / 2, 20, { align: 'center' });
+      
+      // Period
+      doc.setFontSize(12);
+      doc.setTextColor(100, 100, 100);
+      doc.text(periodString, pageWidth / 2, 30, { align: 'center' });
+      
+      // Summary section
+      doc.setFontSize(14);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Summary', 14, 45);
+      
+      autoTable(doc, {
+        startY: 50,
+        head: [['Metric', 'Amount (₹)']],
+        body: [
+          ['Total Income', totals.income.toLocaleString()],
+          ['Total Expenses', totals.expenses.toLocaleString()],
+          ['Net Balance', totals.netBalance.toLocaleString()],
+          ['Total Savings', totals.savings.toLocaleString()],
+          ['Total Investments', totals.investments.toLocaleString()],
+          ['Total Wealth', totals.totalWealth.toLocaleString()],
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [66, 139, 202] },
+      });
+      
+      // Expenses by Category
+      if (expensesByCategory.length > 0) {
+        const finalY = (doc as any).lastAutoTable.finalY || 50;
+        doc.setFontSize(14);
+        doc.text('Expenses by Category', 14, finalY + 15);
+        
+        autoTable(doc, {
+          startY: finalY + 20,
+          head: [['Category', 'Amount (₹)']],
+          body: expensesByCategory.map(cat => [cat.name, cat.value.toLocaleString()]),
+          theme: 'striped',
+          headStyles: { fillColor: [231, 76, 60] },
+        });
+      }
+      
+      // Income by Category
+      if (incomeByCategory.length > 0) {
+        const finalY = (doc as any).lastAutoTable.finalY || 50;
+        doc.setFontSize(14);
+        doc.text('Income by Category', 14, finalY + 15);
+        
+        autoTable(doc, {
+          startY: finalY + 20,
+          head: [['Category', 'Amount (₹)']],
+          body: incomeByCategory.map(cat => [cat.name, cat.value.toLocaleString()]),
+          theme: 'striped',
+          headStyles: { fillColor: [46, 204, 113] },
+        });
+      }
+      
+      // Top 5 Expenses
+      if (topExpenses.length > 0) {
+        const finalY = (doc as any).lastAutoTable.finalY || 50;
+        doc.setFontSize(14);
+        doc.text('Top 5 Expenses', 14, finalY + 15);
+        
+        autoTable(doc, {
+          startY: finalY + 20,
+          head: [['Date', 'Category', 'Payment Mode', 'Amount (₹)']],
+          body: topExpenses.map(expense => [
+            format(new Date(expense.date), 'MMM dd, yyyy'),
+            expense.category,
+            expense.paymentMode,
+            expense.amount.toLocaleString(),
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [155, 89, 182] },
+        });
+      }
+      
+      // Save PDF
+      doc.save(`xpenzy-report-${format(startDate, 'yyyy-MM-dd')}.pdf`);
     }
   };
 
@@ -493,6 +582,14 @@ export const Reports = () => {
                 >
                   <Download className="w-4 h-4" />
                   Export as JSON
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex items-center gap-2"
+                  onClick={() => exportData('pdf')}
+                >
+                  <Download className="w-4 h-4" />
+                  Export as PDF
                 </Button>
               </div>
             </CardContent>
