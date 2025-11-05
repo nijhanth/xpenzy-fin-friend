@@ -575,6 +575,82 @@ export const savingsTransactionService = {
   }
 };
 
+// Notes Service
+const notesService = {
+  async getAll(): Promise<any[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('due_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(note: any): Promise<any> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('notes')
+      .insert([{ ...note, user_id: user.id }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, note: any): Promise<any> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('notes')
+      .update(note)
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+      .from('notes')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+  },
+
+  async markComplete(id: string, isCompleted: boolean): Promise<any> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('notes')
+      .update({ is_completed: isCompleted })
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+};
+
 export const database = {
   income: incomeService,
   expenses: expenseService,
@@ -583,4 +659,5 @@ export const database = {
   investmentTransactions: investmentTransactionService,
   savingsTransactions: savingsTransactionService,
   budgets: budgetService,
+  notes: notesService,
 };

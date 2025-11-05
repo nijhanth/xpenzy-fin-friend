@@ -321,6 +321,51 @@ export type Database = {
           },
         ]
       }
+      notes: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          due_date: string
+          id: string
+          is_completed: boolean
+          notes: string | null
+          priority: string
+          reminder: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          due_date: string
+          id?: string
+          is_completed?: boolean
+          notes?: string | null
+          priority?: string
+          reminder?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          due_date?: string
+          id?: string
+          is_completed?: boolean
+          notes?: string | null
+          priority?: string
+          reminder?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
