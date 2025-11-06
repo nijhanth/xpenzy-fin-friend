@@ -651,6 +651,107 @@ const notesService = {
   }
 };
 
+// User Preferences Service
+const userPreferencesService = {
+  async get(): Promise<any> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  },
+
+  async upsert(preferences: any): Promise<any> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .upsert({ ...preferences, user_id: user.id })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+};
+
+// Profile Service
+const profileService = {
+  async update(displayName: string): Promise<any> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ display_name: displayName })
+      .eq('user_id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+};
+
+// Data Export Service
+const dataExportService = {
+  async exportAllData(): Promise<any> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const [expenses, income, investments, investmentTransactions, savings, savingsTransactions, budgets, notes, preferences, profile] = await Promise.all([
+      supabase.from('expense_entries').select('*').eq('user_id', user.id),
+      supabase.from('income_entries').select('*').eq('user_id', user.id),
+      supabase.from('investment_entries').select('*').eq('user_id', user.id),
+      supabase.from('investment_transactions').select('*').eq('user_id', user.id),
+      supabase.from('savings_goals').select('*').eq('user_id', user.id),
+      supabase.from('savings_transactions').select('*').eq('user_id', user.id),
+      supabase.from('budget_categories').select('*').eq('user_id', user.id),
+      supabase.from('notes').select('*').eq('user_id', user.id),
+      supabase.from('user_preferences').select('*').eq('user_id', user.id).single(),
+      supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+    ]);
+
+    return {
+      user: { id: user.id, email: user.email },
+      profile: profile.data,
+      preferences: preferences.data,
+      expenses: expenses.data,
+      income: income.data,
+      investments: investments.data,
+      investmentTransactions: investmentTransactions.data,
+      savings: savings.data,
+      savingsTransactions: savingsTransactions.data,
+      budgets: budgets.data,
+      notes: notes.data,
+      exportedAt: new Date().toISOString(),
+    };
+  },
+
+  async resetAllData(): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    await Promise.all([
+      supabase.from('expense_entries').delete().eq('user_id', user.id),
+      supabase.from('income_entries').delete().eq('user_id', user.id),
+      supabase.from('investment_transactions').delete().eq('user_id', user.id),
+      supabase.from('investment_entries').delete().eq('user_id', user.id),
+      supabase.from('savings_transactions').delete().eq('user_id', user.id),
+      supabase.from('savings_goals').delete().eq('user_id', user.id),
+      supabase.from('budget_categories').delete().eq('user_id', user.id),
+      supabase.from('notes').delete().eq('user_id', user.id),
+    ]);
+  }
+};
+
 export const database = {
   income: incomeService,
   expenses: expenseService,
@@ -660,4 +761,7 @@ export const database = {
   savingsTransactions: savingsTransactionService,
   budgets: budgetService,
   notes: notesService,
+  userPreferences: userPreferencesService,
+  profile: profileService,
+  dataExport: dataExportService,
 };

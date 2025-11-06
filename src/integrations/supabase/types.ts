@@ -462,6 +462,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_preferences: {
+        Row: {
+          budget_alerts: boolean
+          created_at: string
+          id: string
+          language: string
+          push_notifications: boolean
+          theme: string
+          updated_at: string
+          user_id: string
+          weekly_reports: boolean
+        }
+        Insert: {
+          budget_alerts?: boolean
+          created_at?: string
+          id?: string
+          language?: string
+          push_notifications?: boolean
+          theme?: string
+          updated_at?: string
+          user_id: string
+          weekly_reports?: boolean
+        }
+        Update: {
+          budget_alerts?: boolean
+          created_at?: string
+          id?: string
+          language?: string
+          push_notifications?: boolean
+          theme?: string
+          updated_at?: string
+          user_id?: string
+          weekly_reports?: boolean
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
