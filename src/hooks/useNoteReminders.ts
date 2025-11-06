@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { database } from '@/lib/database';
 import { useNotifications } from './useNotifications';
 
@@ -9,6 +10,10 @@ export const useNoteReminders = () => {
     // Check for note reminders every minute
     const checkReminders = async () => {
       try {
+        // Check if user is authenticated first
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return; // Skip if not authenticated
+        
         const notes = await database.notes.getAll();
         const now = new Date();
         

@@ -673,7 +673,10 @@ const userPreferencesService = {
 
     const { data, error } = await supabase
       .from('user_preferences')
-      .upsert({ ...preferences, user_id: user.id })
+      .upsert(
+        { ...preferences, user_id: user.id },
+        { onConflict: 'user_id' }
+      )
       .select()
       .single();
 

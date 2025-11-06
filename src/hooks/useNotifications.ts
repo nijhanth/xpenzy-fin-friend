@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { database } from '@/lib/database';
 
 export interface NotificationPreferences {
@@ -27,6 +28,10 @@ export const useNotifications = () => {
 
   const loadPreferences = async () => {
     try {
+      // Check if user is authenticated first
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return; // Skip if not authenticated
+      
       const prefs = await database.userPreferences.get();
       if (prefs) {
         setPreferences({
