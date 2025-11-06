@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNotifications } from '@/hooks/useNotifications';
 import { 
   User, 
   Moon, 
@@ -29,6 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 export const Settings = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { requestPermission } = useNotifications();
   
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [pushNotifications, setPushNotifications] = useState(true);
@@ -86,6 +88,18 @@ export const Settings = () => {
   };
 
   const handlePushNotificationsChange = async (value: boolean) => {
+    if (value) {
+      // Request browser notification permission
+      const granted = await requestPermission();
+      if (!granted) {
+        toast({
+          title: "Permission Required",
+          description: "Please allow notifications in your browser settings",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     setPushNotifications(value);
     await updatePreference('push_notifications', value);
   };

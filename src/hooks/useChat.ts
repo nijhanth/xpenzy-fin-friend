@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useNotifications } from '@/hooks/useNotifications';
 
 interface Message {
   id: string;
@@ -17,6 +18,7 @@ export const useChat = (conversationId: string | null, userId: string) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { showNotification } = useNotifications();
 
   useEffect(() => {
     if (conversationId) {
@@ -84,7 +86,16 @@ export const useChat = (conversationId: string | null, userId: string) => {
             .eq('user_id', payload.new.user_id)
             .single();
 
-          setMessages((prev) => [...prev, { ...payload.new, profiles: profile } as Message]);
+          const newMessage = { ...payload.new, profiles: profile } as Message;
+          setMessages((prev) => [...prev, newMessage]);
+
+          // Show notification if message is from another user
+          if (payload.new.user_id !== userId) {
+            showNotification('New Message', {
+              body: `${profile?.display_name || 'Someone'}: ${payload.new.content.substring(0, 100)}`,
+              tag: `message-${payload.new.id}`,
+            });
+          }
         }
       )
       .on(
