@@ -227,9 +227,11 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Refresh investment data to get updated totals from the database trigger
       try {
         const updatedInvestments = await investmentService.getAll();
+        const updatedBudgets = await budgetService.getAll();
         setData(prev => ({
           ...prev,
-          investments: updatedInvestments
+          investments: updatedInvestments,
+          budgets: updatedBudgets
         }));
       } catch (refreshError) {
         console.error('Error refreshing investment data:', refreshError);
@@ -264,9 +266,11 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Refresh investment data to get updated totals from the database trigger
       try {
         const updatedInvestments = await investmentService.getAll();
+        const updatedBudgets = await budgetService.getAll();
         setData(prev => ({
           ...prev,
-          investments: updatedInvestments
+          investments: updatedInvestments,
+          budgets: updatedBudgets
         }));
       } catch (refreshError) {
         console.error('Error refreshing investment data:', refreshError);
@@ -297,9 +301,11 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Refresh investment data to get updated totals from the database trigger
       try {
         const updatedInvestments = await investmentService.getAll();
+        const updatedBudgets = await budgetService.getAll();
         setData(prev => ({
           ...prev,
-          investments: updatedInvestments
+          investments: updatedInvestments,
+          budgets: updatedBudgets
         }));
       } catch (refreshError) {
         console.error('Error refreshing investment data:', refreshError);
@@ -334,9 +340,11 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Refresh savings data to get updated totals from the database trigger
       try {
         const updatedSavings = await savingsService.getAll();
+        const updatedBudgets = await budgetService.getAll();
         setData(prev => ({
           ...prev,
-          savings: updatedSavings
+          savings: updatedSavings,
+          budgets: updatedBudgets
         }));
       } catch (refreshError) {
         console.error('Error refreshing savings data:', refreshError);
@@ -369,9 +377,11 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Refresh savings data to get updated totals from the database trigger
       try {
         const updatedSavings = await savingsService.getAll();
+        const updatedBudgets = await budgetService.getAll();
         setData(prev => ({
           ...prev,
-          savings: updatedSavings
+          savings: updatedSavings,
+          budgets: updatedBudgets
         }));
       } catch (refreshError) {
         console.error('Error refreshing savings data:', refreshError);
@@ -402,9 +412,11 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Refresh savings data to get updated totals from the database trigger
       try {
         const updatedSavings = await savingsService.getAll();
+        const updatedBudgets = await budgetService.getAll();
         setData(prev => ({
           ...prev,
-          savings: updatedSavings
+          savings: updatedSavings,
+          budgets: updatedBudgets
         }));
       } catch (refreshError) {
         console.error('Error refreshing savings data:', refreshError);
