@@ -100,16 +100,21 @@ export const Budget = () => {
     });
   }, [data.budgets, selectedYear, selectedMonth, selectedWeek]);
 
-  // Calculate spent amounts from real expense data automatically
+  // Calculate spent amounts from real data automatically
   const budgetsWithRealSpent = useMemo(() => {
     return filteredBudgets.map(budget => {
-      // Get filtered expenses based on budget period and selected time frame
-      const filteredExpenses = getFilteredExpenses(budget.period);
+      let spent = 0;
       
-      // Calculate spent from actual expenses matching this budget category
-      const spent = filteredExpenses
-        .filter(expense => expense.category === budget.category)
-        .reduce((sum, expense) => sum + expense.amount, 0);
+      // For savings and investment budgets, use the 'current' field which is auto-updated by triggers
+      if (budget.linked_type === 'savings' || budget.linked_type === 'investment') {
+        spent = budget.current || 0;
+      } else {
+        // For expense budgets, calculate from actual expenses matching this budget category
+        const filteredExpenses = getFilteredExpenses(budget.period);
+        spent = filteredExpenses
+          .filter(expense => expense.category === budget.category)
+          .reduce((sum, expense) => sum + expense.amount, 0);
+      }
       
       return {
         ...budget,
@@ -562,7 +567,9 @@ export const Budget = () => {
                         {remaining >= 0 ? `₹${remaining.toLocaleString()} remaining` : `₹${Math.abs(remaining).toLocaleString()} over budget`}
                       </span>
                       <span className="text-muted-foreground">
-                        Auto-updated from expenses
+                        {budget.linked_type === 'savings' ? 'Auto-updated from savings' :
+                         budget.linked_type === 'investment' ? 'Auto-updated from investments' :
+                         'Auto-updated from expenses'}
                       </span>
                     </div>
                   </div>
@@ -604,16 +611,16 @@ export const Budget = () => {
         <CardContent>
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              • Budget categories automatically appear in expense forms
+              • Expense budget categories automatically appear in expense forms
             </p>
             <p className="text-sm text-muted-foreground">
-              • Spent amounts are calculated from your actual expenses
+              • Spent amounts auto-update from expenses, savings transactions, and investments
             </p>
             <p className="text-sm text-muted-foreground">
               • Expenses without matching budgets are classified as "Others"
             </p>
             <p className="text-sm text-muted-foreground">
-              • Budget status updates in real-time when you add expenses
+              • Budget status updates in real-time when you add transactions
             </p>
           </div>
         </CardContent>
