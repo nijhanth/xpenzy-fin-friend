@@ -41,6 +41,14 @@ export const Home = () => {
     return sanitizedName;
   };
 
+  // Get dynamic greeting based on current time
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
+  };
+
   // Log security event for data access
   React.useEffect(() => {
     if (user) {
@@ -113,11 +121,14 @@ export const Home = () => {
       <div className="relative z-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground font-outfit bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Good Morning, {getSecureDisplayName()}! 👋
-          </h1>
-          <p className="text-sm text-muted-foreground font-inter">December 2024</p>
+        <div className="flex items-center gap-3">
+          <span className="text-3xl">👋</span>
+          <div>
+            <h1 className="text-3xl font-bold font-outfit bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              {getGreeting()}, {getSecureDisplayName()}!
+            </h1>
+            <p className="text-sm text-muted-foreground font-inter">December 2024</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="rounded-full glass-card">
