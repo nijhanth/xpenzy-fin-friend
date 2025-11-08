@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { 
   Home, 
   PiggyBank, 
@@ -7,7 +6,6 @@ import {
   BarChart3, 
   Target,
   Settings,
-  Plus,
   Wallet,
   MessageSquare,
   Calendar,
@@ -45,26 +43,12 @@ interface BottomNavigationProps {
 }
 
 export const BottomNavigation = ({ activeTab, onTabChange }: BottomNavigationProps) => {
-  // Group items into pages for better mobile navigation
-  const itemsPerPage = 5;
-  const [currentPage, setCurrentPage] = useState(0);
-  const totalPages = Math.ceil(navigationItems.length / itemsPerPage);
-  
-  const currentItems = navigationItems.slice(
-    currentPage * itemsPerPage,
-    (currentPage + 1) * itemsPerPage
-  );
-
-  const nextPage = () => {
-    setCurrentPage((prev) => (prev + 1) % totalPages);
-  };
-
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-lg border-t border-border shadow-elevated z-50">
-      <div className="relative px-2 py-3 max-w-md mx-auto">
-        {/* Navigation Items */}
-        <div className="flex items-center justify-around">
-          {currentItems.map((item) => {
+      {/* Desktop: All items visible, Mobile: Horizontal scroll */}
+      <div className="relative px-2 py-3 max-w-7xl mx-auto overflow-x-auto scrollbar-hide">
+        <div className="flex items-center justify-around md:justify-center gap-1 md:gap-2 min-w-max md:min-w-0">
+          {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             
@@ -74,7 +58,7 @@ export const BottomNavigation = ({ activeTab, onTabChange }: BottomNavigationPro
                 onClick={() => onTabChange(item.id)}
                 className={cn(
                   "flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300",
-                  "min-w-[55px] min-h-[55px] relative overflow-hidden",
+                  "min-w-[55px] min-h-[55px] relative overflow-hidden flex-shrink-0",
                   isActive 
                     ? "bg-gradient-primary text-primary-foreground shadow-glow scale-110" 
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/50 hover:scale-105"
@@ -100,33 +84,7 @@ export const BottomNavigation = ({ activeTab, onTabChange }: BottomNavigationPro
             );
           })}
         </div>
-        
-        {/* Page Indicators */}
-        {totalPages > 1 && (
-          <div className="flex justify-center mt-2 gap-1">
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentPage(i)}
-                className={cn(
-                  "w-2 h-2 rounded-full transition-all duration-200",
-                  i === currentPage 
-                    ? "bg-primary scale-125" 
-                    : "bg-muted hover:bg-muted-foreground/50"
-                )}
-              />
-            ))}
-          </div>
-        )}
       </div>
-      
-      {/* Floating Add Button */}
-      <button 
-        onClick={nextPage}
-        className="absolute -top-6 right-6 bg-gradient-primary text-primary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-glow hover:scale-110 transition-all duration-200 group"
-      >
-        <Plus className="w-6 h-6 group-hover:rotate-45 transition-transform duration-300" />
-      </button>
     </div>
   );
 };
