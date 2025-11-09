@@ -146,7 +146,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
                       placeholder="Enter profit (+) or loss (-)"
                       {...field}
                       onChange={(e) => field.onChange(Number(e.target.value))}
-                      step="1"
+                      step="0.01"
                     />
                   </FormControl>
                   <FormMessage />
