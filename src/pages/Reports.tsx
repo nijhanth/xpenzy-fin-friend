@@ -58,8 +58,9 @@ export const Reports = () => {
     return {
       income: filterByDate(data.income),
       expenses: filterByDate(data.expenses),
-      savings: filterByDate(data.savings),
-      investments: filterByDate(data.investments),
+      // Don't filter savings and investments by date - show current totals
+      savings: data.savings,
+      investments: data.investments,
     };
   }, [data, startDate, endDate]);
 
