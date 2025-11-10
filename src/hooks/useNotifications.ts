@@ -24,27 +24,27 @@ export const useNotifications = () => {
     }
 
     // Load user preferences
-    loadPreferences();
+    const loadPrefs = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        const prefs = await database.userPreferences.get();
+        if (prefs) {
+          setPreferences({
+            push_notifications: prefs.push_notifications,
+            weekly_reports: prefs.weekly_reports,
+            budget_alerts: prefs.budget_alerts,
+          });
+        }
+      } catch (error) {
+        console.error('Error loading notification preferences:', error);
+      }
+    };
+    
+    loadPrefs();
   }, []);
 
-  const loadPreferences = async () => {
-    try {
-      // Check if user is authenticated first
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return; // Skip if not authenticated
-      
-      const prefs = await database.userPreferences.get();
-      if (prefs) {
-        setPreferences({
-          push_notifications: prefs.push_notifications,
-          weekly_reports: prefs.weekly_reports,
-          budget_alerts: prefs.budget_alerts,
-        });
-      }
-    } catch (error) {
-      console.error('Error loading notification preferences:', error);
-    }
-  };
 
   const requestPermission = async (): Promise<boolean> => {
     if (!('Notification' in window)) {
@@ -91,6 +91,5 @@ export const useNotifications = () => {
     preferences,
     requestPermission,
     showNotification,
-    loadPreferences,
   };
 };

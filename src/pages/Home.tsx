@@ -13,6 +13,7 @@ import { IncomeForm } from '@/components/forms/IncomeForm';
 import { ExpenseForm } from '@/components/forms/ExpenseForm';
 import { SavingsForm } from '@/components/forms/SavingsForm';
 import { InvestmentForm } from '@/components/forms/InvestmentForm';
+import { NotificationBell } from '@/components/ui/notification-bell';
 
 export const Home = () => {
   const { data } = useFinancial();
@@ -131,9 +132,7 @@ export const Home = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="rounded-full glass-card">
-            <Bell className="w-5 h-5" />
-          </Button>
+          <NotificationBell />
           <UserMenu />
         </div>
       </div>
