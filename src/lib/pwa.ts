@@ -23,25 +23,30 @@ export const showPushNotification = async (
   const hasPermission = await requestNotificationPermission();
   
   if (!hasPermission) {
+    console.warn('Notification permission not granted');
     return;
   }
 
-  // Check if service worker is ready
-  if ('serviceWorker' in navigator && 'PushManager' in window) {
-    const registration = await navigator.serviceWorker.ready;
-    
-    await registration.showNotification(title, {
-      icon: '/icon-192x192.png',
-      badge: '/icon-192x192.png',
-      ...options,
-    });
-  } else {
-    // Fallback to regular notification
-    new Notification(title, {
-      icon: '/icon-192x192.png',
-      badge: '/icon-192x192.png',
-      ...options,
-    });
+  try {
+    // Check if service worker is ready
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      const registration = await navigator.serviceWorker.ready;
+      
+      await registration.showNotification(title, {
+        icon: '/icon-192x192.png',
+        badge: '/icon-192x192.png',
+        ...options,
+      });
+    } else {
+      // Fallback to regular notification
+      new Notification(title, {
+        icon: '/icon-192x192.png',
+        badge: '/icon-192x192.png',
+        ...options,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to show notification:', error);
   }
 };
 
