@@ -18,6 +18,10 @@ export default defineConfig(({ mode }) => ({
       strategies: 'injectManifest',
       srcDir: 'public',
       filename: 'sw.js',
+      injectManifest: {
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB limit
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff,woff2}']
+      },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon-192x192.png', 'icon-512x512.png'],
       manifest: {
         name: 'Xpenzy',
