@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { database } from '@/lib/database';
+import { showPushNotification, requestNotificationPermission } from '@/lib/pwa';
 
 export interface NotificationPreferences {
   push_notifications: boolean;
@@ -70,19 +71,18 @@ export const useNotifications = () => {
       return;
     }
 
-    // Request permission if not already granted
-    const hasPermission = await requestPermission();
-    
-    if (hasPermission && 'Notification' in window) {
-      try {
-        new Notification(title, {
-          icon: '/lovable-uploads/e88aa1f4-0c35-4871-9992-7efea8c237ed.png',
-          badge: '/lovable-uploads/e88aa1f4-0c35-4871-9992-7efea8c237ed.png',
-          ...options,
-        });
-      } catch (error) {
-        console.error('Error showing notification:', error);
-      }
+    // Use PWA push notifications
+    try {
+      await showPushNotification(title, {
+        body: options?.body,
+        icon: '/icon-192x192.png',
+        badge: '/icon-192x192.png',
+        tag: options?.tag,
+        requireInteraction: options?.requireInteraction,
+        ...options,
+      });
+    } catch (error) {
+      console.error('Error showing notification:', error);
     }
   };
 
