@@ -2,6 +2,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { FinanceLogo } from '@/components/ui/finance-logo';
 import { 
   TrendingUp, 
@@ -20,6 +22,14 @@ import financeDashboard from '@/assets/finance-dashboard-bg.jpg';
 
 const Landing = () => {
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
+
+  // Redirect to app if already authenticated
+  useEffect(() => {
+    if (!loading && user) {
+      navigate('/app');
+    }
+  }, [user, loading, navigate]);
 
   const features = [
     {
