@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FinanceLogo } from '@/components/ui/finance-logo';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { 
   TrendingUp, 
   PieChart, 
@@ -15,7 +16,8 @@ import {
   Target,
   ArrowRight,
   CheckCircle,
-  Star
+  Star,
+  Download
 } from 'lucide-react';
 import financeHero from '@/assets/finance-chart-hero.jpg';
 import financeDashboard from '@/assets/finance-dashboard-bg.jpg';
@@ -23,6 +25,7 @@ import financeDashboard from '@/assets/finance-dashboard-bg.jpg';
 const Landing = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+  const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
 
   // Redirect to app if already authenticated
   useEffect(() => {
@@ -30,6 +33,10 @@ const Landing = () => {
       navigate('/app');
     }
   }, [user, loading, navigate]);
+
+  const handleInstall = async () => {
+    await promptInstall();
+  };
 
   const features = [
     {
@@ -100,6 +107,26 @@ const Landing = () => {
               </h1>
             </div>
             <div className="flex items-center gap-4">
+              {(isInstallable || isInstalled) && (
+                <Button 
+                  variant="outline" 
+                  onClick={handleInstall}
+                  disabled={isInstalled}
+                  className="font-medium"
+                >
+                  {isInstalled ? (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Installed
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 mr-2" />
+                      Install App
+                    </>
+                  )}
+                </Button>
+              )}
               <Button 
                 variant="ghost" 
                 onClick={() => navigate('/auth')}
