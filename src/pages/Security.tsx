@@ -16,35 +16,32 @@ import {
   EyeOff
 } from 'lucide-react';
 import { useState } from 'react';
+import { useSecuritySettings } from '@/hooks/useSecuritySettings';
 
-const securitySettings = [
+const securitySettingsConfig = [
   {
     title: "App Lock",
     description: "Secure app with PIN or pattern",
     icon: Lock,
-    enabled: true,
-    type: "toggle"
+    key: 'app_lock' as const,
   },
   {
     title: "Biometric Authentication",
     description: "Use fingerprint or face recognition",
     icon: Fingerprint,
-    enabled: false,
-    type: "toggle"
+    key: 'biometric_auth' as const,
   },
   {
     title: "Auto Lock",
     description: "Lock app when inactive for 5 minutes",
     icon: Smartphone,
-    enabled: true,
-    type: "toggle"
+    key: 'auto_lock' as const,
   },
   {
     title: "Cloud Sync",
     description: "Encrypt and sync data to cloud",
     icon: Cloud,
-    enabled: true,
-    type: "toggle"
+    key: 'cloud_sync' as const,
   }
 ];
 
@@ -53,34 +50,37 @@ const backupOptions = [
     title: "Local Backup",
     description: "Save encrypted backup to device",
     icon: Download,
-    lastBackup: "2 days ago",
-    size: "2.4 MB"
+    type: 'local' as const,
   },
   {
     title: "Cloud Backup",
     description: "Auto backup to secure cloud storage",
     icon: Upload,
-    lastBackup: "12 hours ago",
-    size: "1.8 MB"
+    type: 'cloud' as const,
   }
 ];
 
 export const Security = () => {
-  const [settings, setSettings] = useState(securitySettings);
+  const { settings, loading, updateSetting, updateBackupTimestamp } = useSecuritySettings();
   const [showPinSetup, setShowPinSetup] = useState(false);
-  
-  const toggleSetting = (index: number) => {
-    const newSettings = [...settings];
-    newSettings[index].enabled = !newSettings[index].enabled;
-    setSettings(newSettings);
-  };
 
   const getSecurityScore = () => {
-    const enabledCount = settings.filter(setting => setting.enabled).length;
-    return Math.round((enabledCount / settings.length) * 100);
+    if (!settings) return 0;
+    const enabledCount = securitySettingsConfig.filter(
+      config => settings[config.key]
+    ).length;
+    return Math.round((enabledCount / securitySettingsConfig.length) * 100);
   };
 
   const securityScore = getSecurityScore();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
   const getScoreColor = () => {
     if (securityScore >= 80) return "text-emerald-600";
     if (securityScore >= 60) return "text-yellow-600";
@@ -148,20 +148,21 @@ export const Security = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {settings.map((setting, index) => (
-              <div key={index} className="flex items-center justify-between p-3 rounded-lg border border-border">
+            {securitySettingsConfig.map((config) => (
+              <div key={config.key} className="flex items-center justify-between p-3 rounded-lg border border-border">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                    <setting.icon className="w-5 h-5" />
+                    <config.icon className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-medium">{setting.title}</h3>
-                    <p className="text-sm text-muted-foreground">{setting.description}</p>
+                    <h3 className="font-medium">{config.title}</h3>
+                    <p className="text-sm text-muted-foreground">{config.description}</p>
                   </div>
                 </div>
                 <Switch 
-                  checked={setting.enabled}
-                  onCheckedChange={() => toggleSetting(index)}
+                  checked={settings?.[config.key] ?? false}
+                  onCheckedChange={(checked) => updateSetting(config.key, checked)}
+                  disabled={!settings}
                 />
               </div>
             ))}
@@ -200,29 +201,43 @@ export const Security = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {backupOptions.map((option, index) => (
-              <div key={index} className="border border-border rounded-lg p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-secondary text-secondary-foreground">
-                      <option.icon className="w-5 h-5" />
+            {backupOptions.map((option) => {
+              const lastBackupField = option.type === 'local' ? 'last_backup_local' : 'last_backup_cloud';
+              const lastBackup = settings?.[lastBackupField];
+              const backupDate = lastBackup ? new Date(lastBackup) : null;
+              const backupText = backupDate 
+                ? `${Math.floor((Date.now() - backupDate.getTime()) / (1000 * 60 * 60))} hours ago`
+                : 'Never';
+              
+              return (
+                <div key={option.type} className="border border-border rounded-lg p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-secondary text-secondary-foreground">
+                        <option.icon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">{option.title}</h3>
+                        <p className="text-sm text-muted-foreground">{option.description}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-medium">{option.title}</h3>
-                      <p className="text-sm text-muted-foreground">{option.description}</p>
-                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => updateBackupTimestamp(option.type)}
+                      disabled={!settings}
+                    >
+                      {option.type === 'local' ? 'Backup Now' : 'Configure'}
+                    </Button>
                   </div>
-                  <Button size="sm" variant="outline">
-                    {index === 0 ? 'Backup Now' : 'Configure'}
-                  </Button>
+                  
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Last backup: {backupText}</span>
+                    <span>Size: N/A</span>
+                  </div>
                 </div>
-                
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Last backup: {option.lastBackup}</span>
-                  <span>Size: {option.size}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
