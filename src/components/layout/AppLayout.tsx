@@ -1,6 +1,5 @@
 import { BottomNavigation } from './BottomNavigation';
 import { FloatingAIAssistant } from '@/components/ui/floating-ai-assistant';
-import { InstallPrompt } from '@/components/ui/install-prompt';
 import { cn } from '@/lib/utils';
 
 interface AppLayoutProps {
@@ -26,9 +25,6 @@ export const AppLayout = ({ children, className, activeTab, onTabChange }: AppLa
         activeTab={activeTab} 
         onTabChange={onTabChange} 
       />
-      
-      {/* PWA Install Prompt */}
-      <InstallPrompt />
     </div>
   );
 };
