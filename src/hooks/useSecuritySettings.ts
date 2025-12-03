@@ -1,37 +1,32 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 interface SecuritySettings {
-  id?: string;
-  user_id: string;
   app_lock: boolean;
   biometric_auth: boolean;
   auto_lock: boolean;
   auto_lock_timeout: number;
   cloud_sync: boolean;
-  pin_hash: string | null;
-  pin_salt: string | null;
   two_factor_enabled: boolean;
   security_alerts: boolean;
   last_backup_local: string | null;
   last_backup_cloud: string | null;
 }
 
-const DEFAULT_SETTINGS: Omit<SecuritySettings, 'id' | 'user_id'> = {
+const DEFAULT_SETTINGS: SecuritySettings = {
   app_lock: true,
   biometric_auth: false,
   auto_lock: true,
   auto_lock_timeout: 300,
   cloud_sync: true,
-  pin_hash: null,
-  pin_salt: null,
   two_factor_enabled: false,
   security_alerts: true,
   last_backup_local: null,
   last_backup_cloud: null,
 };
+
+const STORAGE_KEY = 'xpenzy_security_settings';
 
 export const useSecuritySettings = () => {
   const { user, loading: authLoading } = useAuth();
@@ -39,101 +34,55 @@ export const useSecuritySettings = () => {
   const [settings, setSettings] = useState<SecuritySettings | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch settings only when user is authenticated
+  // Load settings from localStorage
   useEffect(() => {
     if (authLoading) return;
     
     if (!user) {
+      setSettings(null);
       setLoading(false);
       return;
     }
 
-    fetchSettings();
+    const storageKey = `${STORAGE_KEY}_${user.id}`;
+    const stored = localStorage.getItem(storageKey);
+    
+    if (stored) {
+      try {
+        setSettings(JSON.parse(stored));
+      } catch {
+        setSettings(DEFAULT_SETTINGS);
+        localStorage.setItem(storageKey, JSON.stringify(DEFAULT_SETTINGS));
+      }
+    } else {
+      setSettings(DEFAULT_SETTINGS);
+      localStorage.setItem(storageKey, JSON.stringify(DEFAULT_SETTINGS));
+    }
+    
+    setLoading(false);
   }, [user, authLoading]);
 
-  const fetchSettings = async () => {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('security_settings')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (!data) {
-        // Create default settings for new user
-        const newSettings = {
-          ...DEFAULT_SETTINGS,
-          user_id: user.id,
-        };
-        
-        const { data: created, error: createError } = await supabase
-          .from('security_settings')
-          .insert(newSettings)
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        setSettings(created);
-      } else {
-        setSettings(data);
-      }
-    } catch (error: any) {
-      console.error('Error fetching security settings:', error);
-      // Only show error if it's not a "table doesn't exist" error
-      if (!error?.message?.includes('does not exist')) {
-        toast({
-          variant: "destructive",
-          title: "Error loading settings",
-          description: error.message,
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateSetting = async <K extends keyof Omit<SecuritySettings, 'id' | 'user_id'>>(
+  const updateSetting = <K extends keyof SecuritySettings>(
     key: K,
     value: SecuritySettings[K]
   ) => {
     if (!user || !settings) return;
 
-    try {
-      const { error } = await supabase
-        .from('security_settings')
-        .update({ [key]: value })
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      setSettings(prev => prev ? { ...prev, [key]: value } : null);
-      
-      toast({
-        title: "Settings updated",
-        description: "Your security settings have been saved.",
-      });
-    } catch (error: any) {
-      console.error('Error updating security settings:', error);
-      toast({
-        variant: "destructive",
-        title: "Error updating settings",
-        description: error.message,
-      });
-    }
+    const newSettings = { ...settings, [key]: value };
+    setSettings(newSettings);
+    localStorage.setItem(`${STORAGE_KEY}_${user.id}`, JSON.stringify(newSettings));
+    
+    toast({
+      title: "Settings updated",
+      description: "Your security settings have been saved.",
+    });
   };
 
-  const updateBackupTimestamp = async (type: 'local' | 'cloud') => {
+  const updateBackupTimestamp = (type: 'local' | 'cloud') => {
     if (!user || !settings) return;
 
     const field = type === 'local' ? 'last_backup_local' : 'last_backup_cloud';
-    const timestamp = new Date().toISOString();
-
-    await updateSetting(field, timestamp);
+    updateSetting(field, new Date().toISOString());
   };
 
   return {
@@ -141,6 +90,5 @@ export const useSecuritySettings = () => {
     loading: loading || authLoading,
     updateSetting,
     updateBackupTimestamp,
-    refetch: fetchSettings,
   };
 };
