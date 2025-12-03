@@ -8,8 +8,7 @@ import {
   Fingerprint, 
   Smartphone, 
   Cloud, 
-  Download, 
-  Upload,
+  Download,
   AlertTriangle,
   CheckCircle,
   Eye,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useSecuritySettings } from '@/hooks/useSecuritySettings';
+import { GoogleDriveBackup } from '@/components/ui/google-drive-backup';
 
 const securitySettingsConfig = [
   {
@@ -42,21 +42,6 @@ const securitySettingsConfig = [
     description: "Encrypt and sync data to cloud",
     icon: Cloud,
     key: 'cloud_sync' as const,
-  }
-];
-
-const backupOptions = [
-  {
-    title: "Local Backup",
-    description: "Save encrypted backup to device",
-    icon: Download,
-    type: 'local' as const,
-  },
-  {
-    title: "Cloud Backup",
-    description: "Auto backup to secure cloud storage",
-    icon: Upload,
-    type: 'cloud' as const,
   }
 ];
 
@@ -194,50 +179,42 @@ export const Security = () => {
         </CardContent>
       </Card>
 
-      {/* Backup & Restore */}
+      {/* Google Drive Backup */}
+      <GoogleDriveBackup />
+
+      {/* Local Backup */}
       <Card>
         <CardHeader>
-          <CardTitle>Backup & Restore</CardTitle>
+          <CardTitle>Local Backup</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {backupOptions.map((option) => {
-              const lastBackupField = option.type === 'local' ? 'last_backup_local' : 'last_backup_cloud';
-              const lastBackup = settings?.[lastBackupField];
-              const backupDate = lastBackup ? new Date(lastBackup) : null;
-              const backupText = backupDate 
-                ? `${Math.floor((Date.now() - backupDate.getTime()) / (1000 * 60 * 60))} hours ago`
-                : 'Never';
-              
-              return (
-                <div key={option.type} className="border border-border rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-secondary text-secondary-foreground">
-                        <option.icon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-medium">{option.title}</h3>
-                        <p className="text-sm text-muted-foreground">{option.description}</p>
-                      </div>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => updateBackupTimestamp(option.type)}
-                      disabled={!settings}
-                    >
-                      {option.type === 'local' ? 'Backup Now' : 'Configure'}
-                    </Button>
-                  </div>
-                  
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Last backup: {backupText}</span>
-                    <span>Size: N/A</span>
-                  </div>
+          <div className="border border-border rounded-lg p-4">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-secondary text-secondary-foreground">
+                  <Download className="w-5 h-5" />
                 </div>
-              );
-            })}
+                <div>
+                  <h3 className="font-medium">Device Backup</h3>
+                  <p className="text-sm text-muted-foreground">Save encrypted backup to device</p>
+                </div>
+              </div>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => updateBackupTimestamp('local')}
+                disabled={!settings}
+              >
+                Backup Now
+              </Button>
+            </div>
+            
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Last backup: {settings?.last_backup_local 
+                ? `${Math.floor((Date.now() - new Date(settings.last_backup_local).getTime()) / (1000 * 60 * 60))} hours ago`
+                : 'Never'}</span>
+              <span>Size: N/A</span>
+            </div>
           </div>
         </CardContent>
       </Card>

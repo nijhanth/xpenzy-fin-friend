@@ -1,1 +1,4 @@
 project_id = "bpeaafyktucbkxxfdwcb"
+
+[functions.google-drive-backup]
+verify_jwt = false
