@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { AudioWaveform, TrendingUp, TrendingDown, PiggyBank, Bell, Plus, BarChart3, LineChart as LineChartIcon, Activity, Target, DollarSign, CreditCard } from 'lucide-react';
+import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
+import { AudioWaveform, TrendingUp, TrendingDown, PiggyBank, Plus, BarChart3, LineChart as LineChartIcon, Activity, Target, CandlestickChart } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,64 @@ import { useFinancial } from '@/contexts/FinancialContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePrivacy } from '@/contexts/PrivacyContext';
 import { UserMenu } from '@/components/ui/user-menu';
-import { maskEmail, maskName, logSecurityEvent, hasDataAccess, sanitizeUserInput } from '@/lib/security';
+import { maskName, logSecurityEvent, hasDataAccess, sanitizeUserInput } from '@/lib/security';
 import { IncomeForm } from '@/components/forms/IncomeForm';
 import { ExpenseForm } from '@/components/forms/ExpenseForm';
 import { SavingsForm } from '@/components/forms/SavingsForm';
 import { InvestmentForm } from '@/components/forms/InvestmentForm';
 import { NotificationBell } from '@/components/ui/notification-bell';
+
+// Custom tooltip for pie chart
+const PieChartTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-card/95 backdrop-blur-md border border-border rounded-lg p-3 shadow-elevated">
+        <p className="font-semibold text-foreground">{data.name}</p>
+        <p className="text-lg font-bold" style={{ color: data.color }}>
+          ₹{data.value.toLocaleString()}
+        </p>
+        <p className="text-xs text-muted-foreground">{data.percentage}% of total</p>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Custom tooltip for area chart (trade style)
+const TradeChartTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const isPositive = data.balance >= 0;
+    return (
+      <div className="bg-card/95 backdrop-blur-md border border-border rounded-lg p-3 shadow-elevated min-w-[160px]">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-muted-foreground font-mono">{data.fullDate}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded ${isPositive ? 'bg-income/20 text-income' : 'bg-expense/20 text-expense'}`}>
+            {isPositive ? '▲' : '▼'}
+          </span>
+        </div>
+        <div className="space-y-1">
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-muted-foreground">Balance</span>
+            <span className={`font-bold font-mono ${isPositive ? 'text-income' : 'text-expense'}`}>
+              ₹{Math.abs(data.balance).toLocaleString()}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-muted-foreground">Income</span>
+            <span className="text-xs text-income font-mono">+₹{data.income.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-muted-foreground">Expense</span>
+            <span className="text-xs text-expense font-mono">-₹{data.expense.toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export const Home = () => {
   const { data } = useFinancial();
@@ -65,9 +117,9 @@ export const Home = () => {
   const totals = useMemo(() => {
     const totalIncome = data.income.reduce((sum, item) => sum + item.amount, 0);
     const totalExpenses = data.expenses.reduce((sum, item) => sum + item.amount, 0);
-    const totalSavings = data.savings.reduce((sum, item) => sum + item.current, 0);
+    const totalSavings = data.savings.reduce((sum, item) => sum + (item.current || 0), 0);
     const totalInvestments = data.investments.reduce((sum, item) => sum + item.invested, 0);
-    const remainingBalance = totalIncome - totalExpenses - totalSavings;
+    const remainingBalance = totalIncome - totalExpenses;
 
     return {
       totalIncome,
@@ -78,25 +130,75 @@ export const Home = () => {
     };
   }, [data]);
 
-  // Dynamic chart data based on real data
-  const balanceData = [
-    { name: 'Income', value: totals.totalIncome, color: 'hsl(var(--income))' },
-    { name: 'Expenses', value: totals.totalExpenses, color: 'hsl(var(--expense))' },
-    { name: 'Available', value: totals.remainingBalance, color: 'hsl(var(--savings))' },
-  ].filter(item => item.value > 0);
+  // Dynamic chart data based on real data with percentages
+  const balanceData = useMemo(() => {
+    const total = totals.totalIncome + totals.totalExpenses + Math.max(0, totals.remainingBalance);
+    const items = [
+      { name: 'Income', value: totals.totalIncome, color: 'hsl(142, 76%, 36%)' },
+      { name: 'Expenses', value: totals.totalExpenses, color: 'hsl(0, 84%, 60%)' },
+      { name: 'Savings', value: totals.totalSavings, color: 'hsl(212, 95%, 68%)' },
+      { name: 'Investments', value: totals.totalInvestments, color: 'hsl(271, 91%, 65%)' },
+    ].filter(item => item.value > 0);
 
-  // Generate trend data from recent transactions
+    return items.map(item => ({
+      ...item,
+      percentage: total > 0 ? ((item.value / total) * 100).toFixed(1) : '0'
+    }));
+  }, [totals]);
+
+  // Generate real trend data from actual transactions
   const trendData = useMemo(() => {
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const last7Days: { date: Date; day: string; fullDate: string; income: number; expense: number; balance: number }[] = [];
+    
+    // Get dates for last 7 days
+    for (let i = 6; i >= 0; i--) {
       const date = new Date();
-      date.setDate(date.getDate() - (6 - i));
-      return {
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() - i);
+      
+      const dateStr = date.toISOString().split('T')[0];
+      
+      // Calculate income for this day
+      const dayIncome = data.income
+        .filter(item => item.date === dateStr)
+        .reduce((sum, item) => sum + item.amount, 0);
+      
+      // Calculate expenses for this day
+      const dayExpense = data.expenses
+        .filter(item => item.date === dateStr)
+        .reduce((sum, item) => sum + item.amount, 0);
+      
+      last7Days.push({
+        date,
         day: date.toLocaleDateString('en', { weekday: 'short' }),
-        balance: totals.remainingBalance + Math.random() * 5000 - 2500 // Simulated daily variation
+        fullDate: date.toLocaleDateString('en', { month: 'short', day: 'numeric' }),
+        income: dayIncome,
+        expense: dayExpense,
+        balance: dayIncome - dayExpense
+      });
+    }
+
+    // Calculate cumulative balance
+    let cumulative = 0;
+    return last7Days.map(day => {
+      cumulative += day.balance;
+      return {
+        ...day,
+        balance: cumulative,
+        dailyChange: day.balance
       };
     });
-    return last7Days;
-  }, [totals.remainingBalance]);
+  }, [data.income, data.expenses]);
+
+  // Calculate min/max for chart domain
+  const chartDomain = useMemo(() => {
+    const values = trendData.map(d => d.balance);
+    const min = Math.min(...values, 0);
+    const max = Math.max(...values, 0);
+    const padding = Math.max(Math.abs(max - min) * 0.1, 1000);
+    return [min - padding, max + padding];
+  }, [trendData]);
+
   return (
     <div className="relative p-4 space-y-6 animate-fade-in font-xpenzy overflow-hidden">
       {/* Background Motion Graphics */}
@@ -176,9 +278,12 @@ export const Home = () => {
       {/* Charts Section */}
       <div className="space-y-6">
         {/* Balance Overview Pie Chart */}
-        <Card className="glass-card bg-gradient-card border-border shadow-elevated backdrop-blur-xl">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Balance Overview</CardTitle>
+        <Card className="glass-card bg-gradient-card border-border shadow-elevated backdrop-blur-xl overflow-hidden">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              Balance Overview
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-64">
@@ -189,15 +294,22 @@ export const Home = () => {
                       data={balanceData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={5}
+                      innerRadius={55}
+                      outerRadius={90}
+                      paddingAngle={3}
                       dataKey="value"
+                      strokeWidth={2}
+                      stroke="hsl(var(--background))"
                     >
                       {balanceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.color}
+                          className="hover:opacity-80 transition-opacity cursor-pointer"
+                        />
                       ))}
                     </Pie>
+                    <Tooltip content={<PieChartTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
@@ -210,46 +322,159 @@ export const Home = () => {
                 </div>
               )}
             </div>
-            <div className="flex justify-center gap-6 mt-4">
+            {/* Legend */}
+            <div className="flex flex-wrap justify-center gap-4 mt-2">
               {balanceData.map((item, index) => (
-                <div key={index} className="flex items-center gap-2">
+                <div key={index} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50">
                   <div 
-                    className="w-3 h-3 rounded-full" 
+                    className="w-3 h-3 rounded-full shadow-sm" 
                     style={{ backgroundColor: item.color }}
                   />
-                  <span className="text-sm text-muted-foreground">{item.name}</span>
+                  <span className="text-sm font-medium text-foreground">{item.name}</span>
+                  <span className="text-xs text-muted-foreground">₹{item.value.toLocaleString()}</span>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        {/* Weekly Trend Line Chart */}
-        <Card className="glass-card bg-gradient-card border-border shadow-elevated backdrop-blur-xl">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Daily Balance Trend</CardTitle>
+        {/* Trade-Style Daily Balance Trend Chart */}
+        <Card className="glass-card border-border shadow-elevated backdrop-blur-xl overflow-hidden relative">
+          {/* Trade-style header */}
+          <CardHeader className="pb-2 border-b border-border/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <CandlestickChart className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-semibold">Daily Balance Trend</CardTitle>
+                  <p className="text-xs text-muted-foreground font-mono">7-Day Performance</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`px-3 py-1 rounded-md text-sm font-mono font-bold ${
+                  totals.remainingBalance >= 0 
+                    ? 'bg-income/10 text-income border border-income/30' 
+                    : 'bg-expense/10 text-expense border border-expense/30'
+                }`}>
+                  {totals.remainingBalance >= 0 ? '+' : ''}₹{totals.remainingBalance.toLocaleString()}
+                </div>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="h-48">
+          <CardContent className="pt-4">
+            {/* Chart stats bar */}
+            <div className="flex justify-between mb-4 px-2">
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">High</p>
+                <p className="text-sm font-mono font-semibold text-income">
+                  ₹{Math.max(...trendData.map(d => d.balance)).toLocaleString()}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">Low</p>
+                <p className="text-sm font-mono font-semibold text-expense">
+                  ₹{Math.min(...trendData.map(d => d.balance)).toLocaleString()}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">Avg</p>
+                <p className="text-sm font-mono font-semibold text-foreground">
+                  ₹{Math.round(trendData.reduce((a, b) => a + b.balance, 0) / trendData.length).toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            {/* Chart */}
+            <div className="h-56 relative">
+              {/* Grid background effect */}
+              <div className="absolute inset-0 opacity-5">
+                <div className="w-full h-full" style={{
+                  backgroundImage: 'linear-gradient(to right, hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--foreground)) 1px, transparent 1px)',
+                  backgroundSize: '40px 40px'
+                }} />
+              </div>
+              
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData}>
+                <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="balanceGradientPositive" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.4} />
+                      <stop offset="50%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.1} />
+                      <stop offset="100%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="balanceGradientNegative" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(0, 84%, 60%)" stopOpacity={0} />
+                      <stop offset="50%" stopColor="hsl(0, 84%, 60%)" stopOpacity={0.1} />
+                      <stop offset="100%" stopColor="hsl(0, 84%, 60%)" stopOpacity={0.4} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid 
+                    strokeDasharray="3 3" 
+                    stroke="hsl(var(--border))" 
+                    strokeOpacity={0.5}
+                    vertical={false}
+                  />
                   <XAxis 
                     dataKey="day" 
                     axisLine={false} 
                     tickLine={false}
-                    className="text-xs text-muted-foreground"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontFamily: 'monospace' }}
+                    dy={10}
                   />
-                  <YAxis hide />
-                  <Line 
+                  <YAxis 
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontFamily: 'monospace' }}
+                    tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
+                    domain={chartDomain}
+                  />
+                  <Tooltip content={<TradeChartTooltip />} />
+                  <ReferenceLine 
+                    y={0} 
+                    stroke="hsl(var(--muted-foreground))" 
+                    strokeDasharray="5 5" 
+                    strokeOpacity={0.5}
+                  />
+                  <Area 
                     type="monotone" 
                     dataKey="balance" 
-                    stroke="hsl(var(--primary))" 
-                    strokeWidth={3}
-                    dot={{ fill: 'hsl(var(--primary))', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, stroke: 'hsl(var(--primary))', strokeWidth: 2 }}
+                    stroke="hsl(142, 76%, 36%)"
+                    strokeWidth={2.5}
+                    fill="url(#balanceGradientPositive)"
+                    dot={{ 
+                      fill: 'hsl(var(--background))', 
+                      stroke: 'hsl(142, 76%, 36%)', 
+                      strokeWidth: 2, 
+                      r: 4 
+                    }}
+                    activeDot={{ 
+                      r: 6, 
+                      stroke: 'hsl(142, 76%, 36%)', 
+                      strokeWidth: 2,
+                      fill: 'hsl(var(--background))'
+                    }}
                   />
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
+            </div>
+
+            {/* Bottom ticker-style info */}
+            <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-4">
+                <span className="text-muted-foreground">
+                  <span className="inline-block w-2 h-2 rounded-full bg-income mr-1.5" />
+                  Income: <span className="text-income font-mono font-semibold">+₹{trendData.reduce((a, b) => a + b.income, 0).toLocaleString()}</span>
+                </span>
+                <span className="text-muted-foreground">
+                  <span className="inline-block w-2 h-2 rounded-full bg-expense mr-1.5" />
+                  Expenses: <span className="text-expense font-mono font-semibold">-₹{trendData.reduce((a, b) => a + b.expense, 0).toLocaleString()}</span>
+                </span>
+              </div>
+              <span className="text-muted-foreground font-mono">
+                {new Date().toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
             </div>
           </CardContent>
         </Card>
