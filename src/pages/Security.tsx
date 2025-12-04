@@ -12,49 +12,31 @@ import {
   AlertTriangle,
   CheckCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  RefreshCw
 } from 'lucide-react';
 import { useState } from 'react';
 import { useSecuritySettings } from '@/hooks/useSecuritySettings';
+import { useAppLock } from '@/hooks/useAppLock';
+import { useCloudSync } from '@/hooks/useCloudSync';
 import { GoogleDriveBackup } from '@/components/ui/google-drive-backup';
-
-const securitySettingsConfig = [
-  {
-    title: "App Lock",
-    description: "Secure app with PIN or pattern",
-    icon: Lock,
-    key: 'app_lock' as const,
-  },
-  {
-    title: "Biometric Authentication",
-    description: "Use fingerprint or face recognition",
-    icon: Fingerprint,
-    key: 'biometric_auth' as const,
-  },
-  {
-    title: "Auto Lock",
-    description: "Lock app when inactive for 5 minutes",
-    icon: Smartphone,
-    key: 'auto_lock' as const,
-  },
-  {
-    title: "Cloud Sync",
-    description: "Encrypt and sync data to cloud",
-    icon: Cloud,
-    key: 'cloud_sync' as const,
-  }
-];
+import { PinSetupDialog } from '@/components/ui/pin-setup-dialog';
 
 export const Security = () => {
   const { settings, loading, updateSetting, updateBackupTimestamp } = useSecuritySettings();
+  const { hasPin, lockApp, isLocked } = useAppLock();
+  const { isEnabled: cloudSyncEnabled, isConnected, isSyncing, enableCloudSync, disableCloudSync, performSync, getTimeSinceLastSync } = useCloudSync();
   const [showPinSetup, setShowPinSetup] = useState(false);
+  const [pinMode, setPinMode] = useState<'setup' | 'change' | 'remove'>('setup');
 
   const getSecurityScore = () => {
     if (!settings) return 0;
-    const enabledCount = securitySettingsConfig.filter(
-      config => settings[config.key]
-    ).length;
-    return Math.round((enabledCount / securitySettingsConfig.length) * 100);
+    let score = 0;
+    if (hasPin) score += 25;
+    if (settings.biometric_auth) score += 25;
+    if (settings.auto_lock && hasPin) score += 25;
+    if (cloudSyncEnabled && isConnected) score += 25;
+    return score;
   };
 
   const securityScore = getSecurityScore();
@@ -66,10 +48,45 @@ export const Security = () => {
       </div>
     );
   }
+  
   const getScoreColor = () => {
     if (securityScore >= 80) return "text-emerald-600";
     if (securityScore >= 60) return "text-yellow-600";
     return "text-red-600";
+  };
+
+  const handleAppLockToggle = (checked: boolean) => {
+    if (checked && !hasPin) {
+      setPinMode('setup');
+      setShowPinSetup(true);
+    } else if (!checked && hasPin) {
+      setPinMode('remove');
+      setShowPinSetup(true);
+    }
+    updateSetting('app_lock', checked);
+  };
+
+  const handleCloudSyncToggle = async (checked: boolean) => {
+    if (checked) {
+      await enableCloudSync();
+    } else {
+      disableCloudSync();
+    }
+  };
+
+  const handleChangePinClick = () => {
+    if (hasPin) {
+      setPinMode('change');
+    } else {
+      setPinMode('setup');
+    }
+    setShowPinSetup(true);
+  };
+
+  const handleLockNow = () => {
+    if (hasPin) {
+      lockApp();
+    }
   };
 
   return (
@@ -133,24 +150,96 @@ export const Security = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {securitySettingsConfig.map((config) => (
-              <div key={config.key} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                    <config.icon className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium">{config.title}</h3>
-                    <p className="text-sm text-muted-foreground">{config.description}</p>
-                  </div>
+            {/* App Lock */}
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                  <Lock className="w-5 h-5" />
                 </div>
+                <div>
+                  <h3 className="font-medium">App Lock</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {hasPin ? 'PIN protection enabled' : 'Secure app with PIN'}
+                  </p>
+                </div>
+              </div>
+              <Switch 
+                checked={hasPin}
+                onCheckedChange={handleAppLockToggle}
+              />
+            </div>
+
+            {/* Biometric Auth */}
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                  <Fingerprint className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-medium">Biometric Authentication</h3>
+                  <p className="text-sm text-muted-foreground">Use fingerprint or face recognition</p>
+                </div>
+              </div>
+              <Switch 
+                checked={settings?.biometric_auth ?? false}
+                onCheckedChange={(checked) => updateSetting('biometric_auth', checked)}
+                disabled={!settings}
+              />
+            </div>
+
+            {/* Auto Lock */}
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-medium">Auto Lock</h3>
+                  <p className="text-sm text-muted-foreground">Lock app when inactive for 5 minutes</p>
+                </div>
+              </div>
+              <Switch 
+                checked={settings?.auto_lock ?? false}
+                onCheckedChange={(checked) => updateSetting('auto_lock', checked)}
+                disabled={!settings || !hasPin}
+              />
+            </div>
+
+            {/* Cloud Sync */}
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-medium">Cloud Sync</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {cloudSyncEnabled && isConnected 
+                      ? `Last sync: ${getTimeSinceLastSync()}`
+                      : isConnected 
+                        ? 'Auto sync to Google Drive'
+                        : 'Connect Google Drive first'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {cloudSyncEnabled && isConnected && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => performSync()}
+                    disabled={isSyncing}
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  </Button>
+                )}
                 <Switch 
-                  checked={settings?.[config.key] ?? false}
-                  onCheckedChange={(checked) => updateSetting(config.key, checked)}
-                  disabled={!settings}
+                  checked={cloudSyncEnabled}
+                  onCheckedChange={handleCloudSyncToggle}
+                  disabled={!isConnected || isSyncing}
                 />
               </div>
-            ))}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -164,17 +253,28 @@ export const Security = () => {
           <Button 
             variant="outline" 
             className="w-full justify-start h-12"
-            onClick={() => setShowPinSetup(!showPinSetup)}
+            onClick={handleChangePinClick}
           >
             <Lock className="w-5 h-5 mr-3" />
-            Change PIN
-            {showPinSetup ? <EyeOff className="w-4 h-4 ml-auto" /> : <Eye className="w-4 h-4 ml-auto" />}
+            {hasPin ? 'Change PIN' : 'Setup PIN'}
+            {hasPin && <Badge className="ml-auto" variant="secondary">Active</Badge>}
           </Button>
           
-          <Button variant="outline" className="w-full justify-start h-12">
+          {hasPin && (
+            <Button 
+              variant="outline" 
+              className="w-full justify-start h-12"
+              onClick={handleLockNow}
+            >
+              <Lock className="w-5 h-5 mr-3" />
+              Lock App Now
+            </Button>
+          )}
+          
+          <Button variant="outline" className="w-full justify-start h-12" disabled>
             <Fingerprint className="w-5 h-5 mr-3" />
             Setup Biometric Lock
-            <Badge className="ml-auto">New</Badge>
+            <Badge className="ml-auto">Coming Soon</Badge>
           </Button>
         </CardContent>
       </Card>
@@ -235,6 +335,13 @@ export const Security = () => {
           </p>
         </CardContent>
       </Card>
+
+      {/* PIN Setup Dialog */}
+      <PinSetupDialog 
+        open={showPinSetup} 
+        onOpenChange={setShowPinSetup}
+        mode={pinMode}
+      />
     </div>
   );
 };

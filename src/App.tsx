@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Index from "./pages/Index";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
@@ -13,11 +13,25 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PrivacyProvider } from "@/contexts/PrivacyContext";
 import { FinancialProvider } from "@/contexts/FinancialContext";
 import { useNoteReminders } from "./hooks/useNoteReminders";
+import { useAppLock } from "./hooks/useAppLock";
+import { AppLockScreen } from "./components/ui/app-lock-screen";
 
 const queryClient = new QueryClient();
 
 const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
   useNoteReminders();
+  return <>{children}</>;
+};
+
+const AppLockWrapper = ({ children }: { children: React.ReactNode }) => {
+  const { isLocked, hasPin, loading } = useAppLock();
+  const [unlocked, setUnlocked] = useState(false);
+
+  // If the app is locked and user hasn't unlocked it yet
+  if (!loading && hasPin && isLocked && !unlocked) {
+    return <AppLockScreen onUnlock={() => setUnlocked(true)} />;
+  }
+
   return <>{children}</>;
 };
 
@@ -50,7 +64,11 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      <Route path="/app" element={<Index />} />
+      <Route path="/app" element={
+        <AppLockWrapper>
+          <Index />
+        </AppLockWrapper>
+      } />
       <Route path="/auth" element={<Auth onAuthSuccess={() => window.location.href = "/app"} />} />
       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
       <Route path="*" element={<NotFound />} />
