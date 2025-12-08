@@ -1,6 +1,52 @@
 import React, { useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { Plus, CreditCard, Calendar, TrendingDown, ShoppingBag, BarChart3, Edit, Filter, ChevronDown } from 'lucide-react';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, AreaChart, Area, ReferenceLine } from 'recharts';
+import { Plus, CreditCard, Calendar, TrendingDown, ShoppingBag, BarChart3, Filter } from 'lucide-react';
+
+// Trade-style tooltip for donut chart
+const DonutChartTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-card/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: data.color }} />
+          <span className="text-sm font-semibold text-foreground">{data.name}</span>
+        </div>
+        <p className="text-lg font-bold text-expense">₹{data.value.toLocaleString()}</p>
+        <p className="text-xs text-muted-foreground">{data.percentage?.toFixed(1)}% of total</p>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Trade-style tooltip for spending pattern
+const SpendingTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-card/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
+        <p className="text-xs text-muted-foreground mb-1">{label}</p>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-expense" />
+          <span className="text-lg font-bold text-expense">₹{payload[0].value.toLocaleString()}</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Category colors with better variety
+const EXPENSE_COLORS = [
+  'hsl(0 84% 60%)',     // Red
+  'hsl(25 95% 53%)',    // Orange
+  'hsl(45 93% 47%)',    // Yellow
+  'hsl(142 71% 45%)',   // Green
+  'hsl(217 91% 60%)',   // Blue
+  'hsl(263 70% 50%)',   // Purple
+  'hsl(330 81% 60%)',   // Pink
+  'hsl(174 72% 40%)',   // Teal
+];
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -127,7 +173,7 @@ export const Expenses = () => {
 
   const totalExpenses = filteredExpenses.reduce((sum, entry) => sum + entry.amount, 0);
 
-  // Generate category data from filtered expense entries
+  // Generate category data from filtered expense entries with percentages
   const categoryExpenses = useMemo(() => {
     const categories = filteredExpenses.reduce((acc, entry) => {
       const category = entry.category;
@@ -135,16 +181,19 @@ export const Expenses = () => {
       return acc;
     }, {} as Record<string, number>);
 
-    const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
+    const total = Object.values(categories).reduce((sum, val) => sum + val, 0);
     
-    return Object.entries(categories).map(([name, value], index) => ({
-      name,
-      value,
-      color: colors[index % colors.length]
-    }));
+    return Object.entries(categories)
+      .map(([name, value], index) => ({
+        name,
+        value,
+        color: EXPENSE_COLORS[index % EXPENSE_COLORS.length],
+        percentage: total > 0 ? (value / total) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
   }, [filteredExpenses]);
 
-  // Generate daily spending data
+  // Generate daily spending data with running total
   const weeklySpending = useMemo(() => {
     const dailyData = filteredExpenses.reduce((acc, entry) => {
       const day = new Date(entry.date).toLocaleDateString('en-US', { weekday: 'short' });
@@ -153,11 +202,18 @@ export const Expenses = () => {
     }, {} as Record<string, number>);
 
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return days.map(day => ({
-      day,
-      amount: dailyData[day] || 0
-    }));
+    let cumulative = 0;
+    return days.map(day => {
+      cumulative += dailyData[day] || 0;
+      return {
+        day,
+        amount: dailyData[day] || 0,
+        cumulative
+      };
+    });
   }, [filteredExpenses]);
+
+  const avgDailySpending = weeklySpending.reduce((sum, d) => sum + d.amount, 0) / 7;
 
   const handleEdit = (entryId: string) => {
     setEditingEntry(entryId);
@@ -293,102 +349,198 @@ export const Expenses = () => {
 
       {/* Charts Section */}
       <div className="space-y-6">
-        {/* Expense by Category Donut Chart */}
-        <Card className="bg-gradient-card border-border shadow-card">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5" />
-              Expense by Category
-            </CardTitle>
-            <Button variant="outline" size="sm" onClick={() => handleViewReport('category')}>
-              <BarChart3 className="w-4 h-4 mr-2" />
-              View Report
+        {/* Expense by Category Donut Chart - Trade Style */}
+        <Card className="relative overflow-hidden bg-card/50 backdrop-blur-sm border-border/50 shadow-xl">
+          {/* Background gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-expense/5 via-transparent to-transparent pointer-events-none" />
+          
+          <CardHeader className="relative flex flex-row items-center justify-between pb-2">
+            <div>
+              <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                <div className="p-2 rounded-lg bg-expense/10">
+                  <ShoppingBag className="w-4 h-4 text-expense" />
+                </div>
+                Expense by Category
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                {categoryExpenses.length} categories • ₹{totalExpenses.toLocaleString()} total
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => handleViewReport('category')}>
+              <BarChart3 className="w-4 h-4" />
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative pt-0">
             {categoryExpenses.length > 0 ? (
-              <>
-                <div className="h-64">
+              <div className="flex flex-col lg:flex-row items-center gap-6">
+                <div className="h-64 w-full lg:w-1/2">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
+                      <defs>
+                        {categoryExpenses.map((entry, index) => (
+                          <linearGradient key={`gradient-${index}`} id={`expenseGradient-${index}`} x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor={entry.color} stopOpacity={1} />
+                            <stop offset="100%" stopColor={entry.color} stopOpacity={0.7} />
+                          </linearGradient>
+                        ))}
+                      </defs>
                       <Pie
                         data={categoryExpenses}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
-                        outerRadius={100}
-                        paddingAngle={2}
+                        innerRadius={60}
+                        outerRadius={95}
+                        paddingAngle={3}
                         dataKey="value"
+                        strokeWidth={0}
                       >
                         {categoryExpenses.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={`url(#expenseGradient-${index})`}
+                            className="drop-shadow-sm hover:opacity-80 transition-opacity cursor-pointer"
+                          />
                         ))}
                       </Pie>
+                      <Tooltip content={<DonutChartTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  {categoryExpenses.map((item, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full" 
-                        style={{ backgroundColor: item.color }}
-                      />
-                      <span className="text-xs text-muted-foreground">{item.name}</span>
+                {/* Legend with amounts */}
+                <div className="w-full lg:w-1/2 space-y-2">
+                  {categoryExpenses.slice(0, 6).map((item, index) => (
+                    <div 
+                      key={index} 
+                      className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full shadow-sm" 
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="text-sm text-foreground font-medium">{item.name}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-bold text-foreground">₹{item.value.toLocaleString()}</span>
+                        <span className="text-xs text-muted-foreground ml-2">({item.percentage?.toFixed(1)}%)</span>
+                      </div>
                     </div>
                   ))}
+                  {categoryExpenses.length > 6 && (
+                    <p className="text-xs text-muted-foreground text-center pt-2">
+                      +{categoryExpenses.length - 6} more categories
+                    </p>
+                  )}
                 </div>
-              </>
+              </div>
             ) : (
               <div className="h-64 flex items-center justify-center text-muted-foreground">
                 <div className="text-center">
-                  <ShoppingBag className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p>No expense data available</p>
-                  <p className="text-sm">Add your first expense to see the breakdown</p>
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted/50 flex items-center justify-center">
+                    <ShoppingBag className="w-8 h-8 opacity-50" />
+                  </div>
+                  <p className="font-medium">No expense data available</p>
+                  <p className="text-sm mt-1">Add your first expense to see the breakdown</p>
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Weekly Spending Bar Chart */}
-        <Card className="bg-gradient-card border-border shadow-card">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <TrendingDown className="w-5 h-5" />
-              Daily Spending Pattern
-            </CardTitle>
-            <Button variant="outline" size="sm" onClick={() => handleViewReport('daily')}>
-              <BarChart3 className="w-4 h-4 mr-2" />
-              View Report
+        {/* Daily Spending Pattern - Trade Style */}
+        <Card className="relative overflow-hidden bg-card/50 backdrop-blur-sm border-border/50 shadow-xl">
+          {/* Background gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-expense/5 via-transparent to-transparent pointer-events-none" />
+          
+          <CardHeader className="relative flex flex-row items-center justify-between pb-2">
+            <div>
+              <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                <div className="p-2 rounded-lg bg-expense/10">
+                  <TrendingDown className="w-4 h-4 text-expense" />
+                </div>
+                Daily Spending Pattern
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Avg: ₹{avgDailySpending.toLocaleString(undefined, { maximumFractionDigits: 0 })}/day
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => handleViewReport('daily')}>
+              <BarChart3 className="w-4 h-4" />
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative pt-0">
             {weeklySpending.some(item => item.amount > 0) ? (
-              <div className="h-48">
+              <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={weeklySpending}>
+                  <AreaChart data={weeklySpending} margin={{ top: 20, right: 10, left: 10, bottom: 10 }}>
+                    <defs>
+                      <linearGradient id="expenseSpendingGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(0 84% 60%)" stopOpacity={0.4} />
+                        <stop offset="50%" stopColor="hsl(0 84% 60%)" stopOpacity={0.15} />
+                        <stop offset="100%" stopColor="hsl(0 84% 60%)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid 
+                      strokeDasharray="3 3" 
+                      stroke="hsl(var(--border))" 
+                      opacity={0.3}
+                      vertical={false}
+                    />
                     <XAxis 
                       dataKey="day" 
                       axisLine={false} 
                       tickLine={false}
-                      className="text-xs text-muted-foreground"
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                      dy={10}
                     />
-                    <YAxis hide />
-                    <Bar 
-                      dataKey="amount" 
-                      radius={[6, 6, 0, 0]}
-                      fill="hsl(var(--expense))"
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                      tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
+                      width={45}
                     />
-                  </BarChart>
+                    <Tooltip content={<SpendingTooltip />} />
+                    {avgDailySpending > 0 && (
+                      <ReferenceLine 
+                        y={avgDailySpending} 
+                        stroke="hsl(var(--muted-foreground))" 
+                        strokeDasharray="5 5"
+                        strokeOpacity={0.5}
+                        label={{ 
+                          value: 'Avg', 
+                          position: 'right',
+                          fill: 'hsl(var(--muted-foreground))',
+                          fontSize: 10
+                        }}
+                      />
+                    )}
+                    <Area
+                      type="monotone"
+                      dataKey="amount"
+                      stroke="hsl(0 84% 60%)"
+                      strokeWidth={2.5}
+                      fill="url(#expenseSpendingGradient)"
+                      dot={{ fill: 'hsl(0 84% 60%)', strokeWidth: 0, r: 4 }}
+                      activeDot={{ 
+                        r: 6, 
+                        fill: 'hsl(0 84% 60%)', 
+                        stroke: 'white', 
+                        strokeWidth: 2,
+                        className: 'drop-shadow-lg'
+                      }}
+                    />
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-48 flex items-center justify-center text-muted-foreground">
+              <div className="h-64 flex items-center justify-center text-muted-foreground">
                 <div className="text-center">
-                  <TrendingDown className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p>No spending pattern available</p>
-                  <p className="text-sm">Add expenses to see daily spending trends</p>
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted/50 flex items-center justify-center">
+                    <TrendingDown className="w-8 h-8 opacity-50" />
+                  </div>
+                  <p className="font-medium">No spending pattern available</p>
+                  <p className="text-sm mt-1">Add expenses to see daily spending trends</p>
                 </div>
               </div>
             )}
