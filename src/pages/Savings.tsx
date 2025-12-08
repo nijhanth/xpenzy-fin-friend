@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3, Edit, Wallet, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3, Wallet, History, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -11,6 +11,27 @@ import { SavingsForm } from '@/components/forms/SavingsForm';
 import { SavingsTransactionForm } from '@/components/forms/SavingsTransactionForm';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
+
+// Trade-style tooltip for savings trend
+const SavingsTrendTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-card/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
+        <p className="text-xs text-muted-foreground mb-1">{label}</p>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-savings" />
+          <span className="text-lg font-bold text-savings">₹{payload[0].value.toLocaleString()}</span>
+        </div>
+        {payload[0].payload.change !== undefined && (
+          <p className={`text-xs mt-1 ${payload[0].payload.change >= 0 ? 'text-success' : 'text-expense'}`}>
+            {payload[0].payload.change >= 0 ? '+' : ''}₹{payload[0].payload.change.toLocaleString()} from previous
+          </p>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
 
 const savingsTips = [
   "Set up automatic transfers to your savings account",
@@ -33,24 +54,90 @@ export const Savings = () => {
   } | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
+  const [timePeriod, setTimePeriod] = useState<'7d' | '30d' | '3m'>('30d');
   
   const totalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
   const totalTargets = data.savings.reduce((sum, goal) => sum + goal.target, 0);
   const overallProgress = totalTargets > 0 ? (totalSavings / totalTargets) * 100 : 0;
 
-  // Generate savings trend from monthly data
+  // Generate savings trend from transactions with time period filter
   const savingsTrend = useMemo(() => {
-    const monthlyData = data.savings.reduce((acc, goal) => {
-      const month = new Date(goal.date).toLocaleDateString('en-US', { month: 'short' });
-      acc[month] = (acc[month] || 0) + goal.current;
-      return acc;
-    }, {} as Record<string, number>);
+    const now = new Date();
+    let startDate: Date;
+    
+    switch (timePeriod) {
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '3m':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+    }
 
-    return Object.entries(monthlyData).map(([month, amount]) => ({
-      month,
-      amount
-    }));
-  }, [data.savings]);
+    // Collect all savings transactions
+    const allTransactions: { date: string; amount: number }[] = [];
+    data.savings.forEach(goal => {
+      const transactions = getSavingsTransactions(goal.id);
+      transactions.forEach(t => {
+        const tDate = new Date(t.date);
+        if (tDate >= startDate && tDate <= now) {
+          allTransactions.push({ date: t.date, amount: t.amount });
+        }
+      });
+    });
+
+    // Group by date and calculate cumulative
+    const dailyTotals: Record<string, number> = {};
+    allTransactions.forEach(t => {
+      dailyTotals[t.date] = (dailyTotals[t.date] || 0) + t.amount;
+    });
+
+    const sortedDates = Object.keys(dailyTotals).sort();
+    let cumulative = 0;
+    let prevAmount = 0;
+    
+    const trendData = sortedDates.map(date => {
+      cumulative += dailyTotals[date];
+      const change = cumulative - prevAmount;
+      prevAmount = cumulative;
+      return {
+        date,
+        displayDate: new Date(date).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        }),
+        amount: cumulative,
+        daily: dailyTotals[date],
+        change
+      };
+    });
+
+    // If no transaction data, fall back to goal-based data
+    if (trendData.length === 0) {
+      const monthlyData = data.savings.reduce((acc, goal) => {
+        const month = new Date(goal.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        acc[month] = (acc[month] || 0) + goal.current;
+        return acc;
+      }, {} as Record<string, number>);
+
+      return Object.entries(monthlyData).map(([month, amount], index, arr) => ({
+        date: month,
+        displayDate: month,
+        amount,
+        daily: amount,
+        change: index > 0 ? amount - arr[index - 1][1] : 0
+      }));
+    }
+
+    return trendData;
+  }, [data.savings, getSavingsTransactions, timePeriod]);
+
+  const avgSavings = savingsTrend.length > 0 
+    ? savingsTrend.reduce((sum, d) => sum + d.daily, 0) / savingsTrend.length 
+    : 0;
 
   const handleEdit = (entryId: string) => {
     setEditingEntry(entryId);
@@ -303,47 +390,115 @@ export const Savings = () => {
         </CardContent>
       </Card>
 
-      {/* Savings Trend */}
-      <Card className="bg-gradient-card border-border shadow-card">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            Savings Goal Trend
-          </CardTitle>
-          <Button variant="outline" size="sm">
-            <BarChart3 className="w-4 h-4 mr-2" />
-            View Report
-          </Button>
+      {/* Savings Trend - Trade Style */}
+      <Card className="relative overflow-hidden bg-card/50 backdrop-blur-sm border-border/50 shadow-xl">
+        {/* Background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-savings/5 via-transparent to-transparent pointer-events-none" />
+        
+        <CardHeader className="relative flex flex-row items-center justify-between pb-2">
+          <div>
+            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+              <div className="p-2 rounded-lg bg-savings/10">
+                <TrendingUp className="w-4 h-4 text-savings" />
+              </div>
+              Savings Goal Trend
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Cumulative savings over time
+            </p>
+          </div>
+          {/* Time Period Selector */}
+          <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
+            {(['7d', '30d', '3m'] as const).map((period) => (
+              <Button
+                key={period}
+                variant={timePeriod === period ? 'default' : 'ghost'}
+                size="sm"
+                className={`h-7 px-3 text-xs ${
+                  timePeriod === period 
+                    ? 'bg-savings text-white shadow-sm' 
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => setTimePeriod(period)}
+              >
+                {period === '7d' ? '7D' : period === '30d' ? '30D' : '3M'}
+              </Button>
+            ))}
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="relative pt-0">
           {savingsTrend.length > 0 ? (
-            <div className="h-48">
+            <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={savingsTrend}>
+                <AreaChart data={savingsTrend} margin={{ top: 20, right: 10, left: 10, bottom: 10 }}>
+                  <defs>
+                    <linearGradient id="savingsGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(217 91% 60%)" stopOpacity={0.4} />
+                      <stop offset="50%" stopColor="hsl(217 91% 60%)" stopOpacity={0.15} />
+                      <stop offset="100%" stopColor="hsl(217 91% 60%)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid 
+                    strokeDasharray="3 3" 
+                    stroke="hsl(var(--border))" 
+                    opacity={0.3}
+                    vertical={false}
+                  />
                   <XAxis 
-                    dataKey="month" 
+                    dataKey="displayDate" 
                     axisLine={false} 
                     tickLine={false}
-                    className="text-xs text-muted-foreground"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                    dy={10}
                   />
-                  <YAxis hide />
-                  <Line 
-                    type="monotone" 
-                    dataKey="amount" 
-                    stroke="hsl(var(--savings))" 
-                    strokeWidth={3}
-                    dot={{ fill: 'hsl(var(--savings))', strokeWidth: 2, r: 5 }}
-                    activeDot={{ r: 7, stroke: 'hsl(var(--savings))', strokeWidth: 2 }}
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                    tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
+                    width={45}
                   />
-                </LineChart>
+                  <Tooltip content={<SavingsTrendTooltip />} />
+                  {avgSavings > 0 && (
+                    <ReferenceLine 
+                      y={avgSavings} 
+                      stroke="hsl(var(--muted-foreground))" 
+                      strokeDasharray="5 5"
+                      strokeOpacity={0.5}
+                      label={{ 
+                        value: 'Avg', 
+                        position: 'right',
+                        fill: 'hsl(var(--muted-foreground))',
+                        fontSize: 10
+                      }}
+                    />
+                  )}
+                  <Area
+                    type="monotone"
+                    dataKey="amount"
+                    stroke="hsl(217 91% 60%)"
+                    strokeWidth={2.5}
+                    fill="url(#savingsGradient)"
+                    dot={false}
+                    activeDot={{ 
+                      r: 6, 
+                      fill: 'hsl(217 91% 60%)', 
+                      stroke: 'white', 
+                      strokeWidth: 2,
+                      className: 'drop-shadow-lg'
+                    }}
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-48 flex items-center justify-center text-muted-foreground">
+            <div className="h-64 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
-                <TrendingUp className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>No savings trend available</p>
-                <p className="text-sm">Add savings goals to see trends</p>
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted/50 flex items-center justify-center">
+                  <TrendingUp className="w-8 h-8 opacity-50" />
+                </div>
+                <p className="font-medium">No savings trend available</p>
+                <p className="text-sm mt-1">Add savings goals and transactions to see trends</p>
               </div>
             </div>
           )}
