@@ -1,20 +1,130 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Download, TrendingUp, TrendingDown, IndianRupee, Calendar as CalendarIcon, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, IndianRupee, Calendar as CalendarIcon, ArrowUpRight, ArrowDownRight, PieChartIcon, BarChart3 } from 'lucide-react';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useMemo, useState } from 'react';
 import { StatCard } from '@/components/ui/stat-card';
-import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, subDays } from 'date-fns';
-import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 type DateRange = 'thisMonth' | 'lastMonth' | 'last30Days' | 'last90Days' | 'thisYear' | 'custom';
+
+// Modern color palette for charts
+const EXPENSE_COLORS = [
+  'hsl(0, 84%, 60%)',      // Red
+  'hsl(25, 95%, 53%)',     // Orange
+  'hsl(45, 93%, 47%)',     // Yellow
+  'hsl(262, 83%, 58%)',    // Purple
+  'hsl(340, 82%, 52%)',    // Pink
+  'hsl(199, 89%, 48%)',    // Blue
+];
+
+const INCOME_COLORS = [
+  'hsl(142, 76%, 36%)',    // Green
+  'hsl(173, 80%, 40%)',    // Teal
+  'hsl(199, 89%, 48%)',    // Blue
+  'hsl(221, 83%, 53%)',    // Indigo
+  'hsl(262, 83%, 58%)',    // Purple
+  'hsl(142, 71%, 45%)',    // Light Green
+];
+
+const PAYMENT_COLORS = [
+  'hsl(221, 83%, 53%)',    // Blue
+  'hsl(142, 76%, 36%)',    // Green
+  'hsl(262, 83%, 58%)',    // Purple
+  'hsl(25, 95%, 53%)',     // Orange
+  'hsl(340, 82%, 52%)',    // Pink
+  'hsl(45, 93%, 47%)',     // Yellow
+];
+
+// Custom Tooltip for Expense Pie Chart
+const ExpensePieTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const total = payload[0].payload.total || 0;
+    const percentage = total > 0 ? ((data.value / total) * 100).toFixed(1) : 0;
+    return (
+      <div className="bg-card/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: data.fill }} />
+          <span className="font-semibold text-foreground">{data.name}</span>
+        </div>
+        <div className="space-y-1 text-sm">
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">Amount:</span>
+            <span className="font-medium text-expense">₹{data.value.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">Share:</span>
+            <span className="font-medium text-foreground">{percentage}%</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Custom Tooltip for Income Bar Chart
+const IncomeBarTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-card/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
+        <p className="font-semibold text-foreground mb-2">{label}</p>
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">Amount:</span>
+          <span className="font-medium text-income">₹{payload[0].value.toLocaleString()}</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Custom Tooltip for Payment Mode Chart
+const PaymentTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-card/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: data.fill }} />
+          <span className="font-semibold text-foreground">{data.name}</span>
+        </div>
+        <div className="flex justify-between gap-4 text-sm">
+          <span className="text-muted-foreground">Transactions:</span>
+          <span className="font-medium text-primary">{data.value}</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Custom Legend Component
+const CustomLegend = ({ payload, colors }: any) => {
+  if (!payload || payload.length === 0) return null;
+  
+  return (
+    <div className="grid grid-cols-2 gap-2 mt-4 px-2">
+      {payload.map((entry: any, index: number) => (
+        <div key={index} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors">
+          <div 
+            className="w-3 h-3 rounded-full flex-shrink-0" 
+            style={{ backgroundColor: entry.color || colors[index % colors.length] }}
+          />
+          <span className="text-xs font-medium text-foreground truncate">{entry.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 export const Reports = () => {
   const { data } = useFinancial();
@@ -58,7 +168,6 @@ export const Reports = () => {
     return {
       income: filterByDate(data.income),
       expenses: filterByDate(data.expenses),
-      // Don't filter savings and investments by date - show current totals
       savings: data.savings,
       investments: data.investments,
     };
@@ -82,15 +191,21 @@ export const Reports = () => {
     };
   }, [filteredData]);
 
-  // Expense breakdown by category
+  // Expense breakdown by category with total for percentage
   const expensesByCategory = useMemo(() => {
     const categoryMap = new Map<string, number>();
     filteredData.expenses.forEach(expense => {
       const current = categoryMap.get(expense.category) || 0;
       categoryMap.set(expense.category, current + expense.amount);
     });
+    const total = Array.from(categoryMap.values()).reduce((sum, val) => sum + val, 0);
     return Array.from(categoryMap.entries())
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value], index) => ({ 
+        name, 
+        value, 
+        total,
+        fill: EXPENSE_COLORS[index % EXPENSE_COLORS.length]
+      }))
       .sort((a, b) => b.value - a.value);
   }, [filteredData.expenses]);
 
@@ -103,7 +218,11 @@ export const Reports = () => {
       categoryMap.set(category, current + income.amount);
     });
     return Array.from(categoryMap.entries())
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value], index) => ({ 
+        name, 
+        value,
+        fill: INCOME_COLORS[index % INCOME_COLORS.length]
+      }))
       .sort((a, b) => b.value - a.value);
   }, [filteredData.income]);
 
@@ -114,10 +233,12 @@ export const Reports = () => {
       const current = modeMap.get(item.paymentMode) || 0;
       modeMap.set(item.paymentMode, current + 1);
     });
-    return Array.from(modeMap.entries()).map(([name, value]) => ({ name, value }));
+    return Array.from(modeMap.entries()).map(([name, value], index) => ({ 
+      name, 
+      value,
+      fill: PAYMENT_COLORS[index % PAYMENT_COLORS.length]
+    }));
   }, [filteredData]);
-
-  const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--savings))', 'hsl(var(--expense))', 'hsl(var(--warning))', 'hsl(var(--investment))'];
 
   const hasData = filteredData.income.length > 0 || filteredData.expenses.length > 0 || 
                    filteredData.savings.length > 0 || filteredData.investments.length > 0;
@@ -130,7 +251,7 @@ export const Reports = () => {
     [filteredData.expenses]
   );
 
-  // Export function (prepare data)
+  // Export function
   const exportData = (exportFormat: 'csv' | 'json' | 'pdf') => {
     const periodString = `${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`;
     const reportData = {
@@ -152,7 +273,6 @@ export const Reports = () => {
       a.download = `xpenzy-report-${format(startDate, 'yyyy-MM-dd')}.json`;
       a.click();
     } else if (exportFormat === 'csv') {
-      // CSV format
       const periodRow = `Period: ${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`;
       const csvRows = [
         ['Xpenzy Financial Report'],
@@ -178,21 +298,17 @@ export const Reports = () => {
       a.download = `xpenzy-report-${format(startDate, 'yyyy-MM-dd')}.csv`;
       a.click();
     } else if (exportFormat === 'pdf') {
-      // PDF format
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.width;
       
-      // Title
       doc.setFontSize(20);
       doc.setTextColor(40, 40, 40);
       doc.text('Xpenzy Financial Report', pageWidth / 2, 20, { align: 'center' });
       
-      // Period
       doc.setFontSize(12);
       doc.setTextColor(100, 100, 100);
       doc.text(periodString, pageWidth / 2, 30, { align: 'center' });
       
-      // Summary section
       doc.setFontSize(14);
       doc.setTextColor(40, 40, 40);
       doc.text('Summary', 14, 45);
@@ -212,7 +328,6 @@ export const Reports = () => {
         headStyles: { fillColor: [66, 139, 202] },
       });
       
-      // Expenses by Category
       if (expensesByCategory.length > 0) {
         const finalY = (doc as any).lastAutoTable.finalY || 50;
         doc.setFontSize(14);
@@ -227,7 +342,6 @@ export const Reports = () => {
         });
       }
       
-      // Income by Category
       if (incomeByCategory.length > 0) {
         const finalY = (doc as any).lastAutoTable.finalY || 50;
         doc.setFontSize(14);
@@ -242,7 +356,6 @@ export const Reports = () => {
         });
       }
       
-      // Top 5 Expenses
       if (topExpenses.length > 0) {
         const finalY = (doc as any).lastAutoTable.finalY || 50;
         doc.setFontSize(14);
@@ -262,30 +375,35 @@ export const Reports = () => {
         });
       }
       
-      // Save PDF
       doc.save(`xpenzy-report-${format(startDate, 'yyyy-MM-dd')}.pdf`);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-secondary/20 p-4 pb-24 md:pb-4 space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/10 p-4 pb-24 md:pb-4 space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <FileText className="w-8 h-8 text-primary" />
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-primary/10">
+              <FileText className="w-7 h-7 text-primary" />
+            </div>
             Financial Reports
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-2 flex items-center gap-2">
+            <CalendarIcon className="w-4 h-4" />
             {format(startDate, 'MMM dd, yyyy')} - {format(endDate, 'MMM dd, yyyy')}
           </p>
         </div>
       </div>
 
       {/* Date Range Selector */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Select Period</CardTitle>
+      <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <CalendarIcon className="w-5 h-5 text-primary" />
+            Select Period
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
@@ -301,6 +419,7 @@ export const Reports = () => {
                 variant={dateRange === option.value ? 'default' : 'outline'}
                 onClick={() => setDateRange(option.value)}
                 size="sm"
+                className={dateRange === option.value ? 'shadow-md' : 'hover:bg-secondary/50'}
               >
                 {option.label}
               </Button>
@@ -347,10 +466,12 @@ export const Reports = () => {
       </Card>
 
       {!hasData ? (
-        <Card>
+        <Card className="bg-gradient-card border-border/50 shadow-card">
           <CardContent className="p-12 text-center">
             <div className="text-muted-foreground">
-              <div className="text-6xl mb-4">📊</div>
+              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+                <FileText className="w-12 h-12 text-primary/50" />
+              </div>
               <p className="text-xl font-medium mb-2">No data for this period</p>
               <p className="text-sm">Try selecting a different date range or add some transactions</p>
             </div>
@@ -406,112 +527,228 @@ export const Reports = () => {
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Expenses by Category */}
+            {/* Expenses by Category - Modern Donut Chart */}
             {expensesByCategory.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Expenses by Category</CardTitle>
+              <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <PieChartIcon className="w-5 h-5 text-expense" />
+                      Expenses by Category
+                    </CardTitle>
+                    <Badge variant="outline" className="text-xs">
+                      {expensesByCategory.length} categories
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={expensesByCategory}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {expensesByCategory.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => `₹${value.toLocaleString()}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <div className="relative">
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <defs>
+                          {expensesByCategory.map((entry, index) => (
+                            <linearGradient key={`expGrad-${index}`} id={`expenseGradient-${index}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={entry.fill} stopOpacity={1} />
+                              <stop offset="100%" stopColor={entry.fill} stopOpacity={0.7} />
+                            </linearGradient>
+                          ))}
+                          <filter id="expenseShadow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.25"/>
+                          </filter>
+                        </defs>
+                        <Pie
+                          data={expensesByCategory}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={95}
+                          paddingAngle={3}
+                          dataKey="value"
+                          stroke="hsl(var(--background))"
+                          strokeWidth={2}
+                          filter="url(#expenseShadow)"
+                        >
+                          {expensesByCategory.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={`url(#expenseGradient-${index})`}
+                              className="transition-all duration-300 hover:opacity-80"
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<ExpensePieTooltip />} />
+                        <Legend content={<CustomLegend colors={EXPENSE_COLORS} />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {/* Center Label */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none" style={{ marginTop: '-50px' }}>
+                      <p className="text-xs text-muted-foreground">Total</p>
+                      <p className="text-lg font-bold text-expense">₹{totals.expenses.toLocaleString()}</p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Income by Category */}
+            {/* Income by Category - Modern Bar Chart */}
             {incomeByCategory.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Income by Category</CardTitle>
+              <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-income" />
+                      Income by Category
+                    </CardTitle>
+                    <Badge variant="outline" className="text-xs">
+                      {incomeByCategory.length} sources
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={incomeByCategory}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-                      <YAxis stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip 
-                        formatter={(value: number) => `₹${value.toLocaleString()}`}
-                        contentStyle={{ 
-                          backgroundColor: 'hsl(var(--card))', 
-                          border: '1px solid hsl(var(--border))' 
-                        }}
+                    <BarChart data={incomeByCategory} layout="vertical" margin={{ left: 20, right: 20 }}>
+                      <defs>
+                        <linearGradient id="incomeBarGradient" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="hsl(var(--income))" stopOpacity={0.8} />
+                          <stop offset="100%" stopColor="hsl(142, 76%, 46%)" stopOpacity={1} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis 
+                        type="number" 
+                        axisLine={false} 
+                        tickLine={false}
+                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                        tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
                       />
-                      <Bar dataKey="value" fill="hsl(var(--income))" />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        axisLine={false} 
+                        tickLine={false}
+                        tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }}
+                        width={80}
+                      />
+                      <Tooltip content={<IncomeBarTooltip />} cursor={{ fill: 'hsl(var(--secondary))', opacity: 0.3 }} />
+                      <Bar 
+                        dataKey="value" 
+                        fill="url(#incomeBarGradient)" 
+                        radius={[0, 6, 6, 0]}
+                        maxBarSize={35}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
             )}
 
-            {/* Payment Modes */}
+            {/* Payment Methods - Modern Donut Chart */}
             {paymentModeData.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Payment Methods Used</CardTitle>
+              <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <PieChartIcon className="w-5 h-5 text-primary" />
+                      Payment Methods
+                    </CardTitle>
+                    <Badge variant="outline" className="text-xs">
+                      {paymentModeData.reduce((sum, d) => sum + d.value, 0)} transactions
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={paymentModeData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, value }) => `${name}: ${value}`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {paymentModeData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <div className="relative">
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <defs>
+                          {paymentModeData.map((entry, index) => (
+                            <linearGradient key={`payGrad-${index}`} id={`paymentGradient-${index}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={entry.fill} stopOpacity={1} />
+                              <stop offset="100%" stopColor={entry.fill} stopOpacity={0.7} />
+                            </linearGradient>
+                          ))}
+                          <filter id="paymentShadow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.25"/>
+                          </filter>
+                        </defs>
+                        <Pie
+                          data={paymentModeData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={95}
+                          paddingAngle={4}
+                          dataKey="value"
+                          stroke="hsl(var(--background))"
+                          strokeWidth={2}
+                          filter="url(#paymentShadow)"
+                        >
+                          {paymentModeData.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={`url(#paymentGradient-${index})`}
+                              className="transition-all duration-300 hover:opacity-80"
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<PaymentTooltip />} />
+                        <Legend content={<CustomLegend colors={PAYMENT_COLORS} />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {/* Center Label */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none" style={{ marginTop: '-50px' }}>
+                      <p className="text-xs text-muted-foreground">Total</p>
+                      <p className="text-lg font-bold text-primary">{paymentModeData.reduce((sum, d) => sum + d.value, 0)}</p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Category Breakdown */}
+            {/* Expense Category Breakdown - Modern Bar Chart */}
             {expensesByCategory.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Expense Category Breakdown</CardTitle>
+              <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-expense" />
+                      Expense Breakdown
+                    </CardTitle>
+                    <Badge variant="outline" className="text-xs text-expense">
+                      ₹{totals.expenses.toLocaleString()}
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={expensesByCategory}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-                      <YAxis stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip 
-                        formatter={(value: number) => `₹${value.toLocaleString()}`}
-                        contentStyle={{ 
-                          backgroundColor: 'hsl(var(--card))', 
-                          border: '1px solid hsl(var(--border))' 
-                        }}
+                    <BarChart data={expensesByCategory} layout="vertical" margin={{ left: 20, right: 20 }}>
+                      <defs>
+                        <linearGradient id="expenseBarGradient" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="hsl(var(--expense))" stopOpacity={0.8} />
+                          <stop offset="100%" stopColor="hsl(0, 84%, 50%)" stopOpacity={1} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis 
+                        type="number" 
+                        axisLine={false} 
+                        tickLine={false}
+                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                        tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
                       />
-                      <Bar dataKey="value" fill="hsl(var(--expense))" />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        axisLine={false} 
+                        tickLine={false}
+                        tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }}
+                        width={80}
+                      />
+                      <Tooltip content={<ExpensePieTooltip />} cursor={{ fill: 'hsl(var(--secondary))', opacity: 0.3 }} />
+                      <Bar 
+                        dataKey="value" 
+                        fill="url(#expenseBarGradient)" 
+                        radius={[0, 6, 6, 0]}
+                        maxBarSize={35}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -519,58 +756,85 @@ export const Reports = () => {
             )}
           </div>
 
-          {/* Top Expenses Table */}
+          {/* Top Expenses Table - Modern Design */}
           {topExpenses.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Top 5 Expenses</CardTitle>
+            <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingDown className="w-5 h-5 text-expense" />
+                    Top 5 Expenses
+                  </CardTitle>
+                  <Badge variant="outline" className="text-xs">
+                    Highest spending
+                  </Badge>
+                </div>
               </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Payment Mode</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {topExpenses.map((expense) => (
-                      <TableRow key={expense.id}>
-                        <TableCell>{format(new Date(expense.date), 'MMM dd, yyyy')}</TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{expense.category}</div>
-                            {expense.subcategory && (
-                              <div className="text-sm text-muted-foreground">{expense.subcategory}</div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{expense.paymentMode}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          ₹{expense.amount.toLocaleString()}
-                        </TableCell>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-secondary/30 hover:bg-secondary/30">
+                        <TableHead className="text-foreground font-semibold">Date</TableHead>
+                        <TableHead className="text-foreground font-semibold">Category</TableHead>
+                        <TableHead className="text-foreground font-semibold">Payment Mode</TableHead>
+                        <TableHead className="text-right text-foreground font-semibold">Amount</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {topExpenses.map((expense, index) => (
+                        <TableRow 
+                          key={expense.id}
+                          className="hover:bg-secondary/20 transition-colors border-b border-border/30"
+                        >
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-expense/10 flex items-center justify-center text-xs font-bold text-expense">
+                                {index + 1}
+                              </div>
+                              {format(new Date(expense.date), 'MMM dd, yyyy')}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium text-foreground">{expense.category}</div>
+                              {expense.subcategory && (
+                                <div className="text-xs text-muted-foreground mt-0.5">{expense.subcategory}</div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="font-normal">
+                              {expense.paymentMode}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="font-bold text-expense text-lg">
+                              ₹{expense.amount.toLocaleString()}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Export Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Export Report</CardTitle>
+          {/* Export Section - Modern Design */}
+          <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Download className="w-5 h-5 text-primary" />
+                Export Report
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-3">
                 <Button 
                   variant="outline" 
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 hover:bg-primary/10 hover:border-primary/50 transition-all"
                   onClick={() => exportData('csv')}
                 >
                   <Download className="w-4 h-4" />
@@ -578,7 +842,7 @@ export const Reports = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 hover:bg-primary/10 hover:border-primary/50 transition-all"
                   onClick={() => exportData('json')}
                 >
                   <Download className="w-4 h-4" />
@@ -586,7 +850,7 @@ export const Reports = () => {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 hover:bg-primary/10 hover:border-primary/50 transition-all"
                   onClick={() => exportData('pdf')}
                 >
                   <Download className="w-4 h-4" />
