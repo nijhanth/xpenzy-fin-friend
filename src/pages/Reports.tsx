@@ -542,8 +542,9 @@ export const Reports = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="relative">
-                    <ResponsiveContainer width="100%" height={280}>
+                  {/* Chart Container */}
+                  <div className="relative h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <defs>
                           {expensesByCategory.map((entry, index) => (
@@ -560,8 +561,8 @@ export const Reports = () => {
                           data={expensesByCategory}
                           cx="50%"
                           cy="50%"
-                          innerRadius={55}
-                          outerRadius={95}
+                          innerRadius={50}
+                          outerRadius={85}
                           paddingAngle={3}
                           dataKey="value"
                           stroke="hsl(var(--background))"
@@ -577,14 +578,30 @@ export const Reports = () => {
                           ))}
                         </Pie>
                         <Tooltip content={<ExpensePieTooltip />} />
-                        <Legend content={<CustomLegend colors={EXPENSE_COLORS} />} />
                       </PieChart>
                     </ResponsiveContainer>
                     {/* Center Label */}
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none" style={{ marginTop: '-50px' }}>
-                      <p className="text-xs text-muted-foreground">Total</p>
-                      <p className="text-lg font-bold text-expense">₹{totals.expenses.toLocaleString()}</p>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Total</p>
+                        <p className="text-lg font-bold text-expense">₹{totals.expenses.toLocaleString()}</p>
+                      </div>
                     </div>
+                  </div>
+                  {/* Legend - Separate from chart */}
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    {expensesByCategory.map((entry, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors">
+                        <div 
+                          className="w-3 h-3 rounded-full flex-shrink-0" 
+                          style={{ backgroundColor: entry.fill }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-foreground truncate">{entry.name}</p>
+                          <p className="text-xs text-muted-foreground">₹{entry.value.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -656,8 +673,9 @@ export const Reports = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="relative">
-                    <ResponsiveContainer width="100%" height={280}>
+                  {/* Chart Container */}
+                  <div className="relative h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <defs>
                           {paymentModeData.map((entry, index) => (
@@ -674,8 +692,8 @@ export const Reports = () => {
                           data={paymentModeData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={55}
-                          outerRadius={95}
+                          innerRadius={50}
+                          outerRadius={85}
                           paddingAngle={4}
                           dataKey="value"
                           stroke="hsl(var(--background))"
@@ -691,14 +709,30 @@ export const Reports = () => {
                           ))}
                         </Pie>
                         <Tooltip content={<PaymentTooltip />} />
-                        <Legend content={<CustomLegend colors={PAYMENT_COLORS} />} />
                       </PieChart>
                     </ResponsiveContainer>
                     {/* Center Label */}
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none" style={{ marginTop: '-50px' }}>
-                      <p className="text-xs text-muted-foreground">Total</p>
-                      <p className="text-lg font-bold text-primary">{paymentModeData.reduce((sum, d) => sum + d.value, 0)}</p>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Total</p>
+                        <p className="text-lg font-bold text-primary">{paymentModeData.reduce((sum, d) => sum + d.value, 0)}</p>
+                      </div>
                     </div>
+                  </div>
+                  {/* Legend - Separate from chart */}
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    {paymentModeData.map((entry, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors">
+                        <div 
+                          className="w-3 h-3 rounded-full flex-shrink-0" 
+                          style={{ backgroundColor: entry.fill }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-foreground truncate">{entry.name}</p>
+                          <p className="text-xs text-muted-foreground">{entry.value} transactions</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
