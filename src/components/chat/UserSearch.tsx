@@ -32,12 +32,12 @@ export const UserSearch = ({ currentUserId, onStartChat }: UserSearchProps) => {
   const searchUsers = async () => {
     setLoading(true);
     try {
+      // Use secure RPC function that only returns display_name (not email)
       const { data, error } = await supabase
-        .from('profiles')
-        .select('user_id, display_name')
-        .neq('user_id', currentUserId)
-        .ilike('display_name', `%${searchQuery}%`)
-        .limit(5);
+        .rpc('search_users_by_name', {
+          search_query: searchQuery,
+          current_user_id: currentUserId
+        });
 
       if (error) throw error;
       setUsers(data || []);
