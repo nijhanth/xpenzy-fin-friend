@@ -225,9 +225,14 @@ export const Investments = () => {
     return growthData.reduce((sum, d) => sum + d.value, 0) / growthData.length;
   }, [growthData]);
   
-  // Display raw values from database without calculations
-  const totalInvested = data.investments[0]?.invested || 0;
-  const totalCurrent = data.investments[0]?.current || 0;
+  // Calculate totals from all investments
+  const totalInvested = useMemo(() => {
+    return data.investments.reduce((sum, inv) => sum + (inv.invested || 0), 0);
+  }, [data.investments]);
+  
+  const totalCurrent = useMemo(() => {
+    return data.investments.reduce((sum, inv) => sum + (inv.current || 0), 0);
+  }, [data.investments]);
 
   const handleEdit = (entryId: string) => {
     setEditingEntry(entryId);
