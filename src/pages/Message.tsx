@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useChat } from '@/hooks/useChat';
+import { usePresence } from '@/hooks/usePresence';
 import { formatDistanceToNow } from 'date-fns';
 import {
   AlertDialog,
@@ -49,6 +50,8 @@ export const Message = () => {
     selectedConversation,
     user?.id || ''
   );
+  
+  const { isUserOnline } = usePresence(user?.id, selectedConversation);
 
   useEffect(() => {
     if (user) {
@@ -106,13 +109,18 @@ export const Message = () => {
               if (participants) {
                 const { data: profile } = await supabase
                   .from('profiles')
-                  .select('display_name')
+                  .select('display_name, email')
                   .eq('user_id', participants.user_id)
                   .single();
 
+                // Use display_name, fall back to email username, then to 'User'
+                const displayName = profile?.display_name || 
+                  (profile?.email ? profile.email.split('@')[0] : null) || 
+                  'User';
+
                 return {
                   ...conv,
-                  other_user_name: profile?.display_name || 'Unknown',
+                  other_user_name: displayName,
                   other_user_id: participants.user_id,
                 };
               }
@@ -370,8 +378,20 @@ export const Message = () => {
                       ? currentConversation.name
                       : currentConversation.other_user_name || 'Chat'}
                   </h2>
-                  <p className="text-xs text-muted-foreground">
-                    {currentConversation.type === 'group' ? 'Group Chat' : 'Online'}
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    {currentConversation.type === 'group' ? (
+                      'Group Chat'
+                    ) : currentConversation.other_user_id && isUserOnline(currentConversation.other_user_id) ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        Online
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-muted-foreground/50"></span>
+                        Offline
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
