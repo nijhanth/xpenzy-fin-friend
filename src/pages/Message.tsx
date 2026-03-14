@@ -148,14 +148,18 @@ export const Message = () => {
 
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('user_id, display_name, email')
-        .neq('user_id', user.id)
-        .or(`display_name.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%`)
-        .limit(10);
+        .rpc('search_users_by_name', {
+          search_query: trimmedQuery,
+          current_user_id: user.id
+        });
 
       if (error) throw error;
-      setSearchResults(data || []);
+      const profiles = (data || []).map((d: any) => ({
+        user_id: d.user_id,
+        display_name: d.display_name,
+        email: null
+      }));
+      setSearchResults(profiles);
       
       if (!data || data.length === 0) {
         toast({
