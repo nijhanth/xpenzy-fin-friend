@@ -504,7 +504,7 @@ export const Message = () => {
                 searchResults.map((profile) => (
                   <div
                     key={profile.user_id}
-                    onClick={() => startNewChat(profile.user_id, profile.display_name || profile.email || 'Unknown')}
+                    onClick={() => startNewChat(profile.user_id, profile.display_name || 'Unknown')}
                     className="p-3 hover:bg-accent rounded-lg cursor-pointer transition"
                   >
                     <p className="font-medium text-foreground">{profile.display_name || 'Unknown'}</p>
