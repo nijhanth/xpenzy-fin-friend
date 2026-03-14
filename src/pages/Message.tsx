@@ -507,10 +507,7 @@ export const Message = () => {
                     onClick={() => startNewChat(profile.user_id, profile.display_name || profile.email || 'Unknown')}
                     className="p-3 hover:bg-accent rounded-lg cursor-pointer transition"
                   >
-                    <p className="font-medium text-foreground">{profile.display_name || profile.email || 'Unknown'}</p>
-                    {profile.email && profile.display_name && (
-                      <p className="text-xs text-muted-foreground">{profile.email}</p>
-                    )}
+                    <p className="font-medium text-foreground">{profile.display_name || 'Unknown'}</p>
                   </div>
                 ))
               )}
