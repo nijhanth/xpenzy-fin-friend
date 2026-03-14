@@ -109,14 +109,11 @@ export const Message = () => {
               if (participants) {
                 const { data: profile } = await supabase
                   .from('profiles')
-                  .select('display_name, email')
+                  .select('user_id, display_name')
                   .eq('user_id', participants.user_id)
                   .single();
 
-                // Use display_name, fall back to email username, then to 'User'
-                const displayName = profile?.display_name || 
-                  (profile?.email ? profile.email.split('@')[0] : null) || 
-                  'User';
+                const displayName = profile?.display_name || 'User';
 
                 return {
                   ...conv,
@@ -151,14 +148,18 @@ export const Message = () => {
 
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('user_id, display_name, email')
-        .neq('user_id', user.id)
-        .or(`display_name.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%`)
-        .limit(10);
+        .rpc('search_users_by_name', {
+          search_query: trimmedQuery,
+          current_user_id: user.id
+        });
 
       if (error) throw error;
-      setSearchResults(data || []);
+      const profiles = (data || []).map((d: any) => ({
+        user_id: d.user_id,
+        display_name: d.display_name,
+        email: null
+      }));
+      setSearchResults(profiles);
       
       if (!data || data.length === 0) {
         toast({
@@ -503,13 +504,10 @@ export const Message = () => {
                 searchResults.map((profile) => (
                   <div
                     key={profile.user_id}
-                    onClick={() => startNewChat(profile.user_id, profile.display_name || profile.email || 'Unknown')}
+                    onClick={() => startNewChat(profile.user_id, profile.display_name || 'Unknown')}
                     className="p-3 hover:bg-accent rounded-lg cursor-pointer transition"
                   >
-                    <p className="font-medium text-foreground">{profile.display_name || profile.email || 'Unknown'}</p>
-                    {profile.email && profile.display_name && (
-                      <p className="text-xs text-muted-foreground">{profile.email}</p>
-                    )}
+                    <p className="font-medium text-foreground">{profile.display_name || 'Unknown'}</p>
                   </div>
                 ))
               )}
