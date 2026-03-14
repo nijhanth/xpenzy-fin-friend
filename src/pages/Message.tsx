@@ -109,14 +109,11 @@ export const Message = () => {
               if (participants) {
                 const { data: profile } = await supabase
                   .from('profiles')
-                  .select('display_name, email')
+                  .select('user_id, display_name')
                   .eq('user_id', participants.user_id)
                   .single();
 
-                // Use display_name, fall back to email username, then to 'User'
-                const displayName = profile?.display_name || 
-                  (profile?.email ? profile.email.split('@')[0] : null) || 
-                  'User';
+                const displayName = profile?.display_name || 'User';
 
                 return {
                   ...conv,
