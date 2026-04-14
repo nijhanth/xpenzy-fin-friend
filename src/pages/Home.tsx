@@ -14,6 +14,8 @@ import { ExpenseForm } from '@/components/forms/ExpenseForm';
 import { SavingsForm } from '@/components/forms/SavingsForm';
 import { InvestmentForm } from '@/components/forms/InvestmentForm';
 import { NotificationBell } from '@/components/ui/notification-bell';
+import { SmartExpenseInput } from '@/components/ai/SmartExpenseInput';
+import { AIInsightsCard, ExpensePredictionCard } from '@/components/ai/AIInsights';
 
 // Custom tooltip for pie chart
 const PieChartTooltip = ({ active, payload }: any) => {
@@ -273,6 +275,15 @@ export const Home = () => {
           variant="savings"
           trend={{ value: `${data.savings.length} goals`, isPositive: true }}
         />
+      </div>
+
+      {/* Smart AI Expense Input */}
+      <SmartExpenseInput />
+
+      {/* AI Insights & Prediction */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <AIInsightsCard />
+        <ExpensePredictionCard />
       </div>
 
       {/* Charts Section */}
