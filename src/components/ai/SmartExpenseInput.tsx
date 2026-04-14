@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Sparkles, Loader2, Check, Edit2, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, Loader2, Check, Edit2, X, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,9 +16,10 @@ interface CategorizedExpense {
   amount: number;
   category: string;
   note: string;
+  isNewCategory?: boolean;
 }
 
-const CATEGORIES = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education', 'Other'];
+const DEFAULT_CATEGORIES = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education', 'Other'];
 
 export const SmartExpenseInput: React.FC = () => {
   const [input, setInput] = useState('');
@@ -27,8 +28,28 @@ export const SmartExpenseInput: React.FC = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState<CategorizedExpense>({ amount: 0, category: 'Other', note: '' });
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const { addExpense } = useFinancial();
   const { toast } = useToast();
+
+  // Load user's existing categories
+  useEffect(() => {
+    const loadCategories = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const [budgetRes, expenseRes] = await Promise.all([
+        supabase.from('budget_categories').select('category').eq('user_id', user.id),
+        supabase.from('expense_entries').select('category').eq('user_id', user.id),
+      ]);
+      const all = new Set([
+        ...DEFAULT_CATEGORIES,
+        ...(budgetRes.data || []).map((b) => b.category),
+        ...(expenseRes.data || []).map((e) => e.category),
+      ]);
+      setCategories([...all]);
+    };
+    loadCategories();
+  }, []);
 
   const handleSmartInput = async () => {
     if (!input.trim()) return;
@@ -51,6 +72,10 @@ export const SmartExpenseInput: React.FC = () => {
       const data: CategorizedExpense = await resp.json();
       setResult(data);
       setEditData(data);
+      // Add new category to local list if AI created one
+      if (data.isNewCategory && data.category && !categories.includes(data.category)) {
+        setCategories(prev => [...prev, data.category]);
+      }
       setShowPreview(true);
     } catch (e) {
       toast({ title: 'AI Error', description: 'Could not categorize. Please try again or enter manually.', variant: 'destructive' });
@@ -124,7 +149,14 @@ export const SmartExpenseInput: React.FC = () => {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Category</span>
-                    <Badge>{result.category}</Badge>
+                    <div className="flex items-center gap-1">
+                      {result.isNewCategory && (
+                        <Badge variant="outline" className="text-xs border-primary text-primary">
+                          <Plus className="w-3 h-3 mr-0.5" /> New
+                        </Badge>
+                      )}
+                      <Badge>{result.category}</Badge>
+                    </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Description</span>
@@ -142,7 +174,7 @@ export const SmartExpenseInput: React.FC = () => {
                     <Select value={editData.category} onValueChange={(v) => setEditData(d => ({ ...d, category: v }))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent className="bg-background border-border z-50">
-                        {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
