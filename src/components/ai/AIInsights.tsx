@@ -3,6 +3,7 @@ import { Sparkles, Loader2, RefreshCw, TrendingUp, TrendingDown, AlertTriangle, 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
 import ReactMarkdown from 'react-markdown';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`;
@@ -14,11 +15,15 @@ export const AIInsightsCard: React.FC = () => {
   const fetchInsights = async () => {
     setIsLoading(true);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('Please sign in');
+
       const resp = await fetch(CHAT_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ action: 'insights' }),
       });
@@ -87,11 +92,15 @@ export const ExpensePredictionCard: React.FC = () => {
   const fetchPrediction = async () => {
     setIsLoading(true);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('Please sign in');
+
       const resp = await fetch(CHAT_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ action: 'predict' }),
       });
