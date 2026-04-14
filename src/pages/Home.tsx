@@ -277,6 +277,15 @@ export const Home = () => {
         />
       </div>
 
+      {/* Smart AI Expense Input */}
+      <SmartExpenseInput />
+
+      {/* AI Insights & Prediction */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <AIInsightsCard />
+        <ExpensePredictionCard />
+      </div>
+
       {/* Charts Section */}
       <div className="space-y-6">
         {/* Balance Overview Pie Chart */}
