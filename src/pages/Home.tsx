@@ -14,6 +14,8 @@ import { ExpenseForm } from '@/components/forms/ExpenseForm';
 import { SavingsForm } from '@/components/forms/SavingsForm';
 import { InvestmentForm } from '@/components/forms/InvestmentForm';
 import { NotificationBell } from '@/components/ui/notification-bell';
+import { SmartExpenseInput } from '@/components/ai/SmartExpenseInput';
+import { AIInsightsCard, ExpensePredictionCard } from '@/components/ai/AIInsights';
 
 // Custom tooltip for pie chart
 const PieChartTooltip = ({ active, payload }: any) => {
