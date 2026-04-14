@@ -74,11 +74,33 @@ serve(async (req) => {
     let toolChoice: any = undefined;
 
     if (action === "categorize") {
+      // Fetch user's existing categories from budget_categories and expense_entries
+      const [budgetRes, expenseRes] = await Promise.all([
+        supabase.from("budget_categories").select("category").eq("user_id", userId),
+        supabase.from("expense_entries").select("category").eq("user_id", userId),
+      ]);
+      const existingCategories = [
+        ...new Set([
+          ...(budgetRes.data || []).map((b: any) => b.category),
+          ...(expenseRes.data || []).map((e: any) => e.category),
+          "Food", "Travel", "Shopping", "Bills", "Entertainment", "Health", "Education", "Other",
+        ]),
+      ];
+
       systemPrompt = `You are an intelligent expense categorization assistant for Xpenzy finance app.
-Analyze the user input and extract expense details. Return structured data.
-Categories: Food, Travel, Shopping, Bills, Entertainment, Health, Education, Other.
-If amount is not found, use 0. If category is ambiguous, pick the closest match.
-Extract a clean note/description from the input.`;
+
+Your task is to analyze the user input and extract expense details.
+
+Existing Categories:
+${existingCategories.join(", ")}
+
+Instructions:
+- Extract amount (number). If not found, use 0.
+- Identify the most relevant category from the existing list.
+- If no existing category fits well, create a NEW category name (keep it simple, one word if possible).
+- Extract a short, clean note/description.
+- Set isNewCategory to true only if the category is NOT in the existing list.`;
+
       userPrompt = `User Input: "${input}"`;
       useToolCalling = true;
       tools = [{
@@ -90,10 +112,11 @@ Extract a clean note/description from the input.`;
             type: "object",
             properties: {
               amount: { type: "number", description: "The expense amount" },
-              category: { type: "string", enum: ["Food", "Travel", "Shopping", "Bills", "Entertainment", "Health", "Education", "Other"] },
+              category: { type: "string", description: "Category name - use existing or create new" },
               note: { type: "string", description: "Clean description of the expense" },
+              isNewCategory: { type: "boolean", description: "True if category is not in the existing list" },
             },
-            required: ["amount", "category", "note"],
+            required: ["amount", "category", "note", "isNewCategory"],
             additionalProperties: false,
           },
         },
