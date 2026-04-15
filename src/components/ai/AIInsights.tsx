@@ -139,13 +139,19 @@ interface Prediction {
 export const ExpensePredictionCard: React.FC = () => {
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorState, setErrorState] = useState<'none' | 'error'>('none');
 
   const fetchPrediction = async () => {
+    if (isLoading) return;
     setIsLoading(true);
+    setErrorState('none');
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error('Please sign in');
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
 
       const resp = await fetch(CHAT_URL, {
         method: 'POST',
@@ -154,12 +160,21 @@ export const ExpensePredictionCard: React.FC = () => {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ action: 'predict' }),
+        signal: controller.signal,
       });
-      if (!resp.ok) throw new Error('Failed');
+      clearTimeout(timeout);
+
+      if (!resp.ok) {
+        console.error('Predict error:', resp.status);
+        throw new Error('Failed');
+      }
       const data: Prediction = await resp.json();
+      console.log('Predict response:', data);
       setPrediction(data);
-    } catch {
+    } catch (e: any) {
+      console.error('Predict fetch error:', e);
       setPrediction(null);
+      setErrorState('error');
     } finally {
       setIsLoading(false);
     }
