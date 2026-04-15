@@ -303,7 +303,8 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
     }
 
     const content = choice?.message?.content || "";
-    return new Response(JSON.stringify({ content }), {
+    console.log("ai-assistant response (first 200 chars):", content.substring(0, 200));
+    return new Response(JSON.stringify({ content: content.trim() }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
