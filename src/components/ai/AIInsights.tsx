@@ -201,12 +201,21 @@ export const ExpensePredictionCard: React.FC = () => {
         </div>
       </CardHeader>
       <CardContent>
-        {!prediction && !isLoading && (
+        {!prediction && !isLoading && errorState === 'none' && (
           <div className="text-center py-6">
             <TrendingUp className="w-10 h-10 mx-auto mb-3 text-primary/50" />
             <p className="text-sm text-muted-foreground mb-3">Predict your month-end spending</p>
-            <Button onClick={fetchPrediction} className="bg-gradient-primary">
+            <Button onClick={fetchPrediction} className="bg-gradient-primary" disabled={isLoading}>
               <Sparkles className="w-4 h-4 mr-2" /> Predict Spending
+            </Button>
+          </div>
+        )}
+        {!prediction && !isLoading && errorState === 'error' && (
+          <div className="text-center py-6">
+            <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-yellow-500/60" />
+            <p className="text-sm text-muted-foreground mb-3">Unable to generate prediction. Please try again.</p>
+            <Button onClick={fetchPrediction} variant="outline" size="sm" disabled={isLoading}>
+              <RefreshCw className="w-4 h-4 mr-2" /> Retry
             </Button>
           </div>
         )}
