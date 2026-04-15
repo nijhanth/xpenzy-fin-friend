@@ -140,21 +140,46 @@ Here is the user's current financial data for ${finData.month}:
 
     } else if (action === "insights") {
       const finData = await fetchFinancialData();
-      systemPrompt = `You are Xpenzy AI. Generate smart financial insights based on the user's data.
-Be concise and actionable. Use bullet points. Use ₹ for currency. Be encouraging but honest.
-Format with markdown.`;
-      userPrompt = `Generate spending insights for ${finData.month}:
-- Income: ₹${finData.totalIncome.toLocaleString()}
-- Expenses: ₹${finData.totalExpenses.toLocaleString()} across ${finData.expenseCount} transactions
-- Category breakdown: ${JSON.stringify(finData.expensesByCategory)}
-- Savings: ${JSON.stringify(finData.savings)}
-- Budgets: ${JSON.stringify(finData.budgets)}
 
-Provide:
-1. Top spending patterns
-2. Category comparison and biggest spenders
-3. 3 actionable suggestions to save money
-4. Overall financial health score (1-10)`;
+      // Validate: if no expense data, return early without calling AI
+      if (finData.expenseCount === 0 && finData.totalIncome === 0) {
+        console.log("insights: no financial data for user", userId);
+        return new Response(JSON.stringify({ content: "No data available to generate insights. Start by adding some income or expenses!" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (finData.expenseCount < 2) {
+        console.log("insights: insufficient data, only", finData.expenseCount, "entries");
+        return new Response(JSON.stringify({ content: "Not enough data to generate meaningful insights. Add at least 2 expense entries and try again." }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      console.log("insights: generating for user", userId, "expenses:", finData.expenseCount, "income:", finData.totalIncome);
+
+      systemPrompt = `You are a financial assistant.
+Analyze the user's expense data and give insights.
+
+Instructions:
+- Find total spending
+- Find top category
+- Identify unusual spending
+- Suggest 2 ways to save money
+- Keep response SHORT (max 5 bullet points)
+- Use simple English
+- Use ₹ for currency
+- DO NOT return JSON
+- Output only bullet points`;
+
+      userPrompt = `Expense Data:
+${JSON.stringify(finData.expenses.slice(0, 50))}
+
+Summary for ${finData.month}:
+- Total Income: ₹${finData.totalIncome.toLocaleString()}
+- Total Expenses: ₹${finData.totalExpenses.toLocaleString()} across ${finData.expenseCount} transactions
+- Category breakdown: ${JSON.stringify(finData.expensesByCategory)}
+- Savings goals: ${JSON.stringify(finData.savings)}
+- Budgets: ${JSON.stringify(finData.budgets)}`;
 
     } else if (action === "predict") {
       const finData = await fetchFinancialData();
@@ -278,7 +303,8 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
     }
 
     const content = choice?.message?.content || "";
-    return new Response(JSON.stringify({ content }), {
+    console.log("ai-assistant response (first 200 chars):", content.substring(0, 200));
+    return new Response(JSON.stringify({ content: content.trim() }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
