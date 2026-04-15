@@ -139,13 +139,19 @@ interface Prediction {
 export const ExpensePredictionCard: React.FC = () => {
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorState, setErrorState] = useState<'none' | 'error'>('none');
 
   const fetchPrediction = async () => {
+    if (isLoading) return;
     setIsLoading(true);
+    setErrorState('none');
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error('Please sign in');
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
 
       const resp = await fetch(CHAT_URL, {
         method: 'POST',
@@ -154,12 +160,21 @@ export const ExpensePredictionCard: React.FC = () => {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ action: 'predict' }),
+        signal: controller.signal,
       });
-      if (!resp.ok) throw new Error('Failed');
+      clearTimeout(timeout);
+
+      if (!resp.ok) {
+        console.error('Predict error:', resp.status);
+        throw new Error('Failed');
+      }
       const data: Prediction = await resp.json();
+      console.log('Predict response:', data);
       setPrediction(data);
-    } catch {
+    } catch (e: any) {
+      console.error('Predict fetch error:', e);
       setPrediction(null);
+      setErrorState('error');
     } finally {
       setIsLoading(false);
     }
@@ -186,12 +201,21 @@ export const ExpensePredictionCard: React.FC = () => {
         </div>
       </CardHeader>
       <CardContent>
-        {!prediction && !isLoading && (
+        {!prediction && !isLoading && errorState === 'none' && (
           <div className="text-center py-6">
             <TrendingUp className="w-10 h-10 mx-auto mb-3 text-primary/50" />
             <p className="text-sm text-muted-foreground mb-3">Predict your month-end spending</p>
-            <Button onClick={fetchPrediction} className="bg-gradient-primary">
+            <Button onClick={fetchPrediction} className="bg-gradient-primary" disabled={isLoading}>
               <Sparkles className="w-4 h-4 mr-2" /> Predict Spending
+            </Button>
+          </div>
+        )}
+        {!prediction && !isLoading && errorState === 'error' && (
+          <div className="text-center py-6">
+            <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-yellow-500/60" />
+            <p className="text-sm text-muted-foreground mb-3">Unable to generate prediction. Please try again.</p>
+            <Button onClick={fetchPrediction} variant="outline" size="sm" disabled={isLoading}>
+              <RefreshCw className="w-4 h-4 mr-2" /> Retry
             </Button>
           </div>
         )}

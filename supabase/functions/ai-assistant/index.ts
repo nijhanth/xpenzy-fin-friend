@@ -187,8 +187,23 @@ Summary for ${finData.month}:
       const dayOfMonth = now.getDate();
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
 
+      // Early return if no expense data
+      if (finData.expenseCount === 0) {
+        console.log("predict: no expenses for user", userId);
+        const budgetTotal = finData.budgets.reduce((s: number, b: any) => s + Number(b.limit), 0);
+        return new Response(JSON.stringify({
+          predicted_total: 0,
+          budget_total: budgetTotal,
+          risk_level: "low",
+          summary: "No expenses recorded this month yet. Start tracking your spending to get predictions!",
+          top_categories: [],
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      console.log("predict: generating for user", userId, "expenses:", finData.expenseCount, "day:", dayOfMonth);
+
       systemPrompt = `You are Xpenzy AI. Predict the user's end-of-month spending based on current data.
-Return structured prediction data.`;
+Return structured prediction data. Use ₹ for currency in the summary.`;
       userPrompt = `Current month: ${finData.month}
 Day ${dayOfMonth} of ${daysInMonth} days.
 Total spent so far: ₹${finData.totalExpenses.toLocaleString()} across ${finData.expenseCount} transactions.
