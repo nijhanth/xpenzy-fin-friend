@@ -11,13 +11,19 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant
 export const AIInsightsCard: React.FC = () => {
   const [insights, setInsights] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorState, setErrorState] = useState<'none' | 'no_data' | 'error'>('none');
 
   const fetchInsights = async () => {
+    if (isLoading) return; // prevent double clicks
     setIsLoading(true);
+    setErrorState('none');
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error('Please sign in');
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
       const resp = await fetch(CHAT_URL, {
         method: 'POST',
@@ -26,12 +32,41 @@ export const AIInsightsCard: React.FC = () => {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ action: 'insights' }),
+        signal: controller.signal,
       });
-      if (!resp.ok) throw new Error('Failed');
+      clearTimeout(timeout);
+
+      if (resp.status === 429) {
+        setInsights(null);
+        setErrorState('error');
+        console.error('AI insights: rate limited');
+        return;
+      }
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        console.error('AI insights error:', resp.status, errBody);
+        throw new Error('Failed');
+      }
+
       const data = await resp.json();
-      setInsights(data.content);
-    } catch {
-      setInsights('Unable to generate insights right now. Please try again.');
+      const content = (data.content || '').trim();
+      console.log('AI insights response:', content.substring(0, 200));
+
+      if (!content) {
+        setErrorState('no_data');
+        setInsights(null);
+      } else {
+        setInsights(content);
+      }
+    } catch (e: any) {
+      console.error('AI insights fetch error:', e);
+      if (e.name === 'AbortError') {
+        setInsights(null);
+        setErrorState('error');
+      } else {
+        setInsights(null);
+        setErrorState('error');
+      }
     } finally {
       setIsLoading(false);
     }
