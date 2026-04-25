@@ -261,6 +261,7 @@ export const Home = () => {
         <ExpensePredictionCard />
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
       {/* Balance Overview Pie Chart */}
       <Card className="bg-card border-border shadow-card overflow-hidden">
         <CardHeader className="pb-2">
