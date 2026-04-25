@@ -158,15 +158,15 @@ export const Home = () => {
   const currentMonth = new Date().toLocaleDateString('en', { month: 'long', year: 'numeric' });
 
   return (
-    <div className="p-4 pb-6 space-y-5 animate-fade-in font-xpenzy max-w-2xl mx-auto">
+    <div className="p-4 md:p-6 lg:p-8 pb-6 space-y-5 lg:space-y-6 animate-fade-in font-xpenzy max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">{getGreeting()}</p>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">
+          <p className="text-sm md:text-base text-muted-foreground">{getGreeting()}</p>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-foreground tracking-tight">
             {getSecureDisplayName()}
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{currentMonth}</p>
+          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">{currentMonth}</p>
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell />
@@ -176,27 +176,27 @@ export const Home = () => {
 
       {/* Balance Hero Card */}
       <Card className="bg-gradient-to-br from-primary to-primary-glow border-0 shadow-elevated overflow-hidden">
-        <CardContent className="p-5">
+        <CardContent className="p-5 md:p-7 lg:p-8">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-primary-foreground/70 text-sm font-medium">Total Balance</p>
-              <p className="text-3xl font-bold text-primary-foreground mt-1">
+              <p className="text-primary-foreground/70 text-sm md:text-base font-medium">Total Balance</p>
+              <p className="text-3xl md:text-4xl lg:text-5xl font-bold text-primary-foreground mt-1">
                 ₹{totals.remainingBalance.toLocaleString()}
               </p>
-              <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${totals.remainingBalance >= 0 ? 'text-primary-foreground/80' : 'text-red-200'}`}>
-                {totals.remainingBalance >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+              <div className={`flex items-center gap-1 mt-2 text-sm md:text-base font-medium ${totals.remainingBalance >= 0 ? 'text-primary-foreground/80' : 'text-red-200'}`}>
+                {totals.remainingBalance >= 0 ? <ArrowUpRight className="w-4 h-4 md:w-5 md:h-5" /> : <ArrowDownRight className="w-4 h-4 md:w-5 md:h-5" />}
                 <span>{totals.remainingBalance >= 0 ? 'Positive Balance' : 'Deficit'}</span>
               </div>
             </div>
-            <div className="p-3 bg-primary-foreground/15 rounded-2xl backdrop-blur-sm">
-              <Wallet className="w-8 h-8 text-primary-foreground" />
+            <div className="p-3 md:p-4 bg-primary-foreground/15 rounded-2xl backdrop-blur-sm">
+              <Wallet className="w-8 h-8 md:w-10 md:h-10 text-primary-foreground" />
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <StatCard
           title="Income"
           value={`₹${totals.totalIncome.toLocaleString()}`}
@@ -232,7 +232,7 @@ export const Home = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-3 md:gap-4">
         {[
           { key: 'income' as const, label: 'Income', icon: TrendingUp, color: 'bg-income/10 text-income border-income/20' },
           { key: 'expense' as const, label: 'Expense', icon: TrendingDown, color: 'bg-expense/10 text-expense border-expense/20' },
@@ -242,12 +242,12 @@ export const Home = () => {
           <button
             key={key}
             onClick={() => setActiveForm(key)}
-            className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all duration-200 hover:scale-105 active:scale-95 ${color}`}
+            className={`flex flex-col items-center gap-2 p-3 md:p-4 rounded-xl border transition-all duration-200 hover:scale-105 active:scale-95 ${color}`}
           >
-            <div className="p-2 rounded-lg bg-background/50">
-              <Icon className="w-5 h-5" />
+            <div className="p-2 md:p-2.5 rounded-lg bg-background/50">
+              <Icon className="w-5 h-5 md:w-6 md:h-6" />
             </div>
-            <span className="text-xs font-medium">+ {label}</span>
+            <span className="text-xs md:text-sm font-medium">+ {label}</span>
           </button>
         ))}
       </div>
@@ -261,6 +261,7 @@ export const Home = () => {
         <ExpensePredictionCard />
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
       {/* Balance Overview Pie Chart */}
       <Card className="bg-card border-border shadow-card overflow-hidden">
         <CardHeader className="pb-2">
@@ -402,6 +403,7 @@ export const Home = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
 
       {/* Forms */}
       <IncomeForm open={activeForm === 'income'} onClose={() => setActiveForm(null)} />
