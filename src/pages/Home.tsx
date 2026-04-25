@@ -158,7 +158,7 @@ export const Home = () => {
   const currentMonth = new Date().toLocaleDateString('en', { month: 'long', year: 'numeric' });
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 pb-6 space-y-5 lg:space-y-6 animate-fade-in font-xpenzy max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto">
+    <div className="w-full p-4 space-y-6 animate-fade-in font-xpenzy">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -256,7 +256,7 @@ export const Home = () => {
       <SmartExpenseInput />
 
       {/* AI Insights & Prediction */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
         <AIInsightsCard />
         <ExpensePredictionCard />
       </div>
