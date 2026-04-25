@@ -232,7 +232,7 @@ export const Home = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-3 md:gap-4">
         {[
           { key: 'income' as const, label: 'Income', icon: TrendingUp, color: 'bg-income/10 text-income border-income/20' },
           { key: 'expense' as const, label: 'Expense', icon: TrendingDown, color: 'bg-expense/10 text-expense border-expense/20' },
@@ -242,12 +242,12 @@ export const Home = () => {
           <button
             key={key}
             onClick={() => setActiveForm(key)}
-            className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all duration-200 hover:scale-105 active:scale-95 ${color}`}
+            className={`flex flex-col items-center gap-2 p-3 md:p-4 rounded-xl border transition-all duration-200 hover:scale-105 active:scale-95 ${color}`}
           >
-            <div className="p-2 rounded-lg bg-background/50">
-              <Icon className="w-5 h-5" />
+            <div className="p-2 md:p-2.5 rounded-lg bg-background/50">
+              <Icon className="w-5 h-5 md:w-6 md:h-6" />
             </div>
-            <span className="text-xs font-medium">+ {label}</span>
+            <span className="text-xs md:text-sm font-medium">+ {label}</span>
           </button>
         ))}
       </div>
