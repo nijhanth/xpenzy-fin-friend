@@ -403,6 +403,7 @@ export const Home = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
 
       {/* Forms */}
       <IncomeForm open={activeForm === 'income'} onClose={() => setActiveForm(null)} />
