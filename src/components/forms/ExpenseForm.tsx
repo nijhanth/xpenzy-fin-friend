@@ -215,7 +215,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <>
+      <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Expense' : 'Add Expense'}</DialogTitle>
@@ -423,5 +424,37 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
         </Form>
       </DialogContent>
     </Dialog>
+
+    {/* Goal completion prompt */}
+    <Dialog
+      open={!!completionPrompt}
+      onOpenChange={(isOpen) => !isOpen && setCompletionPrompt(null)}
+    >
+      <DialogContent className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle>Did you complete this goal?</DialogTitle>
+          <DialogDescription>
+            You linked this expense to <span className="font-medium">'{completionPrompt?.goalName}'</span>. Mark it as completed?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => setCompletionPrompt(null)}>
+            No
+          </Button>
+          <Button
+            className="bg-success text-white hover:bg-success/90"
+            onClick={async () => {
+              if (completionPrompt) {
+                await markGoalCompleted(completionPrompt.goalId);
+              }
+              setCompletionPrompt(null);
+            }}
+          >
+            Yes, mark completed
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
