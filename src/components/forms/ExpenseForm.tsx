@@ -3,7 +3,7 @@ import React, { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -33,9 +33,10 @@ interface ExpenseFormProps {
 
 
 export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editingId }) => {
-  const { addExpense, updateExpense, updateBudget, data } = useFinancial();
+  const { addExpense, updateExpense, updateBudget, data, markGoalCompleted } = useFinancial();
   const { toast } = useToast();
   const isEditing = !!editingId;
+  const [completionPrompt, setCompletionPrompt] = React.useState<{ goalId: string; goalName: string } | null>(null);
 
   const form = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),
@@ -194,15 +195,21 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       });
     } else {
       await addExpense(expenseData);
-      
-      // Note: Budget spent amounts are calculated dynamically from expenses
-      
+
       toast({
         title: "Expense Added",
         description: `₹${formData.amount.toLocaleString()} expense added successfully!`
       });
     }
-    
+
+    // If linked to an active goal, ask the user if they want to mark it completed
+    const linkedGoal = expenseData.goalId
+      ? data.savings.find(g => g.id === expenseData.goalId)
+      : null;
+    if (linkedGoal && (linkedGoal.status ?? 'active') === 'active') {
+      setCompletionPrompt({ goalId: linkedGoal.id, goalName: linkedGoal.name });
+    }
+
     form.reset();
     onClose();
   };
