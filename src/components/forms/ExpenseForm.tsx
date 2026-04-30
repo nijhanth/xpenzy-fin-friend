@@ -3,7 +3,7 @@ import React, { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -33,9 +33,10 @@ interface ExpenseFormProps {
 
 
 export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editingId }) => {
-  const { addExpense, updateExpense, updateBudget, data } = useFinancial();
+  const { addExpense, updateExpense, updateBudget, data, markGoalCompleted } = useFinancial();
   const { toast } = useToast();
   const isEditing = !!editingId;
+  const [completionPrompt, setCompletionPrompt] = React.useState<{ goalId: string; goalName: string } | null>(null);
 
   const form = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),
@@ -194,21 +195,28 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       });
     } else {
       await addExpense(expenseData);
-      
-      // Note: Budget spent amounts are calculated dynamically from expenses
-      
+
       toast({
         title: "Expense Added",
         description: `₹${formData.amount.toLocaleString()} expense added successfully!`
       });
     }
-    
+
+    // If linked to an active goal, ask the user if they want to mark it completed
+    const linkedGoal = expenseData.goalId
+      ? data.savings.find(g => g.id === expenseData.goalId)
+      : null;
+    if (linkedGoal && (linkedGoal.status ?? 'active') === 'active') {
+      setCompletionPrompt({ goalId: linkedGoal.id, goalName: linkedGoal.name });
+    }
+
     form.reset();
     onClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <>
+      <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Expense' : 'Add Expense'}</DialogTitle>
@@ -416,5 +424,37 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
         </Form>
       </DialogContent>
     </Dialog>
+
+    {/* Goal completion prompt */}
+    <Dialog
+      open={!!completionPrompt}
+      onOpenChange={(isOpen) => !isOpen && setCompletionPrompt(null)}
+    >
+      <DialogContent className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle>Did you complete this goal?</DialogTitle>
+          <DialogDescription>
+            You linked this expense to <span className="font-medium">'{completionPrompt?.goalName}'</span>. Mark it as completed?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => setCompletionPrompt(null)}>
+            No
+          </Button>
+          <Button
+            className="bg-success text-white hover:bg-success/90"
+            onClick={async () => {
+              if (completionPrompt) {
+                await markGoalCompleted(completionPrompt.goalId);
+              }
+              setCompletionPrompt(null);
+            }}
+          >
+            Yes, mark completed
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };

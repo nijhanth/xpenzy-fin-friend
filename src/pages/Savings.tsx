@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
-import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3, Wallet, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3, Wallet, History, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -42,7 +42,7 @@ const savingsTips = [
 ];
 
 export const Savings = () => {
-  const { data, getSavingsTransactions, deleteSavingsTransaction } = useFinancial();
+  const { data, getSavingsTransactions, deleteSavingsTransaction, markGoalCompleted } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
   const { deleteSavings } = useFinancial();
@@ -270,21 +270,15 @@ export const Savings = () => {
               {data.savings.filter(g => (g.status ?? 'active') === 'active').map((goal) => {
                 const progress = (goal.current / goal.target) * 100;
                 const used = goal.used_amount ?? 0;
-                const isCompleted = (goal.status ?? 'active') === 'completed';
-                
+                const remaining = Math.max(0, goal.target - used);
+
                 return (
                   <div key={goal.id} className="space-y-3 p-4 rounded-xl bg-background/50 border border-border/50">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <h3 className="font-medium text-foreground">{goal.name}</h3>
-                        {isCompleted && (
-                          <Badge variant="outline" className="text-success border-success">
-                            <Award className="w-3 h-3 mr-1" />
-                            Completed
-                          </Badge>
-                        )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm text-muted-foreground">
                           Saved: ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
                         </p>
@@ -292,11 +286,19 @@ export const Savings = () => {
                           size="sm"
                           variant="outline"
                           onClick={() => handleAddMoney(goal.id, goal.name)}
-                          disabled={isCompleted}
-                          className="bg-savings/10 border-savings/30 text-savings hover:bg-savings/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="bg-savings/10 border-savings/30 text-savings hover:bg-savings/20"
                         >
                           <Wallet className="w-3 h-3 mr-1" />
-                          {isCompleted ? 'Completed' : 'Add Money'}
+                          Add Money
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => markGoalCompleted(goal.id)}
+                          className="bg-success/10 border-success/30 text-success hover:bg-success/20"
+                        >
+                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          Mark as Completed
                         </Button>
                         <Button
                           size="sm"
@@ -326,7 +328,7 @@ export const Savings = () => {
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">{Math.round(progress)}% complete</span>
                       <span className="text-muted-foreground">
-                        Used: ₹{used.toLocaleString()} • ₹{Math.max(0, goal.target - goal.current).toLocaleString()} remaining
+                        Used: ₹{used.toLocaleString()} • ₹{remaining.toLocaleString()} remaining
                       </span>
                     </div>
 

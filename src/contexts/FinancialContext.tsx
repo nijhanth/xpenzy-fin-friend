@@ -33,6 +33,7 @@ interface FinancialContextType {
   deleteSavings: (id: string) => void;
   deleteInvestment: (id: string) => void;
   deleteBudget: (id: string) => void;
+  markGoalCompleted: (id: string) => Promise<void>;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
@@ -133,33 +134,48 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const refreshGoalAfterLinkedExpense = async (goalId: string | null | undefined, prevSavings: SavingsGoal[]) => {
+  const refreshGoalAfterLinkedExpense = async (goalId: string | null | undefined) => {
     if (!goalId) return;
     try {
       const refreshed = await savingsService.getAll();
       setData(prev => ({ ...prev, savings: refreshed }));
-      const before = prevSavings.find(s => s.id === goalId);
-      const after = refreshed.find(s => s.id === goalId);
-      if (after && (after.status === 'completed') && before?.status !== 'completed') {
-        toast({
-          title: `🎉 Goal '${after.name}' completed!`,
-          description: `Saved ₹${after.current.toLocaleString()} • Used ₹${(after.used_amount ?? 0).toLocaleString()}`
-        });
-      }
     } catch (e) {
       console.error('Failed to refresh goal after linked expense', e);
     }
   };
 
+  const markGoalCompleted = async (id: string) => {
+    try {
+      const updated = await savingsService.update(id, {
+        status: 'completed',
+        completed_date: new Date().toISOString(),
+      } as any);
+      setData(prev => ({
+        ...prev,
+        savings: prev.savings.map(g => (g.id === id ? updated : g)),
+      }));
+      toast({
+        title: `🎉 Goal '${updated.name}' completed!`,
+        description: 'Moved to your completed goals history.',
+      });
+    } catch (error) {
+      console.error('Error marking goal completed:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to mark goal as completed.',
+      });
+    }
+  };
+
   const addExpense = async (expense: Omit<ExpenseEntry, 'id'>) => {
     try {
-      const prevSavings = data.savings;
       const newExpense = await expenseService.create(expense);
       setData(prev => ({
         ...prev,
         expenses: [newExpense, ...prev.expenses]
       }));
-      await refreshGoalAfterLinkedExpense(newExpense.goalId ?? null, prevSavings);
+      await refreshGoalAfterLinkedExpense(newExpense.goalId ?? null);
     } catch (error) {
       console.error('Error adding expense:', error);
       const newExpense: ExpenseEntry = {
@@ -509,7 +525,6 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const updateExpense = async (id: string, expense: Partial<Omit<ExpenseEntry, 'id'>>) => {
     try {
-      const prevSavings = data.savings;
       const prevExpense = data.expenses.find(e => e.id === id);
       const updatedExpense = await expenseService.update(id, expense);
       setData(prev => ({
@@ -518,12 +533,11 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           item.id === id ? updatedExpense : item
         )
       }));
-      // Refresh both old and new linked goals
       const goalsToRefresh = new Set<string>();
       if (prevExpense?.goalId) goalsToRefresh.add(prevExpense.goalId);
       if (updatedExpense.goalId) goalsToRefresh.add(updatedExpense.goalId);
       for (const gid of goalsToRefresh) {
-        await refreshGoalAfterLinkedExpense(gid, prevSavings);
+        await refreshGoalAfterLinkedExpense(gid);
       }
     } catch (error) {
       console.error('Error updating expense:', error);
@@ -733,7 +747,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       deleteExpense,
       deleteSavings,
       deleteInvestment,
-      deleteBudget
+      deleteBudget,
+      markGoalCompleted
     }}>
       {children}
     </FinancialContext.Provider>
