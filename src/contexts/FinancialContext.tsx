@@ -509,6 +509,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const updateExpense = async (id: string, expense: Partial<Omit<ExpenseEntry, 'id'>>) => {
     try {
+      const prevSavings = data.savings;
+      const prevExpense = data.expenses.find(e => e.id === id);
       const updatedExpense = await expenseService.update(id, expense);
       setData(prev => ({
         ...prev,
@@ -516,6 +518,13 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           item.id === id ? updatedExpense : item
         )
       }));
+      // Refresh both old and new linked goals
+      const goalsToRefresh = new Set<string>();
+      if (prevExpense?.goalId) goalsToRefresh.add(prevExpense.goalId);
+      if (updatedExpense.goalId) goalsToRefresh.add(updatedExpense.goalId);
+      for (const gid of goalsToRefresh) {
+        await refreshGoalAfterLinkedExpense(gid, prevSavings);
+      }
     } catch (error) {
       console.error('Error updating expense:', error);
       toast({
