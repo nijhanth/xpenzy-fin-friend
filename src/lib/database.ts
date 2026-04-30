@@ -118,8 +118,9 @@ export const expenseService = {
         payment_mode: expense.paymentMode,
         notes: expense.notes,
         custom_category: expense.customCategory,
+        goal_id: expense.goalId ?? null,
         user_id: (await supabase.auth.getUser()).data.user?.id
-      }])
+      }] as any)
       .select()
       .single();
     
