@@ -129,7 +129,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
           category: existingEntry.category,
           paymentMode: existingEntry.paymentMode as any,
           notes: existingEntry.notes,
-          customCategory: existingEntry.customCategory || ''
+          customCategory: existingEntry.customCategory || '',
+          goalId: existingEntry.goalId ?? null
         });
       }
     } else if (!editingId) {
@@ -139,10 +140,39 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
         category: undefined,
         paymentMode: 'UPI',
         notes: '',
-        customCategory: ''
+        customCategory: '',
+        goalId: null
       });
     }
   }, [editingId, open, data.expenses, form]);
+
+  // Active goals (status === 'active' OR no status set yet)
+  const activeGoals = useMemo(
+    () => data.savings.filter(g => (g.status ?? 'active') === 'active'),
+    [data.savings]
+  );
+
+  // Smart suggestion: when category/notes match an active goal name
+  const watchedCategory = form.watch('category');
+  const watchedCustomCategory = form.watch('customCategory');
+  const watchedNotes = form.watch('notes');
+  const watchedGoalId = form.watch('goalId');
+
+  const suggestedGoal = useMemo(() => {
+    if (watchedGoalId) return null;
+    const haystacks = [
+      watchedCategory,
+      watchedCustomCategory,
+      watchedNotes
+    ]
+      .filter(Boolean)
+      .map(s => String(s).toLowerCase());
+    if (haystacks.length === 0) return null;
+    return activeGoals.find(g => {
+      const name = g.name.toLowerCase();
+      return haystacks.some(h => h.includes(name) || name.includes(h));
+    }) || null;
+  }, [activeGoals, watchedCategory, watchedCustomCategory, watchedNotes, watchedGoalId]);
 
   const onSubmit = async (formData: ExpenseFormData) => {
     const expenseData = {
@@ -152,7 +182,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       subcategory: 'General', // Default subcategory since we removed the field
       paymentMode: formData.paymentMode,
       notes: formData.notes || '',
-      customCategory: formData.category === 'Custom' ? formData.customCategory : undefined
+      customCategory: formData.category === 'Custom' ? formData.customCategory : undefined,
+      goalId: formData.goalId || null
     };
 
     if (isEditing && editingId) {
