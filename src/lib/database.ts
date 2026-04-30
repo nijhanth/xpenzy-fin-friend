@@ -221,7 +221,7 @@ export const savingsService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as SavingsGoal;
   },
 
   async delete(id: string): Promise<void> {
