@@ -28,6 +28,9 @@ export interface SavingsGoal {
   current: number;
   date: string;
   notes: string;
+  used_amount?: number;
+  status?: 'active' | 'completed';
+  completed_date?: string | null;
 }
 
 export interface InvestmentEntry {
