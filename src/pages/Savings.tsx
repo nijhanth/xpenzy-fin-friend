@@ -267,9 +267,10 @@ export const Savings = () => {
         <CardContent>
           {data.savings.length > 0 ? (
             <div className="space-y-6">
-              {data.savings.map((goal) => {
+              {data.savings.filter(g => (g.status ?? 'active') === 'active').map((goal) => {
                 const progress = (goal.current / goal.target) * 100;
-                const isCompleted = progress >= 100;
+                const used = goal.used_amount ?? 0;
+                const isCompleted = (goal.status ?? 'active') === 'completed';
                 
                 return (
                   <div key={goal.id} className="space-y-3 p-4 rounded-xl bg-background/50 border border-border/50">
@@ -285,7 +286,7 @@ export const Savings = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <p className="text-sm text-muted-foreground">
-                          ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
+                          Saved: ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
                         </p>
                         <Button
                           size="sm"
@@ -325,7 +326,7 @@ export const Savings = () => {
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">{Math.round(progress)}% complete</span>
                       <span className="text-muted-foreground">
-                        ₹{Math.max(0, goal.target - goal.current).toLocaleString()} remaining
+                        Used: ₹{used.toLocaleString()} • ₹{Math.max(0, goal.target - goal.current).toLocaleString()} remaining
                       </span>
                     </div>
 
