@@ -18,6 +18,7 @@ export interface ExpenseEntry {
   paymentMode: 'Cash' | 'UPI' | 'Card' | 'Bank Transfer' | 'Net Banking';
   notes: string;
   customCategory?: string;
+  goalId?: string | null;
 }
 
 export interface SavingsGoal {
@@ -27,6 +28,9 @@ export interface SavingsGoal {
   current: number;
   date: string;
   notes: string;
+  used_amount?: number;
+  status?: 'active' | 'completed';
+  completed_date?: string | null;
 }
 
 export interface InvestmentEntry {

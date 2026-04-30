@@ -131,6 +131,7 @@ export type Database = {
           created_at: string | null
           custom_category: string | null
           date: string
+          goal_id: string | null
           id: string
           notes: string | null
           payment_mode: string
@@ -144,6 +145,7 @@ export type Database = {
           created_at?: string | null
           custom_category?: string | null
           date: string
+          goal_id?: string | null
           id?: string
           notes?: string | null
           payment_mode: string
@@ -157,6 +159,7 @@ export type Database = {
           created_at?: string | null
           custom_category?: string | null
           date?: string
+          goal_id?: string | null
           id?: string
           notes?: string | null
           payment_mode?: string
@@ -164,7 +167,15 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "expense_entries_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "savings_goals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       income_entries: {
         Row: {
@@ -395,36 +406,45 @@ export type Database = {
       }
       savings_goals: {
         Row: {
+          completed_date: string | null
           created_at: string | null
           current: number | null
           date: string
           id: string
           name: string
           notes: string | null
+          status: string
           target: number
           updated_at: string | null
+          used_amount: number
           user_id: string
         }
         Insert: {
+          completed_date?: string | null
           created_at?: string | null
           current?: number | null
           date: string
           id?: string
           name: string
           notes?: string | null
+          status?: string
           target: number
           updated_at?: string | null
+          used_amount?: number
           user_id: string
         }
         Update: {
+          completed_date?: string | null
           created_at?: string | null
           current?: number | null
           date?: string
           id?: string
           name?: string
           notes?: string | null
+          status?: string
           target?: number
           updated_at?: string | null
+          used_amount?: number
           user_id?: string
         }
         Relationships: []

@@ -267,9 +267,10 @@ export const Savings = () => {
         <CardContent>
           {data.savings.length > 0 ? (
             <div className="space-y-6">
-              {data.savings.map((goal) => {
+              {data.savings.filter(g => (g.status ?? 'active') === 'active').map((goal) => {
                 const progress = (goal.current / goal.target) * 100;
-                const isCompleted = progress >= 100;
+                const used = goal.used_amount ?? 0;
+                const isCompleted = (goal.status ?? 'active') === 'completed';
                 
                 return (
                   <div key={goal.id} className="space-y-3 p-4 rounded-xl bg-background/50 border border-border/50">
@@ -285,7 +286,7 @@ export const Savings = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <p className="text-sm text-muted-foreground">
-                          ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
+                          Saved: ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
                         </p>
                         <Button
                           size="sm"
@@ -325,7 +326,7 @@ export const Savings = () => {
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">{Math.round(progress)}% complete</span>
                       <span className="text-muted-foreground">
-                        ₹{Math.max(0, goal.target - goal.current).toLocaleString()} remaining
+                        Used: ₹{used.toLocaleString()} • ₹{Math.max(0, goal.target - goal.current).toLocaleString()} remaining
                       </span>
                     </div>
 
@@ -389,6 +390,50 @@ export const Savings = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Completed Goals (History) */}
+      {data.savings.some(g => (g.status ?? 'active') === 'completed') && (
+        <Card className="bg-gradient-card border-border shadow-card">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Award className="w-5 h-5 text-success" />
+              Completed Goals
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {data.savings.filter(g => (g.status ?? 'active') === 'completed').map(goal => (
+                <div key={goal.id} className="flex items-center justify-between p-4 rounded-xl bg-success/5 border border-success/20">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium text-foreground">{goal.name}</h3>
+                      <Badge variant="outline" className="text-success border-success">
+                        <Award className="w-3 h-3 mr-1" />
+                        Completed
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Saved ₹{goal.current.toLocaleString()} • Used ₹{(goal.used_amount ?? 0).toLocaleString()} • Target ₹{goal.target.toLocaleString()}
+                    </p>
+                    {goal.completed_date && (
+                      <p className="text-xs text-muted-foreground">
+                        Completed on {new Date(goal.completed_date).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                  <EditDeleteMenu
+                    onEdit={() => handleEdit(goal.id)}
+                    onDelete={() => handleDelete(goal.id)}
+                    itemName="savings goal"
+                    deleteTitle="Delete Savings Goal"
+                    deleteDescription="Are you sure you want to delete this completed goal?"
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Savings Trend - Trade Style */}
       <Card className="relative overflow-hidden bg-card/50 backdrop-blur-sm border-border/50 shadow-xl">

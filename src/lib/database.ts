@@ -102,7 +102,8 @@ export const expenseService = {
       subcategory: item.subcategory,
       paymentMode: item.payment_mode as any,
       notes: item.notes,
-      customCategory: item.custom_category
+      customCategory: item.custom_category,
+      goalId: (item as any).goal_id ?? null
     })) || [];
   },
 
@@ -117,8 +118,9 @@ export const expenseService = {
         payment_mode: expense.paymentMode,
         notes: expense.notes,
         custom_category: expense.customCategory,
+        goal_id: expense.goalId ?? null,
         user_id: (await supabase.auth.getUser()).data.user?.id
-      }])
+      }] as any)
       .select()
       .single();
     
@@ -131,22 +133,27 @@ export const expenseService = {
       subcategory: data.subcategory,
       paymentMode: data.payment_mode as any,
       notes: data.notes,
-      customCategory: data.custom_category
+      customCategory: data.custom_category,
+      goalId: (data as any).goal_id ?? null
     };
   },
 
   async update(id: string, expense: Partial<Omit<ExpenseEntry, 'id'>>): Promise<ExpenseEntry> {
+    const updatePayload: any = {
+      amount: expense.amount,
+      date: expense.date,
+      category: expense.category,
+      subcategory: expense.subcategory,
+      payment_mode: expense.paymentMode,
+      notes: expense.notes,
+      custom_category: expense.customCategory
+    };
+    if (expense.goalId !== undefined) {
+      updatePayload.goal_id = expense.goalId;
+    }
     const { data, error } = await supabase
       .from('expense_entries')
-      .update({
-        amount: expense.amount,
-        date: expense.date,
-        category: expense.category,
-        subcategory: expense.subcategory,
-        payment_mode: expense.paymentMode,
-        notes: expense.notes,
-        custom_category: expense.customCategory
-      })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();
@@ -160,7 +167,8 @@ export const expenseService = {
       subcategory: data.subcategory,
       paymentMode: data.payment_mode as any,
       notes: data.notes,
-      customCategory: data.custom_category
+      customCategory: data.custom_category,
+      goalId: (data as any).goal_id ?? null
     };
   },
 
@@ -183,7 +191,7 @@ export const savingsService = {
       .order('date', { ascending: false });
     
     if (error) throw error;
-    return data || [];
+    return (data as any[])?.map(d => ({ ...d, status: (d.status as 'active' | 'completed') ?? 'active' })) || [];
   },
 
   async create(savings: Omit<SavingsGoal, 'id'>): Promise<SavingsGoal> {
@@ -201,7 +209,7 @@ export const savingsService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as SavingsGoal;
   },
 
   async update(id: string, savings: Partial<Omit<SavingsGoal, 'id'>>): Promise<SavingsGoal> {
@@ -213,7 +221,7 @@ export const savingsService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as SavingsGoal;
   },
 
   async delete(id: string): Promise<void> {

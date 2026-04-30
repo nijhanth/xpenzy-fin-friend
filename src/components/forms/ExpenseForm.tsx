@@ -19,7 +19,8 @@ const expenseSchema = z.object({
   category: z.string().min(1, 'Category is required'),
   paymentMode: z.enum(['Cash', 'UPI', 'Card', 'Bank Transfer', 'Net Banking']),
   notes: z.string().optional().default(''),
-  customCategory: z.string().optional()
+  customCategory: z.string().optional(),
+  goalId: z.string().nullable().optional()
 });
 
 type ExpenseFormData = z.infer<typeof expenseSchema>;
@@ -44,7 +45,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       category: undefined,
       paymentMode: 'UPI',
       notes: '',
-      customCategory: ''
+      customCategory: '',
+      goalId: null
     }
   });
 
@@ -127,7 +129,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
           category: existingEntry.category,
           paymentMode: existingEntry.paymentMode as any,
           notes: existingEntry.notes,
-          customCategory: existingEntry.customCategory || ''
+          customCategory: existingEntry.customCategory || '',
+          goalId: existingEntry.goalId ?? null
         });
       }
     } else if (!editingId) {
@@ -137,10 +140,39 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
         category: undefined,
         paymentMode: 'UPI',
         notes: '',
-        customCategory: ''
+        customCategory: '',
+        goalId: null
       });
     }
   }, [editingId, open, data.expenses, form]);
+
+  // Active goals (status === 'active' OR no status set yet)
+  const activeGoals = useMemo(
+    () => data.savings.filter(g => (g.status ?? 'active') === 'active'),
+    [data.savings]
+  );
+
+  // Smart suggestion: when category/notes match an active goal name
+  const watchedCategory = form.watch('category');
+  const watchedCustomCategory = form.watch('customCategory');
+  const watchedNotes = form.watch('notes');
+  const watchedGoalId = form.watch('goalId');
+
+  const suggestedGoal = useMemo(() => {
+    if (watchedGoalId) return null;
+    const haystacks = [
+      watchedCategory,
+      watchedCustomCategory,
+      watchedNotes
+    ]
+      .filter(Boolean)
+      .map(s => String(s).toLowerCase());
+    if (haystacks.length === 0) return null;
+    return activeGoals.find(g => {
+      const name = g.name.toLowerCase();
+      return haystacks.some(h => h.includes(name) || name.includes(h));
+    }) || null;
+  }, [activeGoals, watchedCategory, watchedCustomCategory, watchedNotes, watchedGoalId]);
 
   const onSubmit = async (formData: ExpenseFormData) => {
     const expenseData = {
@@ -150,7 +182,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       subcategory: 'General', // Default subcategory since we removed the field
       paymentMode: formData.paymentMode,
       notes: formData.notes || '',
-      customCategory: formData.category === 'Custom' ? formData.customCategory : undefined
+      customCategory: formData.category === 'Custom' ? formData.customCategory : undefined,
+      goalId: formData.goalId || null
     };
 
     if (isEditing && editingId) {
@@ -323,6 +356,53 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
                 </FormItem>
               )}
             />
+
+            {/* Linked Goal (Optional) */}
+            <FormField
+              control={form.control}
+              name="goalId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Linked Goal (Optional)</FormLabel>
+                  <Select
+                    onValueChange={(val) => field.onChange(val === '__none__' ? null : val)}
+                    value={field.value ?? '__none__'}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="No goal linked" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background border-border z-50">
+                      <SelectItem value="__none__">No goal linked</SelectItem>
+                      {activeGoals.map(g => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Smart suggestion */}
+            {suggestedGoal && (
+              <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 flex items-center justify-between gap-3">
+                <p className="text-sm">
+                  Link this expense to <span className="font-medium">'{suggestedGoal.name}'</span>?
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => form.setValue('goalId', suggestedGoal.id, { shouldDirty: true })}
+                >
+                  Link
+                </Button>
+              </div>
+            )}
 
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={onClose}>
