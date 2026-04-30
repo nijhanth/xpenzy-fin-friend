@@ -19,7 +19,8 @@ const expenseSchema = z.object({
   category: z.string().min(1, 'Category is required'),
   paymentMode: z.enum(['Cash', 'UPI', 'Card', 'Bank Transfer', 'Net Banking']),
   notes: z.string().optional().default(''),
-  customCategory: z.string().optional()
+  customCategory: z.string().optional(),
+  goalId: z.string().nullable().optional()
 });
 
 type ExpenseFormData = z.infer<typeof expenseSchema>;
