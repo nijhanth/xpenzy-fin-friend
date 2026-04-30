@@ -133,13 +133,33 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  const refreshGoalAfterLinkedExpense = async (goalId: string | null | undefined, prevSavings: SavingsGoal[]) => {
+    if (!goalId) return;
+    try {
+      const refreshed = await savingsService.getAll();
+      setData(prev => ({ ...prev, savings: refreshed }));
+      const before = prevSavings.find(s => s.id === goalId);
+      const after = refreshed.find(s => s.id === goalId);
+      if (after && (after.status === 'completed') && before?.status !== 'completed') {
+        toast({
+          title: `🎉 Goal '${after.name}' completed!`,
+          description: `Saved ₹${after.current.toLocaleString()} • Used ₹${(after.used_amount ?? 0).toLocaleString()}`
+        });
+      }
+    } catch (e) {
+      console.error('Failed to refresh goal after linked expense', e);
+    }
+  };
+
   const addExpense = async (expense: Omit<ExpenseEntry, 'id'>) => {
     try {
+      const prevSavings = data.savings;
       const newExpense = await expenseService.create(expense);
       setData(prev => ({
         ...prev,
         expenses: [newExpense, ...prev.expenses]
       }));
+      await refreshGoalAfterLinkedExpense(newExpense.goalId ?? null, prevSavings);
     } catch (error) {
       console.error('Error adding expense:', error);
       const newExpense: ExpenseEntry = {
