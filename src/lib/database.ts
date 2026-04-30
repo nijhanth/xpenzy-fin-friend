@@ -191,7 +191,7 @@ export const savingsService = {
       .order('date', { ascending: false });
     
     if (error) throw error;
-    return data || [];
+    return (data as any[])?.map(d => ({ ...d, status: (d.status as 'active' | 'completed') ?? 'active' })) || [];
   },
 
   async create(savings: Omit<SavingsGoal, 'id'>): Promise<SavingsGoal> {
