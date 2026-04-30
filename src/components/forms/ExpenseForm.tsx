@@ -45,7 +45,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       category: undefined,
       paymentMode: 'UPI',
       notes: '',
-      customCategory: ''
+      customCategory: '',
+      goalId: null
     }
   });
 
