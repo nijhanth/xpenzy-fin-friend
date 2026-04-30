@@ -209,7 +209,7 @@ export const savingsService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as SavingsGoal;
   },
 
   async update(id: string, savings: Partial<Omit<SavingsGoal, 'id'>>): Promise<SavingsGoal> {
