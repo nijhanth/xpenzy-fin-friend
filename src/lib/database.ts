@@ -102,7 +102,8 @@ export const expenseService = {
       subcategory: item.subcategory,
       paymentMode: item.payment_mode as any,
       notes: item.notes,
-      customCategory: item.custom_category
+      customCategory: item.custom_category,
+      goalId: (item as any).goal_id ?? null
     })) || [];
   },
 
