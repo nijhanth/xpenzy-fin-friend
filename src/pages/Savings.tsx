@@ -226,28 +226,18 @@ export const Savings = () => {
       {/* Financial Summary */}
       <Card className="bg-gradient-card border-border shadow-card">
         <CardContent className="pt-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <div className="p-3 rounded-lg bg-savings/10 border border-savings/20">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-4 rounded-lg bg-savings/10 border border-savings/20">
               <p className="text-xs text-muted-foreground">💰 Savings Balance</p>
-              <p className="text-base font-bold text-savings">₹{savingsBalance.toLocaleString()}</p>
+              <p className="text-lg font-bold text-savings">₹{savingsBalance.toLocaleString()}</p>
             </div>
-            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-              <p className="text-xs text-muted-foreground">🎯 Active Goal Allocation</p>
-              <p className="text-base font-bold text-primary">₹{activeGoalAllocation.toLocaleString()}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-expense/10 border border-expense/20">
-              <p className="text-xs text-muted-foreground">🛒 Total Used from Goals</p>
-              <p className="text-base font-bold text-expense">₹{totalUsedFromGoals.toLocaleString()}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="p-4 rounded-lg bg-muted/50 border border-border">
               <p className="text-xs text-muted-foreground">📊 Lifetime Goal Savings</p>
-              <p className="text-base font-bold text-foreground">₹{lifetimeGoalSavings.toLocaleString()}</p>
+              <p className="text-lg font-bold text-foreground">₹{lifetimeGoalSavings.toLocaleString()}</p>
             </div>
-            <div className={`p-3 rounded-lg border ${availableBalance >= 0 ? 'bg-success/10 border-success/30' : 'bg-destructive/10 border-destructive/30'}`}>
-              <p className="text-xs text-muted-foreground">🟢 Available Balance</p>
-              <p className={`text-base font-bold ${availableBalance >= 0 ? 'text-success' : 'text-destructive'}`}>
-                ₹{availableBalance.toLocaleString()}
-              </p>
+            <div className="p-4 rounded-lg bg-expense/10 border border-expense/20">
+              <p className="text-xs text-muted-foreground">🛒 Total Spent from Goals</p>
+              <p className="text-lg font-bold text-expense">₹{totalUsedFromGoals.toLocaleString()}</p>
             </div>
           </div>
         </CardContent>
