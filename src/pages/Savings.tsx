@@ -59,6 +59,9 @@ export const Savings = () => {
   const totalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
   const totalTargets = data.savings.reduce((sum, goal) => sum + goal.target, 0);
   const overallProgress = totalTargets > 0 ? (totalSavings / totalTargets) * 100 : 0;
+  const totalUsed = data.savings.reduce((sum, goal) => sum + (goal.used_amount ?? 0), 0);
+  const savingsBalance = Math.max(0, totalSavings - totalUsed);
+  const availableBalance = Math.max(0, savingsBalance);
 
   // Generate savings trend from transactions with time period filter
   const savingsTrend = useMemo(() => {
