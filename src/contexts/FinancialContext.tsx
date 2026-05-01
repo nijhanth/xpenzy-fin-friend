@@ -34,6 +34,7 @@ interface FinancialContextType {
   deleteInvestment: (id: string) => void;
   deleteBudget: (id: string) => void;
   markGoalCompleted: (id: string) => Promise<void>;
+  restoreGoal: (id: string) => Promise<void>;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
