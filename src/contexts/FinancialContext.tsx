@@ -771,7 +771,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       deleteSavings,
       deleteInvestment,
       deleteBudget,
-      markGoalCompleted
+      markGoalCompleted,
+      restoreGoal
     }}>
       {children}
     </FinancialContext.Provider>
