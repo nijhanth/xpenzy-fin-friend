@@ -56,12 +56,23 @@ export const Savings = () => {
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
   const [timePeriod, setTimePeriod] = useState<'7d' | '30d' | '3m'>('30d');
   
-  const totalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
+  // Lifetime: total ever saved across all goals (active + completed)
+  const lifetimeGoalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
   const totalTargets = data.savings.reduce((sum, goal) => sum + goal.target, 0);
-  const overallProgress = totalTargets > 0 ? (totalSavings / totalTargets) * 100 : 0;
-  const totalUsed = data.savings.reduce((sum, goal) => sum + (goal.used_amount ?? 0), 0);
-  const savingsBalance = Math.max(0, totalSavings - totalUsed);
-  const availableBalance = Math.max(0, savingsBalance);
+  const overallProgress = totalTargets > 0 ? (lifetimeGoalSavings / totalTargets) * 100 : 0;
+
+  // Active-only buckets
+  const activeGoals = data.savings.filter(g => (g.status ?? 'active') === 'active');
+  const activeGoalAllocation = activeGoals.reduce((sum, g) => sum + g.current, 0);
+  const totalUsedFromGoals = data.savings.reduce((sum, g) => sum + (g.used_amount ?? 0), 0);
+
+  // Real money currently in account = lifetime saved minus everything spent from goals
+  const savingsBalance = Math.max(0, lifetimeGoalSavings - totalUsedFromGoals);
+  // Available = real money minus what's reserved for active goals
+  const availableBalance = savingsBalance - activeGoalAllocation;
+
+  // Backwards-compat alias used elsewhere in this component
+  const totalSavings = lifetimeGoalSavings;
 
   // Generate savings trend from transactions with time period filter
   const savingsTrend = useMemo(() => {
