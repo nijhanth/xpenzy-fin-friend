@@ -56,12 +56,23 @@ export const Savings = () => {
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
   const [timePeriod, setTimePeriod] = useState<'7d' | '30d' | '3m'>('30d');
   
-  const totalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
+  // Lifetime: total ever saved across all goals (active + completed)
+  const lifetimeGoalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
   const totalTargets = data.savings.reduce((sum, goal) => sum + goal.target, 0);
-  const overallProgress = totalTargets > 0 ? (totalSavings / totalTargets) * 100 : 0;
-  const totalUsed = data.savings.reduce((sum, goal) => sum + (goal.used_amount ?? 0), 0);
-  const savingsBalance = Math.max(0, totalSavings - totalUsed);
-  const availableBalance = Math.max(0, savingsBalance);
+  const overallProgress = totalTargets > 0 ? (lifetimeGoalSavings / totalTargets) * 100 : 0;
+
+  // Active-only buckets
+  const activeGoals = data.savings.filter(g => (g.status ?? 'active') === 'active');
+  const activeGoalAllocation = activeGoals.reduce((sum, g) => sum + g.current, 0);
+  const totalUsedFromGoals = data.savings.reduce((sum, g) => sum + (g.used_amount ?? 0), 0);
+
+  // Real money currently in account = lifetime saved minus everything spent from goals
+  const savingsBalance = Math.max(0, lifetimeGoalSavings - totalUsedFromGoals);
+  // Available = real money minus what's reserved for active goals
+  const availableBalance = savingsBalance - activeGoalAllocation;
+
+  // Backwards-compat alias used elsewhere in this component
+  const totalSavings = lifetimeGoalSavings;
 
   // Generate savings trend from transactions with time period filter
   const savingsTrend = useMemo(() => {
@@ -203,25 +214,44 @@ export const Savings = () => {
     <div className="p-4 space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-foreground">Savings Tracker</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <span className="text-muted-foreground">
-              Saved in Goals: <span className="font-semibold text-foreground">₹{totalSavings.toLocaleString()}</span>
-            </span>
-            <span className="text-muted-foreground">
-              Savings Balance: <span className="font-semibold text-savings">₹{savingsBalance.toLocaleString()}</span>
-            </span>
-            <span className="text-muted-foreground">
-              Available: <span className="font-semibold text-foreground">₹{availableBalance.toLocaleString()}</span>
-            </span>
-          </div>
         </div>
         <Button className="bg-savings text-white" onClick={() => setIsFormOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Add Goal
         </Button>
       </div>
+
+      {/* Financial Summary */}
+      <Card className="bg-gradient-card border-border shadow-card">
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="p-3 rounded-lg bg-savings/10 border border-savings/20">
+              <p className="text-xs text-muted-foreground">💰 Savings Balance</p>
+              <p className="text-base font-bold text-savings">₹{savingsBalance.toLocaleString()}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+              <p className="text-xs text-muted-foreground">🎯 Active Goal Allocation</p>
+              <p className="text-base font-bold text-primary">₹{activeGoalAllocation.toLocaleString()}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-expense/10 border border-expense/20">
+              <p className="text-xs text-muted-foreground">🛒 Total Used from Goals</p>
+              <p className="text-base font-bold text-expense">₹{totalUsedFromGoals.toLocaleString()}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-muted/50 border border-border">
+              <p className="text-xs text-muted-foreground">📊 Lifetime Goal Savings</p>
+              <p className="text-base font-bold text-foreground">₹{lifetimeGoalSavings.toLocaleString()}</p>
+            </div>
+            <div className={`p-3 rounded-lg border ${availableBalance >= 0 ? 'bg-success/10 border-success/30' : 'bg-destructive/10 border-destructive/30'}`}>
+              <p className="text-xs text-muted-foreground">🟢 Available Balance</p>
+              <p className={`text-base font-bold ${availableBalance >= 0 ? 'text-success' : 'text-destructive'}`}>
+                ₹{availableBalance.toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Overall Progress */}
       <Card className="bg-gradient-card border-border shadow-card">
