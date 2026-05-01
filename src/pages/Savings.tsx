@@ -456,13 +456,22 @@ export const Savings = () => {
                       </p>
                     )}
                   </div>
-                  <EditDeleteMenu
-                    onEdit={() => handleEdit(goal.id)}
-                    onDelete={() => handleDelete(goal.id)}
-                    itemName="savings goal"
-                    deleteTitle="Delete Savings Goal"
-                    deleteDescription="Are you sure you want to delete this completed goal?"
-                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => restoreGoal(goal.id)}
+                    >
+                      Restore
+                    </Button>
+                    <EditDeleteMenu
+                      onEdit={() => handleEdit(goal.id)}
+                      onDelete={() => handleDelete(goal.id)}
+                      itemName="savings goal"
+                      deleteTitle="Delete Savings Goal"
+                      deleteDescription="Are you sure you want to delete this completed goal?"
+                    />
+                  </div>
                 </div>
               ))}
             </div>
