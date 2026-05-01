@@ -34,6 +34,7 @@ interface FinancialContextType {
   deleteInvestment: (id: string) => void;
   deleteBudget: (id: string) => void;
   markGoalCompleted: (id: string) => Promise<void>;
+  restoreGoal: (id: string) => Promise<void>;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
@@ -144,6 +145,23 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  const restoreGoal = async (id: string) => {
+    try {
+      const updated = await savingsService.update(id, {
+        status: 'active',
+        completed_date: null,
+      } as any);
+      setData(prev => ({
+        ...prev,
+        savings: prev.savings.map(g => (g.id === id ? updated : g)),
+      }));
+    } catch (error) {
+      console.error('Error restoring goal:', error);
+      const { toast: sonnerToast } = await import('sonner');
+      sonnerToast.error('Failed to restore goal');
+    }
+  };
+
   const markGoalCompleted = async (id: string) => {
     try {
       const updated = await savingsService.update(id, {
@@ -154,9 +172,14 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         ...prev,
         savings: prev.savings.map(g => (g.id === id ? updated : g)),
       }));
-      toast({
-        title: `🎉 Goal '${updated.name}' completed!`,
+      const { toast: sonnerToast } = await import('sonner');
+      sonnerToast.success(`Goal '${updated.name}' marked as completed`, {
         description: 'Moved to your completed goals history.',
+        duration: 8000,
+        action: {
+          label: 'UNDO',
+          onClick: () => { restoreGoal(id); },
+        },
       });
     } catch (error) {
       console.error('Error marking goal completed:', error);
@@ -748,7 +771,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       deleteSavings,
       deleteInvestment,
       deleteBudget,
-      markGoalCompleted
+      markGoalCompleted,
+      restoreGoal
     }}>
       {children}
     </FinancialContext.Provider>
