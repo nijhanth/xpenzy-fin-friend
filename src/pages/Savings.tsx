@@ -59,6 +59,9 @@ export const Savings = () => {
   const totalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
   const totalTargets = data.savings.reduce((sum, goal) => sum + goal.target, 0);
   const overallProgress = totalTargets > 0 ? (totalSavings / totalTargets) * 100 : 0;
+  const totalUsed = data.savings.reduce((sum, goal) => sum + (goal.used_amount ?? 0), 0);
+  const savingsBalance = Math.max(0, totalSavings - totalUsed);
+  const availableBalance = Math.max(0, savingsBalance);
 
   // Generate savings trend from transactions with time period filter
   const savingsTrend = useMemo(() => {
@@ -199,10 +202,20 @@ export const Savings = () => {
   return (
     <div className="p-4 space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Savings Tracker</h1>
-          <p className="text-sm text-muted-foreground">Total: ₹{totalSavings.toLocaleString()}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="text-muted-foreground">
+              Saved in Goals: <span className="font-semibold text-foreground">₹{totalSavings.toLocaleString()}</span>
+            </span>
+            <span className="text-muted-foreground">
+              Savings Balance: <span className="font-semibold text-savings">₹{savingsBalance.toLocaleString()}</span>
+            </span>
+            <span className="text-muted-foreground">
+              Available: <span className="font-semibold text-foreground">₹{availableBalance.toLocaleString()}</span>
+            </span>
+          </div>
         </div>
         <Button className="bg-savings text-white" onClick={() => setIsFormOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
