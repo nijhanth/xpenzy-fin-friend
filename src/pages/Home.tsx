@@ -108,7 +108,9 @@ export const Home = () => {
   const totals = useMemo(() => {
     const totalIncome = data.income.reduce((sum, item) => sum + item.amount, 0);
     const totalExpenses = data.expenses.reduce((sum, item) => sum + item.amount, 0);
-    const totalSavings = data.savings.reduce((sum, item) => sum + (item.current || 0), 0);
+    const lifetimeGoalSavings = data.savings.reduce((sum, item) => sum + (item.current || 0), 0);
+    const totalUsedFromGoals = data.savings.reduce((sum, item) => sum + (item.used_amount || 0), 0);
+    const totalSavings = Math.max(0, lifetimeGoalSavings - totalUsedFromGoals);
     const totalInvestments = data.investments.reduce((sum, item) => sum + item.invested, 0);
     const remainingBalance = totalIncome - totalExpenses;
     return { totalIncome, totalExpenses, totalSavings, totalInvestments, remainingBalance };
