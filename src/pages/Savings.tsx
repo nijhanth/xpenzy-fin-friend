@@ -42,7 +42,7 @@ const savingsTips = [
 ];
 
 export const Savings = () => {
-  const { data, getSavingsTransactions, deleteSavingsTransaction, markGoalCompleted } = useFinancial();
+  const { data, getSavingsTransactions, deleteSavingsTransaction, markGoalCompleted, restoreGoal } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
   const { deleteSavings } = useFinancial();
