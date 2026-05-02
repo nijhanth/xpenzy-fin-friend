@@ -177,7 +177,9 @@ export const Reports = () => {
   const totals = useMemo(() => {
     const totalIncome = filteredData.income.reduce((sum, item) => sum + item.amount, 0);
     const totalExpenses = filteredData.expenses.reduce((sum, item) => sum + item.amount, 0);
-    const totalSavings = filteredData.savings.reduce((sum, item) => sum + item.current, 0);
+    const lifetimeSavings = filteredData.savings.reduce((sum, item) => sum + (item.current || 0), 0);
+    const totalUsedFromGoals = filteredData.savings.reduce((sum, item: any) => sum + (item.used_amount || 0), 0);
+    const totalSavings = Math.max(0, lifetimeSavings - totalUsedFromGoals);
     const totalInvestments = filteredData.investments.reduce((sum, item) => sum + item.current, 0);
     const netBalance = totalIncome - totalExpenses;
 
