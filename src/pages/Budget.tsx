@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, AlertTriangle, CheckCircle, TrendingUp, Calendar } from 'lucide-react';
@@ -35,6 +37,7 @@ export const Budget = () => {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<BudgetCategory | null>(null);
+  const [isUnbudgetedSheetOpen, setIsUnbudgetedSheetOpen] = useState(false);
 
   // Date selection state
   const currentDate = new Date();
@@ -124,17 +127,22 @@ export const Budget = () => {
   }, [filteredBudgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
 
   // Calculate expenses that don't have budgets (Others/Unbudgeted)
-  const unbudgetedExpenses = useMemo(() => {
+  const unbudgetedExpensesList = useMemo(() => {
     const budgetCategoryNames = filteredBudgets.map(b => b.category);
     const allFilteredExpenses = [...getFilteredExpenses('yearly'), ...getFilteredExpenses('monthly'), ...getFilteredExpenses('weekly')];
-    const uniqueExpenses = allFilteredExpenses.filter((expense, index, self) => 
+    const uniqueExpenses = allFilteredExpenses.filter((expense, index, self) =>
       index === self.findIndex(e => e.id === expense.id)
     );
-    
+
     return uniqueExpenses
       .filter(expense => !budgetCategoryNames.includes(expense.category))
-      .reduce((sum, expense) => sum + expense.amount, 0);
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [filteredBudgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
+
+  const unbudgetedExpenses = useMemo(
+    () => unbudgetedExpensesList.reduce((sum, e) => sum + e.amount, 0),
+    [unbudgetedExpensesList]
+  );
 
   const getProgressPercentage = (spent: number, limit: number) => {
     return Math.min((spent / limit) * 100, 100);
@@ -337,18 +345,87 @@ export const Budget = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => setIsUnbudgetedSheetOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setIsUnbudgetedSheetOpen(true);
+            }
+          }}
+          className="cursor-pointer transition-all hover:shadow-elevated hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Unbudgeted</p>
                 <p className="text-2xl font-bold text-orange-500">₹{unbudgetedExpenses.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {unbudgetedExpensesList.length} {unbudgetedExpensesList.length === 1 ? 'expense' : 'expenses'} • Tap to view
+                </p>
               </div>
               <div className="text-3xl">📊</div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Unbudgeted Expenses Bottom Sheet */}
+      <Sheet open={isUnbudgetedSheetOpen} onOpenChange={setIsUnbudgetedSheetOpen}>
+        <SheetContent side="bottom" className="h-[80vh] flex flex-col">
+          <SheetHeader className="text-left">
+            <SheetTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-500" />
+              Unbudgeted Expenses
+            </SheetTitle>
+            <SheetDescription>
+              Expenses without an assigned budget category for the selected period.
+              Total: <span className="font-semibold text-orange-500">₹{unbudgetedExpenses.toLocaleString()}</span>
+            </SheetDescription>
+          </SheetHeader>
+
+          <ScrollArea className="flex-1 mt-4 -mx-6 px-6">
+            {unbudgetedExpensesList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <CheckCircle className="w-12 h-12 text-green-500 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  No unbudgeted expenses for this period.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 pb-6">
+                {unbudgetedExpensesList.map((expense) => (
+                  <div
+                    key={expense.id}
+                    className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{expense.category}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                        <span>{format(new Date(expense.date), 'dd MMM yyyy')}</span>
+                        {expense.subcategory && (
+                          <>
+                            <span>•</span>
+                            <span className="truncate">{expense.subcategory}</span>
+                          </>
+                        )}
+                      </div>
+                      {expense.notes && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate">{expense.notes}</p>
+                      )}
+                    </div>
+                    <p className="ml-3 font-semibold text-destructive whitespace-nowrap">
+                      ₹{expense.amount.toLocaleString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
 
       {/* Add Budget Button */}
       <div className="flex justify-between items-center">
