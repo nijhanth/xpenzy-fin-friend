@@ -159,6 +159,25 @@ export const Home = () => {
     return [min - padding, max + padding];
   }, [trendData]);
 
+  const monthlyData = useMemo(() => {
+    const map = new Map<string, { key: string; label: string; income: number; expense: number; net: number }>();
+    const addEntry = (dateStr: string, amount: number, type: 'income' | 'expense') => {
+      if (!dateStr) return;
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('en', { month: 'short', year: '2-digit' });
+      if (!map.has(key)) map.set(key, { key, label, income: 0, expense: 0, net: 0 });
+      const entry = map.get(key)!;
+      if (type === 'income') entry.income += amount;
+      else entry.expense += amount;
+      entry.net = entry.income - entry.expense;
+    };
+    data.income.forEach(i => addEntry(i.date, i.amount, 'income'));
+    data.expenses.forEach(e => addEntry(e.date, e.amount, 'expense'));
+    return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key)).slice(-12);
+  }, [data.income, data.expenses]);
+
   const currentMonth = new Date().toLocaleDateString('en', { month: 'long', year: 'numeric' });
 
   return (
