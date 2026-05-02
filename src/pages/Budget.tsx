@@ -127,17 +127,22 @@ export const Budget = () => {
   }, [filteredBudgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
 
   // Calculate expenses that don't have budgets (Others/Unbudgeted)
-  const unbudgetedExpenses = useMemo(() => {
+  const unbudgetedExpensesList = useMemo(() => {
     const budgetCategoryNames = filteredBudgets.map(b => b.category);
     const allFilteredExpenses = [...getFilteredExpenses('yearly'), ...getFilteredExpenses('monthly'), ...getFilteredExpenses('weekly')];
-    const uniqueExpenses = allFilteredExpenses.filter((expense, index, self) => 
+    const uniqueExpenses = allFilteredExpenses.filter((expense, index, self) =>
       index === self.findIndex(e => e.id === expense.id)
     );
-    
+
     return uniqueExpenses
       .filter(expense => !budgetCategoryNames.includes(expense.category))
-      .reduce((sum, expense) => sum + expense.amount, 0);
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [filteredBudgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
+
+  const unbudgetedExpenses = useMemo(
+    () => unbudgetedExpensesList.reduce((sum, e) => sum + e.amount, 0),
+    [unbudgetedExpensesList]
+  );
 
   const getProgressPercentage = (spent: number, limit: number) => {
     return Math.min((spent / limit) * 100, 100);
