@@ -37,6 +37,7 @@ export const Budget = () => {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<BudgetCategory | null>(null);
+  const [isUnbudgetedSheetOpen, setIsUnbudgetedSheetOpen] = useState(false);
 
   // Date selection state
   const currentDate = new Date();
