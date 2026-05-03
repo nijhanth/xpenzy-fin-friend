@@ -58,21 +58,24 @@ export const Savings = () => {
   
   // Lifetime: total ever saved across all goals (active + completed)
   const lifetimeGoalSavings = data.savings.reduce((sum, goal) => sum + goal.current, 0);
-  const totalTargets = data.savings.reduce((sum, goal) => sum + goal.target, 0);
-  const overallProgress = totalTargets > 0 ? (lifetimeGoalSavings / totalTargets) * 100 : 0;
+  const totalUsedFromGoals = data.savings.reduce((sum, g) => sum + (g.used_amount ?? 0), 0);
 
-  // Active-only buckets
+  // Active-only buckets — KPI/circle should reflect only active goals
   const activeGoals = data.savings.filter(g => (g.status ?? 'active') === 'active');
   const activeGoalAllocation = activeGoals.reduce((sum, g) => sum + g.current, 0);
-  const totalUsedFromGoals = data.savings.reduce((sum, g) => sum + (g.used_amount ?? 0), 0);
+  const activeTargets = activeGoals.reduce((sum, g) => sum + g.target, 0);
+  const activeUsed = activeGoals.reduce((sum, g) => sum + (g.used_amount ?? 0), 0);
+  const activeRemainingSaved = Math.max(0, activeGoalAllocation - activeUsed);
+  const overallProgress = activeTargets > 0 ? (activeRemainingSaved / activeTargets) * 100 : 0;
+  const hasActiveGoals = activeGoals.length > 0;
 
   // Real money currently in account = lifetime saved minus everything spent from goals
   const savingsBalance = Math.max(0, lifetimeGoalSavings - totalUsedFromGoals);
-  // Available = real money minus what's reserved for active goals
   const availableBalance = savingsBalance - activeGoalAllocation;
 
-  // Backwards-compat alias used elsewhere in this component
-  const totalSavings = lifetimeGoalSavings;
+  // Circle displays active progress
+  const totalSavings = activeRemainingSaved;
+  const totalTargets = activeTargets;
 
   // Generate savings trend from transactions with time period filter
   const savingsTrend = useMemo(() => {
