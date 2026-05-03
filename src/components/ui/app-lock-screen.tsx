@@ -33,16 +33,21 @@ export const AppLockScreen = ({ onUnlock }: AppLockScreenProps) => {
 
   useEffect(() => {
     if (pin.length === 4) {
-      const isValid = verifyPin(pin);
-      if (isValid) {
-        onUnlock();
-      } else {
-        setError(true);
-        setAttempts(prev => prev + 1);
-        setTimeout(() => {
-          setPin('');
-        }, 500);
-      }
+      let cancelled = false;
+      (async () => {
+        const isValid = await verifyPin(pin);
+        if (cancelled) return;
+        if (isValid) {
+          onUnlock();
+        } else {
+          setError(true);
+          setAttempts(prev => prev + 1);
+          setTimeout(() => setPin(''), 500);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
   }, [pin, verifyPin, onUnlock]);
 

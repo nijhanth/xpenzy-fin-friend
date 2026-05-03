@@ -53,10 +53,11 @@ export const PinSetupDialog = ({ open, onOpenChange, mode = 'setup' }: PinSetupD
     onOpenChange(isOpen);
   };
 
-  const handleCurrentPinComplete = (value: string) => {
+  const handleCurrentPinComplete = async (value: string) => {
     setCurrentPin(value);
     if (value.length === 4) {
-      if (verifyPin(value)) {
+      const ok = await verifyPin(value);
+      if (ok) {
         if (mode === 'remove') {
           removePin();
           handleOpenChange(false);
@@ -79,17 +80,14 @@ export const PinSetupDialog = ({ open, onOpenChange, mode = 'setup' }: PinSetupD
     }
   };
 
-  const handleConfirmPinComplete = (value: string) => {
+  const handleConfirmPinComplete = async (value: string) => {
     setConfirmPin(value);
     if (value.length === 4) {
       if (value === newPin) {
-        let success = false;
-        if (mode === 'change') {
-          success = changePin(currentPin, value);
-        } else {
-          success = setupPin(value);
-        }
-        
+        const success = mode === 'change'
+          ? await changePin(currentPin, value)
+          : await setupPin(value);
+
         if (success) {
           handleOpenChange(false);
         } else {
