@@ -276,13 +276,15 @@ export const Savings = () => {
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-foreground">{Math.round(overallProgress)}%</p>
-                  <p className="text-xs text-muted-foreground">Overall</p>
+                  <p className="text-xs text-muted-foreground">{hasActiveGoals ? 'Active' : 'No active goals'}</p>
                 </div>
               </div>
             </div>
             <div>
               <p className="text-lg font-semibold text-foreground">₹{totalSavings.toLocaleString()}</p>
-              <p className="text-sm text-muted-foreground">of ₹{totalTargets.toLocaleString()} goal</p>
+              <p className="text-sm text-muted-foreground">
+                {hasActiveGoals ? `of ₹${totalTargets.toLocaleString()} active goal` : 'No active goals'}
+              </p>
             </div>
           </div>
         </CardContent>
