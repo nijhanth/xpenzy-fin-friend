@@ -47,10 +47,13 @@ const hashPin = async (pin: string, saltHex: string): Promise<string> => {
     false,
     ['deriveBits']
   );
+  const saltBytes = hexToBytes(saltHex);
+  const saltBuffer = new ArrayBuffer(saltBytes.byteLength);
+  new Uint8Array(saltBuffer).set(saltBytes);
   const bits = await crypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
-      salt: hexToBytes(saltHex),
+      salt: saltBuffer,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
