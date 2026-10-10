@@ -99,7 +99,10 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   const navigate = useNavigate();
   const requireSupabaseConfig = (field: string) => {
     if (hasSupabaseConfig) return true;
-    setErrors({ [field]: 'Supabase is not connected yet. Add your project URL and publishable key to .env.local, then restart the dev server.' });
+    const message = import.meta.env.DEV
+      ? 'Supabase is not connected yet. Add your project URL and publishable key to .env.local, then restart the dev server.'
+      : 'Supabase is not configured for this Lovable deployment. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in the project environment, then rebuild and publish.';
+    setErrors({ [field]: message });
     return false;
   };
 
