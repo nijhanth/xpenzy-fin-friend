@@ -19,7 +19,7 @@ import { QuickAddExpense } from '@/components/forms/QuickAddExpense';
 
 const Index = () => {
   const [currentScreen, setCurrentScreen] = useState('dashboard');
-  const [addOpen, setAddOpen] = useState(false;
+  const [addOpen, setAddOpen] = useState(false);
   const { user, loading } = useAuth();
 
   useEffect(() => {
