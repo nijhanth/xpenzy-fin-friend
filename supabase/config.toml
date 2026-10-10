@@ -1,1 +1,4 @@
-project_id = "dfihljpygatycpynsfgi"
+project_id = "vlafgohsqzhzqtcmlapt"
+
+[functions.check-reset-account]
+verify_jwt = false

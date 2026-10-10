@@ -59,12 +59,7 @@ const AuthShell = ({ children, onHome }: { children: React.ReactNode; onHome: ()
           <p className="text-muted-foreground mt-2">Your money, made clearer. <span className="text-primary font-medium">Free, always.</span></p>
         </div>
         <div className="auth-card rounded-3xl p-6 sm:p-8 bg-card border border-border shadow-2xl shadow-primary/5">{children}</div>
-        {!hasSupabaseConfig && (
-          <p role="status" className="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground">
-            Local preview only. Add your Supabase URL and publishable key to `.env.local` to enable sign-in and sign-up.
-          </p>
-        )}
-        <p className="text-center mt-5 text-xs text-muted-foreground">Secure account access · No payment details needed</p>
+        <p className="text-center mt-5 text-xs text-muted-foreground">Secure account access Â· No payment details needed</p>
       </div>
     </div>
   </div>
@@ -102,6 +97,11 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   const { signUp, signIn, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const requireSupabaseConfig = (field: string) => {
+    if (hasSupabaseConfig) return true;
+    setErrors({ [field]: 'Supabase is not connected yet. Add your project URL and publishable key to .env.local, then restart the dev server.' });
+    return false;
+  };
 
   useEffect(() => {
     if (user && view !== 'forgot-reset' && view !== 'forgot-success') {
@@ -115,7 +115,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     };
   }, []);
 
-  const startCooldown = (seconds = 45) => {
+  const startCooldown = (seconds = 120) => {
     setResendCooldown(seconds);
     if (cooldownRef.current) window.clearInterval(cooldownRef.current);
     cooldownRef.current = window.setInterval(() => {
@@ -137,6 +137,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   // ---------- Sign In ----------
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireSupabaseConfig('form')) return;
     const fieldErrors: Record<string, string> = {};
     const emailRes = emailSchema.safeParse(email);
     if (!emailRes.success) fieldErrors.email = emailRes.error.errors[0].message;
@@ -150,7 +151,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
       const msg = error.message || '';
       const friendly =
         msg.toLowerCase().includes('invalid')
-          ? 'Incorrect email or password'
+          ? 'Invalid email or password. Please try again.'
           : msg;
       setErrors({ form: friendly });
       toast({ variant: 'destructive', title: 'Sign In Failed', description: friendly });
@@ -163,6 +164,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   // ---------- Sign Up ----------
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireSupabaseConfig('form')) return;
     const fieldErrors: Record<string, string> = {};
     const nameRes = nameSchema.safeParse(displayName);
     const emailRes = emailSchema.safeParse(email);
@@ -176,20 +178,33 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     if (Object.keys(fieldErrors).length) return;
 
     setIsLoading(true);
-    const { error } = await signUp(email.trim(), password, displayName.trim());
-    if (error) {
-      const friendly = error.message.includes('User already registered')
-        ? 'An account with this email already exists'
-        : error.message;
-      setErrors({ form: friendly });
-      toast({ variant: 'destructive', title: 'Sign Up Failed', description: friendly });
-    } else {
+    try {
+      const { error } = await signUp(email.trim(), password, displayName.trim());
+      if (error) {
+        const code = 'code' in error ? String(error.code) : '';
+        const friendly = code === 'email_address_not_authorized'
+          ? 'Supabase blocked delivery to this address. Configure custom SMTP in Supabase Auth settings.'
+          : code === 'over_email_send_rate_limit'
+            ? 'Supabase email limit reached. Wait before requesting another code, or configure custom SMTP.'
+            : error.message.includes('User already registered')
+              ? 'An account with this email already exists'
+              : error.message;
+        setErrors({ form: friendly });
+        toast({ variant: 'destructive', title: 'Sign Up Failed', description: friendly });
+        return;
+      }
+
       setSignupOtp('');
-      startCooldown(45);
+      startCooldown(120);
       toast({ title: 'Check your email', description: 'Enter the verification code to finish creating your account.' });
       goTo('signup-otp');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Check your connection and try again.';
+      setErrors({ form: message });
+      toast({ variant: 'destructive', title: 'Sign Up Failed', description: message });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleVerifySignupOtp = async (e: React.FormEvent) => {
@@ -231,7 +246,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         toast({ variant: 'destructive', title: 'Could not resend code', description: error.message });
         return;
       }
-      startCooldown(45);
+      startCooldown(120);
       toast({ title: 'New code sent', description: 'Check your inbox and spam folder.' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Check your connection and try again.';
@@ -243,6 +258,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
 
   // ---------- Forgot Password: Send OTP ----------
   const sendResetOtp = async (emailToUse: string) => {
+    if (!requireSupabaseConfig('resetEmail')) return false;
     const emailRes = emailSchema.safeParse(emailToUse);
     if (!emailRes.success) {
       setErrors({ resetEmail: emailRes.error.errors[0].message });
@@ -252,6 +268,22 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     setIsLoading(true);
     setErrors({});
     try {
+      const { data: accountCheck, error: accountCheckError } = await supabase.functions.invoke('check-reset-account', {
+        body: { email: emailToUse.trim() },
+      });
+      if (accountCheckError) {
+        const message = "We couldn't check this email address right now. Please try again in a moment.";
+        setErrors({ resetEmail: message });
+        toast({ variant: 'destructive', title: 'Email check unavailable', description: message });
+        return false;
+      }
+      if (!accountCheck?.exists) {
+        const message = 'No account was found for this email address. Check the address or create a free account.';
+        setErrors({ resetEmail: message });
+        toast({ variant: 'destructive', title: 'Account not found', description: message });
+        return false;
+      }
+
       const { error } = await supabase.auth.resetPasswordForEmail(emailToUse.trim(), {
         redirectTo: window.location.origin + '/auth',
       });
@@ -267,11 +299,8 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         return false;
       }
 
-      startCooldown(45);
-      toast({
-        title: 'Reset email requested',
-        description: 'Check your inbox and spam folder for the reset email.',
-      });
+      startCooldown(120);
+      toast({ title: 'Reset code sent', description: 'Check your inbox and spam folder for the 6-digit code.' });
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Check your connection and try again.';
@@ -286,7 +315,10 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const ok = await sendResetOtp(resetEmail);
-    if (ok) goTo('forgot-otp');
+    if (ok) {
+      setOtp('');
+      goTo('forgot-otp');
+    }
   };
 
   const handleResendOtp = async () => {
@@ -615,7 +647,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
           </div>
           {errors.signupOtp && <p className="text-sm text-destructive text-center">{errors.signupOtp}</p>}
           <Button type="submit" className="w-full" disabled={isLoading || signupOtp.length !== 6}>{isLoading ? 'Verifying...' : 'Verify email and continue'}</Button>
-          <p className="text-center text-sm text-muted-foreground">Didn’t receive a code?{' '}
+          <p className="text-center text-sm text-muted-foreground">Didnâ€™t receive a code?{' '}
             <button type="button" onClick={handleResendSignupOtp} disabled={resendCooldown > 0 || isLoading} className="font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
               {resendCooldown > 0 ? 'Resend in ' + resendCooldown + 's' : 'Resend code'}
             </button>
@@ -664,10 +696,9 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     return (
       <AuthShell onHome={() => navigate('/')}>
         <BackButton to="forgot-email" />
-        <h2 className="text-2xl font-semibold text-foreground mb-2">Verify Code</h2>
+        <h2 className="text-2xl font-semibold text-foreground mb-2">Enter reset code</h2>
         <p className="text-sm text-muted-foreground mb-6">
-          Enter the 6-digit code sent to{' '}
-          <span className="text-foreground font-medium">{resetEmail}</span>
+          Enter the 6-digit code sent to <span className="font-medium text-foreground">{resetEmail}</span>.
         </p>
         <form onSubmit={handleVerifyOtp} className="space-y-5" noValidate>
           <div className="flex justify-center">
