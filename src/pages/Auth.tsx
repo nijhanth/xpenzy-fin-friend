@@ -271,6 +271,22 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     setIsLoading(true);
     setErrors({});
     try {
+      const { data: accountCheck, error: accountCheckError } = await supabase.functions.invoke('check-reset-account', {
+        body: { email: emailToUse.trim() },
+      });
+      if (accountCheckError || typeof accountCheck?.exists !== 'boolean') {
+        const message = 'We could not verify this account, so no code was sent. Please try again in a moment.';
+        setErrors({ resetEmail: message });
+        toast({ variant: 'destructive', title: 'Could not verify email', description: message });
+        return false;
+      }
+      if (!accountCheck.exists) {
+        const message = 'No account was found for this email address. Check the address or create an account.';
+        setErrors({ resetEmail: message });
+        toast({ variant: 'destructive', title: 'Account not found', description: message });
+        return false;
+      }
+
       const { error } = await supabase.auth.resetPasswordForEmail(emailToUse.trim(), {
         redirectTo: window.location.origin + '/auth',
       });
@@ -287,10 +303,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
       }
 
       startCooldown(120);
-      toast({
-        title: 'Check your email',
-        description: 'If an account exists for this email, a reset code has been sent. Check your inbox and spam folder.',
-      });
+      toast({ title: 'Reset code sent', description: 'Check your inbox and spam folder for the 6-digit code.' });
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Check your connection and try again.';
