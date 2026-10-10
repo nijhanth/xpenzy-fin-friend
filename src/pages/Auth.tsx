@@ -182,7 +182,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
 
     setIsLoading(true);
     try {
-      const { error } = await signUp(email.trim(), password, displayName.trim());
+      const { error, user: signupUser, session } = await signUp(email.trim(), password, displayName.trim());
       if (error) {
         const code = 'code' in error ? String(error.code) : '';
         const friendly = code === 'email_address_not_authorized'
@@ -194,6 +194,18 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
               : error.message;
         setErrors({ form: friendly });
         toast({ variant: 'destructive', title: 'Sign Up Failed', description: friendly });
+        return;
+      }
+
+      if (session) {
+        toast({ title: 'Account created', description: 'Your email is verified and your account is ready.' });
+        return;
+      }
+
+      if (!signupUser || signupUser.identities?.length === 0) {
+        const friendly = 'This email may already be registered. Try signing in or resetting your password.';
+        setErrors({ form: friendly });
+        toast({ variant: 'destructive', title: 'Could not create account', description: friendly });
         return;
       }
 
