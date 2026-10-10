@@ -1,90 +1,98 @@
-import { 
-  Home, 
-  PiggyBank, 
-  CreditCard, 
-  TrendingUp, 
-  BarChart3, 
-  Target,
-  Settings,
-  Wallet,
-  MessageSquare,
-  Calendar,
-  FileText,
-  StickyNote,
-  Shield
+import { useState } from 'react';
+import {
+  Home, List, Target, BarChart3, MoreHorizontal, Plus, Wallet, PiggyBank, TrendingUp,
+  MessageSquare, Calendar, StickyNote, Shield, Settings, LayoutGrid,
 } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
-interface NavigationItem {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  path: string;
-}
-
-const navigationItems: NavigationItem[] = [
-  { id: 'home', label: 'Home', icon: Home, path: '/' },
-  { id: 'income', label: 'Income', icon: Wallet, path: '/income' },
-  { id: 'expenses', label: 'Expenses', icon: CreditCard, path: '/expenses' },
-  { id: 'savings', label: 'Savings', icon: PiggyBank, path: '/savings' },
-  { id: 'investments', label: 'Investment', icon: TrendingUp, path: '/investments' },
-  { id: 'message', label: 'Message', icon: MessageSquare, path: '/message' },
-  { id: 'calendar', label: 'Calendar', icon: Calendar, path: '/calendar' },
-  { id: 'budget', label: 'Budget', icon: Target, path: '/budget' },
-  { id: 'reports', label: 'Reports', icon: BarChart3, path: '/reports' },
-  { id: 'notes', label: 'Notes', icon: StickyNote, path: '/notes' },
-  { id: 'security', label: 'Security', icon: Shield, path: '/security' },
-  { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
+const mainItems = [
+  { id: 'dashboard', label: 'Home', icon: Home },
+  { id: 'expenses', label: 'Transactions', icon: List },
+  { id: 'budget', label: 'Budgets', icon: Target },
+  { id: 'reports', label: 'Insights', icon: BarChart3 },
 ];
 
-interface BottomNavigationProps {
+const moreItems = [
+  { id: 'income', label: 'Income', icon: Wallet },
+  { id: 'savings', label: 'Savings', icon: PiggyBank },
+  { id: 'investments', label: 'Investments', icon: TrendingUp },
+  { id: 'home', label: 'Detailed overview', icon: LayoutGrid },
+  { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'notes', label: 'Notes', icon: StickyNote },
+  { id: 'message', label: 'Messages', icon: MessageSquare },
+  { id: 'security', label: 'Security', icon: Shield },
+  { id: 'settings', label: 'Settings', icon: Settings },
+];
+
+interface Props {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onAdd: () => void;
 }
 
-export const BottomNavigation = ({ activeTab, onTabChange }: BottomNavigationProps) => {
+export const BottomNavigation = ({ activeTab, onTabChange, onAdd }: Props) => {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const inMore = moreItems.some((i) => i.id === activeTab);
+
+  const NavBtn = ({ id, label, icon: Icon, active, onClick }: any) => (
+    <button
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'flex flex-col items-center justify-center gap-1 flex-1 py-2 rounded-xl text-xs transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        active ? 'text-primary font-semibold' : 'text-muted-foreground hover:text-foreground'
+      )}
+    >
+      <Icon className="w-5 h-5" aria-hidden />
+      <span>{label}</span>
+    </button>
+  );
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-lg border-t border-border shadow-elevated z-50">
-      {/* Desktop: All items visible, Mobile: Horizontal scroll */}
-      <div className="relative px-2 py-3 max-w-7xl mx-auto overflow-x-auto scrollbar-hide">
-        <div className="flex items-center justify-around md:justify-center gap-1 md:gap-2 min-w-max md:min-w-0">
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            
-            return (
+    <>
+      <nav aria-label="Main" className="fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur border-t border-border">
+        <div className="max-w-2xl mx-auto flex items-center px-2 pb-[env(safe-area-inset-bottom)]">
+          {mainItems.slice(0, 2).map((i) => (
+            <NavBtn key={i.id} {...i} active={activeTab === i.id} onClick={() => onTabChange(i.id)} />
+          ))}
+          <div className="flex-1 flex justify-center">
+            <button
+              onClick={onAdd}
+              aria-label="Add expense"
+              className="-mt-6 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/40"
+            >
+              <Plus className="w-7 h-7" />
+            </button>
+          </div>
+          {mainItems.slice(2).map((i) => (
+            <NavBtn key={i.id} {...i} active={activeTab === i.id} onClick={() => onTabChange(i.id)} />
+          ))}
+          <NavBtn id="more" label="More" icon={MoreHorizontal} active={inMore} onClick={() => setMoreOpen(true)} />
+        </div>
+      </nav>
+
+      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl">
+          <SheetHeader><SheetTitle>More</SheetTitle></SheetHeader>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 py-4">
+            {moreItems.map(({ id, label, icon: Icon }) => (
               <button
-                key={item.id}
-                onClick={() => onTabChange(item.id)}
+                key={id}
+                onClick={() => { onTabChange(id); setMoreOpen(false); }}
                 className={cn(
-                  "flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300",
-                  "min-w-[55px] min-h-[55px] relative overflow-hidden flex-shrink-0",
-                  isActive 
-                    ? "bg-gradient-primary text-primary-foreground shadow-glow scale-110" 
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50 hover:scale-105"
+                  'flex flex-col items-center gap-2 p-3 rounded-xl text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  activeTab === id ? 'bg-secondary text-primary font-medium' : 'hover:bg-muted'
                 )}
               >
-                {isActive && (
-                  <div className="absolute inset-0 bg-gradient-primary opacity-20 animate-pulse" />
-                )}
-                <Icon className={cn(
-                  "w-5 h-5 mb-1 transition-all duration-300", 
-                  isActive && "drop-shadow-sm animate-bounce"
-                )} />
-                <span className={cn(
-                  "text-xs font-medium transition-all duration-300",
-                  isActive ? "font-bold" : "font-normal"
-                )}>
-                  {item.label}
-                </span>
-                {isActive && (
-                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-primary-foreground rounded-full" />
-                )}
+                <Icon className="w-5 h-5" aria-hidden />
+                {label}
               </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 };

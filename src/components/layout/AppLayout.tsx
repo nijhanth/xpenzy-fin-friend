@@ -7,24 +7,12 @@ interface AppLayoutProps {
   className?: string;
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onAdd: () => void;
 }
 
-export const AppLayout = ({ children, className, activeTab, onTabChange }: AppLayoutProps) => {
-  return (
-    <div className="min-h-screen bg-gradient-auth-bg relative font-xpenzy">
-      {/* Main Content */}
-      <main className={cn(
-        "pb-20 min-h-screen",
-        className
-      )}>
-        {children}
-      </main>
-      
-      {/* Bottom Navigation */}
-      <BottomNavigation 
-        activeTab={activeTab} 
-        onTabChange={onTabChange} 
-      />
-    </div>
-  );
-};
+export const AppLayout = ({ children, className, activeTab, onTabChange, onAdd }: AppLayoutProps) => (
+  <div className="min-h-screen bg-background relative font-xpenzy">
+    <main className={cn('pb-24 min-h-screen', className)}>{children}</main>
+    <BottomNavigation activeTab={activeTab} onTabChange={onTabChange} onAdd={onAdd} />
+  </div>
+);
