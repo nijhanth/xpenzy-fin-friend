@@ -5,7 +5,10 @@ import { brokeredPreviewStorage } from './previewAuthStorage';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const clientUrl = SUPABASE_URL || 'https://supabase-not-configured.invalid';
+const clientKey = SUPABASE_PUBLISHABLE_KEY || 'preview-only-key';
 
+export const hasSupabaseConfig = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
@@ -34,9 +37,9 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(clientUrl, clientKey, {
   global: {
-    fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
+    fetch: createSupabaseFetch(clientKey),
   },
   auth: {
     storage: brokeredPreviewStorage(),

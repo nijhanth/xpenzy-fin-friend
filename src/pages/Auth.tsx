@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { hasSupabaseConfig, supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,6 +45,29 @@ type View =
 interface AuthProps {
   onAuthSuccess: () => void;
 }
+
+const AuthShell = ({ children, onHome }: { children: React.ReactNode; onHome: () => void }) => (
+  <div className="min-h-screen relative overflow-hidden bg-[radial-gradient(ellipse_at_top_left,_hsl(var(--primary)/.16),_transparent_42%),linear-gradient(135deg,hsl(var(--background)),hsl(var(--secondary)/.55))] font-poppins">
+    <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-8">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-7">
+          <button type="button" onClick={onHome} className="inline-flex flex-col items-center justify-center hover:opacity-80 transition-opacity">
+            <FinanceLogo className="w-14 h-14 mb-2" />
+            <span className="text-3xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent tracking-tight">Xpenzy</span>
+          </button>
+          <p className="text-muted-foreground mt-2">Your money, made clearer. <span className="text-primary font-medium">Free, always.</span></p>
+        </div>
+        <div className="rounded-3xl p-6 sm:p-8 bg-card border border-border shadow-2xl shadow-primary/5">{children}</div>
+        {!hasSupabaseConfig && (
+          <p role="status" className="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground">
+            Local preview only. Add your Supabase URL and publishable key to `.env.local` to enable sign-in and sign-up.
+          </p>
+        )}
+        <p className="text-center mt-5 text-xs text-muted-foreground">Secure account access · No payment details needed</p>
+      </div>
+    </div>
+  </div>
+);
 
 export const Auth = ({ onAuthSuccess }: AuthProps) => {
   const [view, setView] = useState<View>('entry');
@@ -251,45 +274,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     goTo('forgot-success');
   };
 
-  // ---------- Layout helpers ----------
-  const Shell = ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 font-poppins">
-      <div className="absolute inset-0 opacity-10">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `linear-gradient(45deg, hsl(var(--primary)) 1px, transparent 1px), linear-gradient(-45deg, hsl(var(--accent)) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px',
-          }}
-        />
-      </div>
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <button
-              onClick={() => navigate('/')}
-              className="inline-flex flex-col items-center justify-center mb-4 hover:opacity-80 transition-opacity"
-            >
-              <FinanceLogo className="w-20 h-20 mb-2" />
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent tracking-tight">
-                Xpenzy
-              </h1>
-            </button>
-            <p className="text-muted-foreground mt-2 text-lg">Smart Finance Management</p>
-          </div>
-
-          <div className="rounded-2xl p-8 bg-card/90 backdrop-blur-sm border border-border shadow-xl">
-            {children}
-          </div>
-
-          <div className="text-center mt-6 text-muted-foreground">
-            <p className="text-sm">Your financial journey starts here ✨</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
+  // Stable layout component prevents form remounts while typing.
   const BackButton = ({ to }: { to: View }) => (
     <button
       type="button"
@@ -303,7 +288,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   // ---------- Views ----------
   if (view === 'entry') {
     return (
-      <Shell>
+      <AuthShell onHome={() => navigate('/') }>
         <div className="space-y-4">
           <h2 className="text-2xl font-semibold text-center text-foreground">Welcome</h2>
           <p className="text-center text-muted-foreground text-sm">
@@ -320,13 +305,13 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
             Sign Up
           </Button>
         </div>
-      </Shell>
+      </AuthShell>
     );
   }
 
   if (view === 'signin') {
     return (
-      <Shell>
+      <AuthShell onHome={() => navigate('/')}>
         <BackButton to="entry" />
         <h2 className="text-2xl font-semibold text-foreground mb-6">Sign In</h2>
         <form onSubmit={handleSignIn} className="space-y-5" noValidate>
@@ -415,13 +400,13 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
             </button>
           </p>
         </form>
-      </Shell>
+      </AuthShell>
     );
   }
 
   if (view === 'signup') {
     return (
-      <Shell>
+      <AuthShell onHome={() => navigate('/')}>
         <BackButton to="entry" />
         <h2 className="text-2xl font-semibold text-foreground mb-6">Create Account</h2>
         <form onSubmit={handleSignUp} className="space-y-4" noValidate>
@@ -541,13 +526,13 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
             </button>
           </p>
         </form>
-      </Shell>
+      </AuthShell>
     );
   }
 
   if (view === 'forgot-email') {
     return (
-      <Shell>
+      <AuthShell onHome={() => navigate('/')}>
         <BackButton to="signin" />
         <h2 className="text-2xl font-semibold text-foreground mb-2">Forgot Password</h2>
         <p className="text-sm text-muted-foreground mb-6">
@@ -576,13 +561,13 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
             {isLoading ? 'Sending...' : 'Send OTP'}
           </Button>
         </form>
-      </Shell>
+      </AuthShell>
     );
   }
 
   if (view === 'forgot-otp') {
     return (
-      <Shell>
+      <AuthShell onHome={() => navigate('/')}>
         <BackButton to="forgot-email" />
         <h2 className="text-2xl font-semibold text-foreground mb-2">Verify Code</h2>
         <p className="text-sm text-muted-foreground mb-6">
@@ -622,13 +607,13 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
             </button>
           </div>
         </form>
-      </Shell>
+      </AuthShell>
     );
   }
 
   if (view === 'forgot-reset') {
     return (
-      <Shell>
+      <AuthShell onHome={() => navigate('/')}>
         <div className="flex items-center gap-2 mb-4 text-primary">
           <ShieldCheck className="h-5 w-5" />
           <span className="text-sm font-medium">Code verified</span>
@@ -698,13 +683,13 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
             {isLoading ? 'Updating...' : 'Update Password'}
           </Button>
         </form>
-      </Shell>
+      </AuthShell>
     );
   }
 
   if (view === 'forgot-success') {
     return (
-      <Shell>
+      <AuthShell onHome={() => navigate('/')}>
         <div className="text-center space-y-4 py-4">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary">
             <CheckCircle2 className="h-10 w-10" />
@@ -725,7 +710,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
             Go to Login
           </Button>
         </div>
-      </Shell>
+      </AuthShell>
     );
   }
 

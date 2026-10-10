@@ -16,7 +16,6 @@ import {
   Target,
   ArrowRight,
   CheckCircle,
-  Star,
   Download
 } from 'lucide-react';
 import financeHero from '@/assets/finance-chart-hero.jpg';
@@ -66,35 +65,13 @@ const Landing = () => {
     }
   ];
 
-  const testimonials = [
-    {
-      name: "Sarah Chen",
-      role: "Financial Advisor",
-      content: "Xpenzy has revolutionized how I track client portfolios. The analytics are incredibly detailed.",
-      rating: 5
-    },
-    {
-      name: "Michael Rodriguez", 
-      role: "Small Business Owner",
-      content: "Finally, a finance app that understands business needs. The reporting features are outstanding.",
-      rating: 5
-    },
-    {
-      name: "Emily Johnson",
-      role: "Personal Investor",
-      content: "I've tried many finance apps, but Xpenzy's UI and insights are in a league of their own.",
-      rating: 5
-    }
-  ];
-
   const stats = [
-    { value: "50K+", label: "Active Users" },
-    { value: "$2.5M+", label: "Managed Assets" },
-    { value: "99.9%", label: "Uptime" },
-    { value: "4.9/5", label: "User Rating" }
+    { value: "Free", label: "No subscription" },
+    { value: "$0", label: "No payment required" },
+    { value: "Always", label: "No trial period" },
   ];
 
-  return (
+    return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Navigation */}
       <nav className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border">
@@ -153,20 +130,19 @@ const Landing = () => {
             <div className="space-y-8">
               <Badge variant="secondary" className="w-fit">
                 <Zap className="w-4 h-4 mr-2" />
-                AI-Powered Finance Management
+                Personal finance, made simple
               </Badge>
               
               <div className="space-y-6">
                 <h1 className="text-5xl lg:text-6xl font-bold font-poppins leading-tight">
-                  Take Control of Your
+                  A clearer view of your
                   <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                    {" "}Financial Future
+                    {" "}finances
                   </span>
                 </h1>
                 
                 <p className="text-xl text-muted-foreground leading-relaxed">
-                  Streamline your finances with intelligent tracking, powerful analytics, 
-                  and personalized insights. Make informed decisions with data-driven recommendations.
+                  Track spending, plan budgets, and understand where your money goes with one calm, easy-to-use workspace.
                 </p>
               </div>
 
@@ -176,7 +152,7 @@ const Landing = () => {
                   onClick={() => navigate('/auth')}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 py-6 text-lg group"
                 >
-                  Get Started
+                  Get started — it’s free
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </div>
@@ -265,44 +241,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-24 bg-card/30">
-        <div className="container mx-auto px-6">
-          <div className="text-center mb-16">
-            <Badge variant="secondary" className="mb-4">
-              Testimonials
-            </Badge>
-            <h2 className="text-4xl font-bold font-poppins mb-4">
-              Trusted by Finance Professionals
-            </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              See what our users have to say about their experience with Xpenzy.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <Card key={index} className="bg-card border-border">
-                <CardContent className="p-8">
-                  <div className="flex mb-4">
-                    {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
-                    ))}
-                  </div>
-                  <p className="text-muted-foreground mb-6 leading-relaxed">
-                    "{testimonial.content}"
-                  </p>
-                  <div>
-                    <div className="font-semibold">{testimonial.name}</div>
-                    <div className="text-sm text-muted-foreground">{testimonial.role}</div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* CTA Section */}
       <section className="py-24 bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10">
         <div className="container mx-auto px-6 text-center">
@@ -311,7 +249,7 @@ const Landing = () => {
               Ready to Transform Your Finances?
             </h2>
             <p className="text-xl text-muted-foreground">
-              Join thousands of users who have already taken control of their financial future with Xpenzy.
+              Everything you need to organize your money, with no subscription and no payment details required.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -332,11 +270,11 @@ const Landing = () => {
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle className="w-4 h-4 text-primary" />
-                30-day free trial
+                Free to use, always
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle className="w-4 h-4 text-primary" />
-                Cancel anytime
+                No card required
               </div>
             </div>
           </div>
@@ -361,7 +299,7 @@ const Landing = () => {
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-muted-foreground">
                 <li><a href="#" className="hover:text-foreground transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Pricing</a></li>
+                <li><a href="#" className="hover:text-foreground transition-colors">Free to use</a></li>
                 <li><a href="#" className="hover:text-foreground transition-colors">Security</a></li>
                 <li><a href="#" className="hover:text-foreground transition-colors">Integrations</a></li>
               </ul>
