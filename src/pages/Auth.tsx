@@ -287,7 +287,10 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
       }
 
       startCooldown(120);
-      toast({ title: 'Reset code sent', description: 'Check your inbox and spam folder for the 6-digit code.' });
+      toast({
+        title: 'Check your email',
+        description: 'If an account exists for this email, a reset code has been sent. Check your inbox and spam folder.',
+      });
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Check your connection and try again.';
