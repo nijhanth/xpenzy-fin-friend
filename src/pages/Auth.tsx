@@ -271,22 +271,6 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     setIsLoading(true);
     setErrors({});
     try {
-      const { data: accountCheck, error: accountCheckError } = await supabase.functions.invoke('check-reset-account', {
-        body: { email: emailToUse.trim() },
-      });
-      if (accountCheckError) {
-        const message = "We couldn't check this email address right now. Please try again in a moment.";
-        setErrors({ resetEmail: message });
-        toast({ variant: 'destructive', title: 'Email check unavailable', description: message });
-        return false;
-      }
-      if (!accountCheck?.exists) {
-        const message = 'No account was found for this email address. Check the address or create a free account.';
-        setErrors({ resetEmail: message });
-        toast({ variant: 'destructive', title: 'Account not found', description: message });
-        return false;
-      }
-
       const { error } = await supabase.auth.resetPasswordForEmail(emailToUse.trim(), {
         redirectTo: window.location.origin + '/auth',
       });
