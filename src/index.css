@@ -19,29 +19,29 @@
 @layer base {
   :root {
     /* Background & Base */
-    --background: 210 20% 98%;
-    --foreground: 215 28% 17%;
+    --background: 80 14% 97%;
+    --foreground: 146 15% 14%;
 
     /* Cards & Surfaces */
     --card: 0 0% 100%;
-    --card-foreground: 215 28% 17%;
+    --card-foreground: 146 15% 14%;
 
     /* Popovers & Overlays */
     --popover: 0 0% 100%;
-    --popover-foreground: 215 28% 17%;
+    --popover-foreground: 146 15% 14%;
 
     /* Primary - Finance Green */
-    --primary: 142 76% 36%;
+    --primary: 145 55% 40%;
     --primary-foreground: 0 0% 100%;
     --primary-glow: 142 70% 45%;
 
     /* Secondary - Professional Blue */
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 215 28% 17%;
+    --secondary: 140 30% 93%;
+    --secondary-foreground: 146 15% 14%;
 
     /* Muted - Subtle Gray */
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 100 12% 93%;
+    --muted-foreground: 146 8% 40%;
 
     /* Accent - Bright Blue */
     --accent: 212 95% 68%;
@@ -60,9 +60,9 @@
     --destructive-foreground: 0 0% 100%;
 
     /* Borders & Inputs */
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 142 76% 36%;
+    --border: 100 12% 88%;
+    --input: 100 12% 88%;
+    --ring: 145 55% 40%;
 
     /* Design System Extensions */
     --radius: 0.75rem;
