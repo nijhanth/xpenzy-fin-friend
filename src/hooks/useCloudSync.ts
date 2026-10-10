@@ -13,7 +13,7 @@ export const useCloudSync = () => {
   const { status, uploadBackup, syncing, hasProviderToken } = useGoogleDriveBackup();
   const { toast } = useToast();
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const getLastSyncKey = useCallback(() => {
     return user ? `${LAST_SYNC_KEY}_${user.id}` : null;
