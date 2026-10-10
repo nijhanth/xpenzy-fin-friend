@@ -37,6 +37,7 @@ type View =
   | 'entry'
   | 'signin'
   | 'signup'
+  | 'signup-otp'
   | 'forgot-email'
   | 'forgot-otp'
   | 'forgot-reset'
@@ -78,6 +79,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [signupOtp, setSignupOtp] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -182,13 +184,61 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
       setErrors({ form: friendly });
       toast({ variant: 'destructive', title: 'Sign Up Failed', description: friendly });
     } else {
-      toast({
-        title: 'Account Created!',
-        description: 'Check your email to verify your account.',
-      });
-      goTo('signin');
+      setSignupOtp('');
+      startCooldown(45);
+      toast({ title: 'Check your email', description: 'Enter the verification code to finish creating your account.' });
+      goTo('signup-otp');
     }
     setIsLoading(false);
+  };
+
+  const handleVerifySignupOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (signupOtp.length !== 6) {
+      setErrors({ signupOtp: 'Enter the 6-digit code from your email.' });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: signupOtp, type: 'email' });
+      if (error) {
+        setErrors({ signupOtp: 'That code is invalid or expired. Request a new code and try again.' });
+        toast({ variant: 'destructive', title: 'Email verification failed', description: error.message });
+        return;
+      }
+      toast({ title: 'Email verified', description: 'Your account is ready.' });
+      onAuthSuccess();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Check your connection and try again.';
+      setErrors({ signupOtp: message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendSignupOtp = async () => {
+    if (resendCooldown > 0 || isLoading) return;
+    setIsLoading(true);
+    setErrors({});
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+        options: { emailRedirectTo: window.location.origin + '/' },
+      });
+      if (error) {
+        setErrors({ signupOtp: error.message });
+        toast({ variant: 'destructive', title: 'Could not resend code', description: error.message });
+        return;
+      }
+      startCooldown(45);
+      toast({ title: 'New code sent', description: 'Check your inbox and spam folder.' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Check your connection and try again.';
+      setErrors({ signupOtp: message });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ---------- Forgot Password: Send OTP ----------
@@ -198,22 +248,39 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
       setErrors({ resetEmail: emailRes.error.errors[0].message });
       return false;
     }
+
     setIsLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(emailToUse.trim(), {
-      redirectTo: `${window.location.origin}/auth`,
-    });
-    setIsLoading(false);
-    if (error) {
-      setErrors({ resetEmail: error.message });
-      toast({ variant: 'destructive', title: 'Could not send code', description: error.message });
+    setErrors({});
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(emailToUse.trim(), {
+        redirectTo: window.location.origin + '/auth',
+      });
+      if (error) {
+        const code = 'code' in error ? String(error.code) : '';
+        const message = code === 'email_address_not_authorized'
+          ? 'This Supabase project only sends email to organization members. Configure custom SMTP in Supabase Auth settings to email other users.'
+          : code === 'over_email_send_rate_limit'
+            ? 'Too many reset emails were requested. Wait a while before trying again.'
+            : error.message;
+        setErrors({ resetEmail: message });
+        toast({ variant: 'destructive', title: 'Could not send reset email', description: message });
+        return false;
+      }
+
+      startCooldown(45);
+      toast({
+        title: 'Reset email requested',
+        description: 'Check your inbox and spam folder for the reset email.',
+      });
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Check your connection and try again.';
+      setErrors({ resetEmail: message });
+      toast({ variant: 'destructive', title: 'Could not send reset email', description: message });
       return false;
+    } finally {
+      setIsLoading(false);
     }
-    startCooldown(45);
-    toast({
-      title: 'Verification code sent',
-      description: 'Check your email for the 6-digit code.',
-    });
-    return true;
   };
 
   const handleSendOtp = async (e: React.FormEvent) => {
@@ -527,6 +594,30 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
               className="text-primary hover:underline font-medium"
             >
               Sign in
+            </button>
+          </p>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  if (view === 'signup-otp') {
+    return (
+      <AuthShell onHome={() => navigate('/')}>
+        <BackButton to="signup" />
+        <h2 className="text-2xl font-semibold text-foreground mb-2">Verify your email</h2>
+        <p className="text-sm text-muted-foreground mb-6">Enter the 6-digit code we sent to <span className="font-medium text-foreground">{email}</span> to finish creating your account.</p>
+        <form onSubmit={handleVerifySignupOtp} className="space-y-5" noValidate>
+          <div className="flex justify-center">
+            <InputOTP maxLength={6} value={signupOtp} onChange={setSignupOtp}>
+              <InputOTPGroup><InputOTPSlot index={0} /><InputOTPSlot index={1} /><InputOTPSlot index={2} /><InputOTPSlot index={3} /><InputOTPSlot index={4} /><InputOTPSlot index={5} /></InputOTPGroup>
+            </InputOTP>
+          </div>
+          {errors.signupOtp && <p className="text-sm text-destructive text-center">{errors.signupOtp}</p>}
+          <Button type="submit" className="w-full" disabled={isLoading || signupOtp.length !== 6}>{isLoading ? 'Verifying...' : 'Verify email and continue'}</Button>
+          <p className="text-center text-sm text-muted-foreground">Didn’t receive a code?{' '}
+            <button type="button" onClick={handleResendSignupOtp} disabled={resendCooldown > 0 || isLoading} className="font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
+              {resendCooldown > 0 ? 'Resend in ' + resendCooldown + 's' : 'Resend code'}
             </button>
           </p>
         </form>
