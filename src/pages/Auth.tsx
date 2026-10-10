@@ -183,7 +183,11 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     setIsLoading(true);
     try {
       const { error, user: signupUser, session } = await signUp(email.trim(), password, displayName.trim());
-      if (error) {
+      const isExistingSignup = Boolean(
+        error?.message.toLowerCase().includes('user already registered') || signupUser?.identities?.length === 0,
+      );
+
+      if (error && !isExistingSignup) {
         const code = 'code' in error ? String(error.code) : '';
         const friendly = code === 'email_address_not_authorized'
           ? 'Supabase blocked delivery to this address. Configure custom SMTP in Supabase Auth settings.'
@@ -202,10 +206,36 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         return;
       }
 
-      if (!signupUser || signupUser.identities?.length === 0) {
-        const friendly = 'This email may already be registered. Try signing in or resetting your password.';
+      if (isExistingSignup) {
+        const { error: resendError } = await supabase.auth.resend({
+          type: 'signup',
+          email: email.trim(),
+          options: { emailRedirectTo: window.location.origin + '/' },
+        });
+        if (resendError) {
+          const code = 'code' in resendError ? String(resendError.code) : '';
+          const isConfirmed = resendError.message.toLowerCase().includes('already confirmed');
+          const friendly = isConfirmed
+            ? 'This email is already confirmed. Sign in or reset your password.'
+            : code === 'over_email_send_rate_limit'
+              ? 'A code was requested recently. Wait a while before trying again.'
+              : resendError.message;
+          setErrors({ form: friendly });
+          toast({ variant: 'destructive', title: 'Could not resend code', description: friendly });
+          return;
+        }
+
+        setSignupOtp('');
+        startCooldown(120);
+        goTo('signup-otp');
+        toast({ title: 'Check your email', description: 'If this signup is still unverified, a new confirmation code has been sent.' });
+        return;
+      }
+
+      if (!signupUser) {
+        const friendly = 'We could not start signup. Please try again.';
         setErrors({ form: friendly });
-        toast({ variant: 'destructive', title: 'Could not create account', description: friendly });
+        toast({ variant: 'destructive', title: 'Sign Up Failed', description: friendly });
         return;
       }
 
