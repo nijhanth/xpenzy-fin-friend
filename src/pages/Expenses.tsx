@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, AreaChart, Area, ReferenceLine } from 'recharts';
-import { Plus, CreditCard, Calendar, TrendingDown, ShoppingBag, BarChart3, Filter } from 'lucide-react';
+import { Plus, CreditCard, Calendar, TrendingDown, ShoppingBag, BarChart3, Filter, Search } from 'lucide-react';
 
 // Trade-style tooltip for donut chart
 const DonutChartTooltip = ({ active, payload }: any) => {
@@ -49,6 +49,7 @@ const EXPENSE_COLORS = [
 ];
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -72,6 +73,13 @@ export const Expenses = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedWeek, setSelectedWeek] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+
+  const categories = useMemo(
+    () => [...new Set(data.expenses.map((expense) => expense.category))].sort((a, b) => a.localeCompare(b)),
+    [data.expenses]
+  );
 
   // Generate years from expenses data
   const availableYears = useMemo(() => {
@@ -133,11 +141,9 @@ export const Expenses = () => {
 
     // Filter by specific date first
     if (selectedDate && selectedDate !== 'all') {
-      return filtered.filter(expense => expense.date === selectedDate);
-    }
-
-    // Filter by week
-    if (selectedWeek && selectedWeek !== 'all' && selectedYear && selectedMonth && selectedMonth !== 'all') {
+      filtered = filtered.filter(expense => expense.date === selectedDate);
+    } else if (selectedWeek && selectedWeek !== 'all' && selectedYear && selectedMonth && selectedMonth !== 'all') {
+      // Filter by week
       const week = availableWeeks.find(w => w.value === selectedWeek);
       if (week) {
         filtered = filtered.filter(expense => {
@@ -168,8 +174,14 @@ export const Expenses = () => {
       });
     }
 
-    return filtered;
-  }, [data.expenses, selectedYear, selectedMonth, selectedWeek, selectedDate, availableWeeks]);
+    const query = searchQuery.trim().toLocaleLowerCase();
+    return filtered.filter((expense) => {
+      const matchesQuery = !query || [expense.category, expense.notes, expense.subcategory, expense.paymentMode]
+        .some((value) => value?.toLocaleLowerCase().includes(query));
+      const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter;
+      return matchesQuery && matchesCategory;
+    });
+  }, [data.expenses, selectedYear, selectedMonth, selectedWeek, selectedDate, availableWeeks, searchQuery, categoryFilter]);
 
   const totalExpenses = filteredExpenses.reduce((sum, entry) => sum + entry.amount, 0);
 
@@ -247,7 +259,7 @@ export const Expenses = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Expense Tracker</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Transactions</h1>
           <p className="text-sm text-muted-foreground">Total: ₹{totalExpenses.toLocaleString()}</p>
         </div>
         <Button className="bg-gradient-expense" onClick={() => setIsFormOpen(true)}>
@@ -256,8 +268,36 @@ export const Expenses = () => {
         </Button>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            id="transaction-search"
+            aria-label="Search transactions"
+            placeholder="Search category, note, or payment method"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger aria-label="Filter by category">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Date Filters */}
-      <Card className="bg-gradient-card border-border shadow-card">
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center gap-2 py-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Filter className="h-4 w-4" aria-hidden />
+          Filter by date
+        </summary>
+      <Card className="mt-3 bg-gradient-card border-border shadow-card">
         <CardHeader>
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Filter className="w-5 h-5" />
@@ -346,9 +386,14 @@ export const Expenses = () => {
           </div>
         </CardContent>
       </Card>
+      </details>
 
       {/* Charts Section */}
-      <div className="space-y-6">
+      <details className="group">
+      <summary className="cursor-pointer list-none border-b border-border py-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        Spending breakdown
+      </summary>
+      <div className="mt-4 space-y-6">
         {/* Expense by Category Donut Chart - Trade Style */}
         <Card className="relative overflow-hidden bg-card/50 backdrop-blur-sm border-border/50 shadow-xl">
           {/* Background gradient */}
@@ -547,13 +592,16 @@ export const Expenses = () => {
           </CardContent>
         </Card>
       </div>
+      </details>
 
       {/* Expense Entries List */}
       <Card className="bg-gradient-card border-border shadow-card">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <CreditCard className="w-5 h-5" />
-            Recent Expenses
+            {searchQuery || categoryFilter !== 'all' || selectedDate !== 'all' || selectedMonth !== 'all'
+              ? `${filteredExpenses.length} matching transactions`
+              : 'Recent transactions'}
           </CardTitle>
           <Button variant="outline" size="sm" onClick={() => handleViewReport('recent')}>
             <BarChart3 className="w-4 h-4 mr-2" />
@@ -600,6 +648,20 @@ export const Expenses = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : data.expenses.length ? (
+            <div className="py-12 text-center text-muted-foreground">
+              <Search className="mx-auto mb-4 h-8 w-8" aria-hidden />
+              <h3 className="font-medium text-foreground">No matching transactions</h3>
+              <p className="mt-1 text-sm">Try another search or clear a filter.</p>
+              <Button variant="ghost" className="mt-2" onClick={() => {
+                setSearchQuery('');
+                setCategoryFilter('all');
+                setSelectedDate('all');
+                setSelectedWeek('all');
+                setSelectedMonth('all');
+                setSelectedYear(new Date().getFullYear().toString());
+              }}>Clear filters</Button>
             </div>
           ) : (
             <div className="py-12 text-center text-muted-foreground">

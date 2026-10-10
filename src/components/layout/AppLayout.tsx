@@ -14,5 +14,6 @@ export const AppLayout = ({ children, className, activeTab, onTabChange, onAdd }
   <div className="min-h-screen bg-background relative font-xpenzy">
     <main className={cn('pb-24 min-h-screen', className)}>{children}</main>
     <BottomNavigation activeTab={activeTab} onTabChange={onTabChange} onAdd={onAdd} />
+    <FloatingAIAssistant />
   </div>
 );

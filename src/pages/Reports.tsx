@@ -5,6 +5,7 @@ import { FileText, Download, TrendingUp, TrendingDown, IndianRupee, Calendar as 
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useMemo, useState } from 'react';
 import { StatCard } from '@/components/ui/stat-card';
+import { AIInsightsCard, ExpensePredictionCard } from '@/components/ai/AIInsights';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -390,7 +391,7 @@ export const Reports = () => {
             <div className="p-2 rounded-xl bg-primary/10">
               <FileText className="w-7 h-7 text-primary" />
             </div>
-            Financial Reports
+            Insights
           </h1>
           <p className="text-muted-foreground mt-2 flex items-center gap-2">
             <CalendarIcon className="w-4 h-4" />
@@ -398,6 +399,20 @@ export const Reports = () => {
           </p>
         </div>
       </div>
+
+      <section aria-labelledby="ai-recap-title" className="space-y-3">
+        <div>
+          <h2 id="ai-recap-title" className="text-lg font-semibold">Monthly AI recap</h2>
+          <p className="text-sm text-muted-foreground">A short summary based on your recorded financial activity.</p>
+        </div>
+        <AIInsightsCard />
+        <details>
+          <summary className="cursor-pointer py-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            View AI spending forecast
+          </summary>
+          <div className="mt-3"><ExpensePredictionCard /></div>
+        </details>
+      </section>
 
       {/* Date Range Selector */}
       <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">

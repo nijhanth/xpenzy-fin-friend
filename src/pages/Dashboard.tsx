@@ -1,13 +1,11 @@
 import { useMemo } from 'react';
-import { Plus, ArrowRight, Receipt } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ArrowRight, Plus, ReceiptText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useAuth } from '@/contexts/AuthContext';
 
-const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+const inr = (amount: number) => `₹${Math.round(amount).toLocaleString('en-IN')}`;
 
 interface Props {
   onAdd: () => void;
@@ -17,116 +15,164 @@ interface Props {
 export const Dashboard = ({ onAdd, onNavigate }: Props) => {
   const { data, isLoading } = useFinancial();
   const { user } = useAuth();
-
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const monthName = now.toLocaleString('en-IN', { month: 'long' });
 
   const stats = useMemo(() => {
-    const monthExp = data.expenses.filter((e) => e.date?.startsWith(monthKey));
-    const spent = monthExp.reduce((s, e) => s + Number(e.amount || 0), 0);
-    const monthlyBudgets = data.budgets.filter(
-      (b) => b.period === 'monthly' && (!b.year || (b.year === now.getFullYear() && (b.month == null || b.month === now.getMonth() + 1)))
-    );
-    const budget = monthlyBudgets.reduce((s, b) => s + Number(b.limit_amount || 0), 0);
-    const byCat: Record<string, number> = {};
-    monthExp.forEach((e) => { byCat[e.category] = (byCat[e.category] || 0) + Number(e.amount); });
-    const top = Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 3);
-    const recent = [...data.expenses].sort((a, b) => (b.date > a.date ? 1 : -1)).slice(0, 5);
-    return { spent, budget, top, recent };
+    const monthExpenses = data.expenses.filter((expense) => expense.date?.startsWith(monthKey));
+    const spent = monthExpenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
+    const budget = data.budgets
+      .filter((item) => item.period === 'monthly' && (!item.year || (item.year === now.getFullYear() && (item.month == null || item.month === now.getMonth() + 1))))
+      .reduce((total, item) => total + Number(item.limit_amount || 0), 0);
+    const categoryTotals = monthExpenses.reduce<Record<string, number>>((totals, expense) => {
+      totals[expense.category] = (totals[expense.category] || 0) + Number(expense.amount || 0);
+      return totals;
+    }, {});
+    const topCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const recent = [...data.expenses].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+
+    return { spent, budget, topCategories, recent, monthCount: monthExpenses.length };
   }, [data.expenses, data.budgets, monthKey]);
 
-  const name = (user?.user_metadata?.full_name || user?.user_metadata?.name || '').split(' ')[0];
+  const firstName = (user?.user_metadata?.full_name || user?.user_metadata?.name || '').split(' ')[0];
   const remaining = stats.budget - stats.spent;
-  const pct = stats.budget > 0 ? Math.min(100, (stats.spent / stats.budget) * 100) : 0;
+  const budgetUsed = stats.budget > 0 ? Math.min(100, (stats.spent / stats.budget) * 100) : 0;
+  const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-8 pb-6 space-y-6">
-      <header>
-        <p className="text-muted-foreground">Hello{name ? `, ${name}` : ''}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">Your {monthName} at a glance</h1>
+    <div className="mx-auto w-full max-w-5xl space-y-8 px-4 pb-8 pt-6 sm:px-6 sm:pt-9">
+      <header className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm text-muted-foreground">{monthName} {now.getFullYear()}</p>
+          <h1 className="mt-1 text-2xl font-semibold">{greeting}{firstName ? `, ${firstName}` : ''}</h1>
+        </div>
+        <Button onClick={onAdd} className="h-11 shrink-0 px-4">
+          <Plus className="mr-2 h-4 w-4" aria-hidden />
+          <span className="hidden sm:inline">Add expense</span>
+          <span className="sm:hidden">Add</span>
+        </Button>
       </header>
 
-      <Card className="border-border shadow-sm">
-        <CardContent className="p-6 space-y-5">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(16rem,0.8fr)] lg:gap-12">
+        <section aria-labelledby="monthly-spending-title" className="rounded-xl bg-foreground p-6 text-background sm:p-8">
           {isLoading ? (
-            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-40 w-full" />
           ) : (
             <>
-              <div>
-                <p className="text-sm text-muted-foreground">Spent this month</p>
-                <p className="text-4xl font-semibold tracking-tight mt-1">{inr(stats.spent)}</p>
-              </div>
-              {stats.budget > 0 ? (
-                <div className="space-y-2">
-                  <Progress value={pct} aria-label="Budget used" />
-                  <p className="text-sm">
-                    {remaining >= 0 ? (
-                      <><span className="font-medium">{inr(remaining)}</span> <span className="text-muted-foreground">left of your {inr(stats.budget)} budget</span></>
-                    ) : (
-                      <span className="text-destructive font-medium">{inr(-remaining)} over your {inr(stats.budget)} budget</span>
-                    )}
-                  </p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="monthly-spending-title" className="text-sm font-medium text-background/75">Spent this month</h2>
+                  <p className="mt-2 text-4xl font-semibold tabular-nums sm:text-5xl">{inr(stats.spent)}</p>
+                  <p className="mt-2 text-sm text-background/70">{stats.monthCount} {stats.monthCount === 1 ? 'expense' : 'expenses'} recorded</p>
                 </div>
-              ) : (
-                <button onClick={() => onNavigate('budget')} className="text-sm text-primary font-medium hover:underline">
-                  Set a monthly budget to see what's left →
-                </button>
-              )}
-              <Button size="lg" className="w-full h-12 text-base" onClick={onAdd}>
-                <Plus className="w-5 h-5 mr-1" /> Add expense
-              </Button>
+                <span className="rounded-full border border-background/20 px-3 py-1 text-xs text-background/80">{monthName}</span>
+              </div>
+
+              <div className="mt-8 border-t border-background/20 pt-5">
+                {stats.budget > 0 ? (
+                  <>
+                    <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                      <span className="text-background/75">Monthly budget</span>
+                      <span className="font-medium tabular-nums">{inr(stats.budget)}</span>
+                    </div>
+                    <div
+                      role="progressbar"
+                      aria-label="Monthly budget used"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(budgetUsed)}
+                      className="h-2 overflow-hidden rounded-full bg-background/20"
+                    >
+                      <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${budgetUsed}%` }} />
+                    </div>
+                    <p className="mt-3 text-sm">
+                      {remaining >= 0 ? (
+                        <><span className="font-semibold">{inr(remaining)}</span><span className="text-background/75"> left to spend</span></>
+                      ) : (
+                        <><span className="font-semibold">{inr(-remaining)} over</span><span className="text-background/75"> your monthly budget</span></>
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <button onClick={() => onNavigate('budget')} className="text-left text-sm font-medium underline decoration-background/40 underline-offset-4 hover:decoration-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background">
+                    Set a monthly budget
+                  </button>
+                )}
+              </div>
             </>
           )}
-        </CardContent>
-      </Card>
-
-      {stats.top.length > 0 && (
-        <section aria-label="Top categories" className="grid grid-cols-3 gap-3">
-          {stats.top.map(([cat, amt]) => (
-            <div key={cat} className="rounded-xl bg-secondary p-3">
-              <p className="text-xs text-muted-foreground truncate">{cat}</p>
-              <p className="font-semibold">{inr(amt)}</p>
-            </div>
-          ))}
         </section>
-      )}
 
-      <Card className="border-border shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base">Recent</CardTitle>
-          {stats.recent.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => onNavigate('expenses')}>
-              See all <ArrowRight className="w-4 h-4 ml-1" />
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent className="pt-0">
-          {isLoading ? (
-            <div className="space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : stats.recent.length === 0 ? (
-            <div className="text-center py-8 space-y-2">
-              <Receipt className="w-8 h-8 mx-auto text-muted-foreground" aria-hidden />
-              <p className="font-medium">No expenses yet</p>
-              <p className="text-sm text-muted-foreground">Add your first one — it only takes a few seconds.</p>
+        <aside className="space-y-7 lg:py-1">
+          <section aria-labelledby="top-categories-title">
+            <div className="flex items-center justify-between">
+              <h2 id="top-categories-title" className="text-base font-semibold">Where it went</h2>
+              <span className="text-xs text-muted-foreground">This month</span>
             </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {stats.recent.map((e) => (
-                <li key={e.id} className="flex items-center justify-between py-3">
+            {isLoading ? (
+              <div className="mt-4 space-y-3"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div>
+            ) : stats.topCategories.length ? (
+              <ul className="mt-3 divide-y divide-border">
+                {stats.topCategories.map(([category, amount]) => (
+                  <li key={category} className="flex items-center justify-between gap-4 py-3">
+                    <span className="truncate text-sm">{category}</span>
+                    <span className="shrink-0 text-sm font-medium tabular-nums">{inr(amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">Your spending categories will appear here.</p>
+            )}
+          </section>
+
+          <Button variant="outline" className="w-full justify-between" onClick={() => onNavigate('budget')}>
+            <span>View budgets</span><ArrowRight className="h-4 w-4" aria-hidden />
+          </Button>
+        </aside>
+      </div>
+
+      <section aria-labelledby="recent-transactions-title">
+        <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
+          <div>
+            <h2 id="recent-transactions-title" className="text-lg font-semibold">Recent transactions</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Your latest recorded expenses</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => onNavigate('expenses')}>
+            All transactions <ArrowRight className="ml-1 h-4 w-4" aria-hidden />
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-3 py-4">{[0, 1, 2].map((index) => <Skeleton key={index} className="h-12 w-full" />)}</div>
+        ) : stats.recent.length ? (
+          <ul className="divide-y divide-border">
+            {stats.recent.map((expense) => (
+              <li key={expense.id} className="flex items-center justify-between gap-4 py-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
+                    <ReceiptText className="h-4 w-4" aria-hidden />
+                  </span>
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{e.notes || e.category}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {e.category} · {new Date(e.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    <p className="truncate text-sm font-medium">{expense.notes || expense.category}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {expense.category} · {new Date(`${expense.date}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                     </p>
                   </div>
-                  <p className="font-semibold tabular-nums">{inr(Number(e.amount))}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+                </div>
+                <p className="shrink-0 text-sm font-semibold tabular-nums">{inr(Number(expense.amount))}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="py-12 text-center">
+            <ReceiptText className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
+            <p className="mt-3 font-medium">No expenses recorded yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">Your transactions will show up here once added.</p>
+            <Button variant="outline" className="mt-4" onClick={onAdd}><Plus className="mr-2 h-4 w-4" />Add your first expense</Button>
+          </div>
+        )}
+      </section>
     </div>
   );
 };

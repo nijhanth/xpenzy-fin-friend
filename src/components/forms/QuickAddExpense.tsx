@@ -12,7 +12,13 @@ import { cn } from '@/lib/utils';
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`;
 const DEFAULTS = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education', 'Other'];
 const LAST_CAT_KEY = 'xpenzy:last-category';
-const today = () => new Date().toISOString().split('T')[0];
+const toDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const today = () => toDateInputValue(new Date());
 
 interface Props {
   open: boolean;
@@ -58,15 +64,31 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action: 'categorize', input: text.trim() }),
       });
-      if (!r.ok) throw new Error('ai');
+      if (!r.ok) {
+        const response = await r.json().catch(() => ({}));
+        if (r.status === 402 || String(response.error || '').includes('LOVABLE_API_KEY')) {
+          setAiNote('AI entry is unavailable. You can still enter the amount, category, and date manually.');
+          return;
+        }
+        if (r.status === 429) {
+          setAiNote('AI is temporarily busy. You can still enter the expense manually.');
+          return;
+        }
+        throw new Error('ai');
+      }
       const res = await r.json();
       if (res.amount) setAmount(String(res.amount));
       if (res.category) setCategory(res.category);
       if (res.note) setNote(res.note);
-      if (/yesterday/i.test(text)) {
-        const d = new Date(); d.setDate(d.getDate() - 1); setDate(d.toISOString().split('T')[0]);
+      if (/\byesterday\b/i.test(text)) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        setDate(toDateInputValue(yesterday));
+      } else if (/\btoday\b/i.test(text)) {
+        setDate(today());
       }
-      setAiNote(`Suggested "${res.category}" from your words${res.isNewCategory ? ' (new category)' : ''}. Check it below before saving.`);
+      const explanation = typeof res.explanation === 'string' ? ` ${res.explanation}` : '';
+      setAiNote(`AI suggests ${res.category || 'a category'}.${explanation} Review or change it before saving.`);
     } catch {
       setAiNote('Could not read that right now. Fill in the details below instead.');
     } finally {
@@ -82,6 +104,10 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
     setError(null); setSaving(true);
     try {
       const added = await addExpense({ amount: value, date, category: category.trim(), subcategory: 'General', paymentMode: 'UPI', notes: note.trim() });
+      if (!added) {
+        setError('Could not save this expense. Please try again.');
+        return;
+      }
       localStorage.setItem(LAST_CAT_KEY, category.trim());
       onOpenChange(false);
       toast.success(`Saved ₹${value.toLocaleString('en-IN')} for ${category}`, {

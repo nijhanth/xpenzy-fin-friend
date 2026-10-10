@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Loader2, RefreshCw, TrendingUp, TrendingDown, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Sparkles, Loader2, RefreshCw, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,8 +12,10 @@ export const AIInsightsCard: React.FC = () => {
   const [insights, setInsights] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorState, setErrorState] = useState<'none' | 'no_data' | 'error'>('none');
+  const [period, setPeriod] = useState<'week' | 'month'>('month');
+  const [isDismissed, setIsDismissed] = useState(false);
 
-  const fetchInsights = async () => {
+  const fetchInsights = async (summaryPeriod = period) => {
     if (isLoading) return; // prevent double clicks
     setIsLoading(true);
     setErrorState('none');
@@ -31,7 +33,11 @@ export const AIInsightsCard: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ action: 'insights' }),
+        body: JSON.stringify({
+          action: 'insights',
+          period: summaryPeriod,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -72,18 +78,53 @@ export const AIInsightsCard: React.FC = () => {
     }
   };
 
+  if (isDismissed) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-between gap-4 py-4">
+          <p className="text-sm text-muted-foreground">AI recap hidden.</p>
+          <Button variant="ghost" size="sm" onClick={() => setIsDismissed(false)}>Show recap</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="glass-card bg-gradient-card border-border shadow-elevated backdrop-blur-xl overflow-hidden">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-primary" />
             AI Insights
             <Badge variant="secondary" className="text-xs">Smart</Badge>
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={fetchInsights} disabled={isLoading}>
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          </Button>
+          <div className="flex w-full items-center justify-between gap-1 sm:w-auto sm:justify-end" role="group" aria-label="AI summary actions">
+            {insights && !isLoading && (
+              <Button variant="ghost" size="icon" aria-label="Dismiss AI recap" onClick={() => setIsDismissed(true)}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+            {(['week', 'month'] as const).map((value) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant={period === value ? 'secondary' : 'ghost'}
+                aria-pressed={period === value}
+                disabled={isLoading}
+                onClick={() => {
+                  setPeriod(value);
+                  setInsights(null);
+                  setErrorState('none');
+                }}
+              >
+                This {value}
+              </Button>
+            ))}
+            <Button variant="ghost" size="icon" aria-label="Refresh AI summary" onClick={fetchInsights} disabled={isLoading}>
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -91,8 +132,8 @@ export const AIInsightsCard: React.FC = () => {
           <div className="text-center py-6">
             <Sparkles className="w-10 h-10 mx-auto mb-3 text-primary/50" />
             <p className="text-sm text-muted-foreground mb-3">Get AI-powered insights about your spending</p>
-            <Button onClick={fetchInsights} className="bg-gradient-primary" disabled={isLoading}>
-              <Sparkles className="w-4 h-4 mr-2" /> Generate Insights
+            <Button onClick={() => fetchInsights(period)} className="bg-gradient-primary" disabled={isLoading}>
+              <Sparkles className="w-4 h-4 mr-2" /> Generate {period === 'week' ? 'weekly' : 'monthly'} recap
             </Button>
           </div>
         )}
@@ -106,7 +147,7 @@ export const AIInsightsCard: React.FC = () => {
         {!insights && !isLoading && errorState === 'error' && (
           <div className="text-center py-6">
             <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-yellow-500/60" />
-            <p className="text-sm text-muted-foreground mb-3">Unable to generate insights. Please try again later.</p>
+            <p className="text-sm text-muted-foreground mb-3">AI is temporarily unavailable. Check the Lovable AI setup and available credits, then try again.</p>
             <Button onClick={fetchInsights} variant="outline" size="sm" disabled={isLoading}>
               <RefreshCw className="w-4 h-4 mr-2" /> Retry
             </Button>

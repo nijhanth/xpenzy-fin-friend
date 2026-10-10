@@ -194,7 +194,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
         description: `₹${formData.amount.toLocaleString()} expense updated successfully!`
       });
     } else {
-      await addExpense(expenseData);
+      const savedExpense = await addExpense(expenseData);
+      if (!savedExpense) return;
 
       toast({
         title: "Expense Added",

@@ -30,17 +30,37 @@ serve(async (req) => {
     }
     const userId = user.id;
 
-    const { action, input, messages } = await req.json();
+    const { action, input, messages, period, timeZone } = await req.json();
+    let safeTimeZone = typeof timeZone === "string" ? timeZone : "UTC";
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: safeTimeZone }).format(new Date());
+    } catch {
+      safeTimeZone = "UTC";
+    }
 
     // Fetch user financial data for context
-    const fetchFinancialData = async () => {
+    const fetchFinancialData = async (range: "week" | "month" = "month") => {
       const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+      const dateParts = new Intl.DateTimeFormat("en-US", {
+        timeZone: safeTimeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(now);
+      const part = (type: string) => Number(dateParts.find((item) => item.type === type)?.value);
+      const localToday = new Date(Date.UTC(part("year"), part("month") - 1, part("day")));
+      const rangeStart = new Date(localToday);
+      if (range === "week") {
+        rangeStart.setUTCDate(rangeStart.getUTCDate() - ((rangeStart.getUTCDay() + 6) % 7));
+      } else {
+        rangeStart.setUTCDate(1);
+      }
+      const periodStart = rangeStart.toISOString().split("T")[0];
+      const periodEnd = localToday.toISOString().split("T")[0];
 
       const [incomeRes, expenseRes, savingsRes, investmentRes, budgetRes] = await Promise.all([
-        supabase.from("income_entries").select("*").eq("user_id", userId).gte("date", monthStart).lte("date", monthEnd),
-        supabase.from("expense_entries").select("*").eq("user_id", userId).gte("date", monthStart).lte("date", monthEnd),
+        supabase.from("income_entries").select("*").eq("user_id", userId).gte("date", periodStart).lte("date", periodEnd),
+        supabase.from("expense_entries").select("*").eq("user_id", userId).gte("date", periodStart).lte("date", periodEnd),
         supabase.from("savings_goals").select("*").eq("user_id", userId),
         supabase.from("investment_entries").select("*").eq("user_id", userId),
         supabase.from("budget_categories").select("*").eq("user_id", userId),
@@ -54,7 +74,7 @@ serve(async (req) => {
       }
 
       return {
-        month: now.toLocaleString("en", { month: "long", year: "numeric" }),
+        month: range === "week" ? `week of ${periodStart}` : localToday.toLocaleString("en", { month: "long", year: "numeric", timeZone: "UTC" }),
         totalIncome,
         totalExpenses,
         balance: totalIncome - totalExpenses,
@@ -97,6 +117,7 @@ ${existingCategories.join(", ")}
 Instructions:
 - Extract amount (number). If not found, use 0.
 - Identify the most relevant category from the existing list.
+- Give a short explanation grounded only in the words the user provided.
 - If no existing category fits well, create a NEW category name (keep it simple, one word if possible).
 - Extract a short, clean note/description.
 - Set isNewCategory to true only if the category is NOT in the existing list.`;
@@ -113,10 +134,11 @@ Instructions:
             properties: {
               amount: { type: "number", description: "The expense amount" },
               category: { type: "string", description: "Category name - use existing or create new" },
+              explanation: { type: "string", description: "Brief reason this category fits the user's description" },
               note: { type: "string", description: "Clean description of the expense" },
               isNewCategory: { type: "boolean", description: "True if category is not in the existing list" },
             },
-            required: ["amount", "category", "note", "isNewCategory"],
+            required: ["amount", "category", "explanation", "note", "isNewCategory"],
             additionalProperties: false,
           },
         },
@@ -127,6 +149,7 @@ Instructions:
       const finData = await fetchFinancialData();
       systemPrompt = `You are Xpenzy AI, a smart financial assistant. You help users understand their spending, savings, and investments.
 Be concise, friendly, and use ₹ for currency. Use bullet points when listing items.
+    You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
 Here is the user's current financial data for ${finData.month}:
 - Total Income: ₹${finData.totalIncome.toLocaleString()}
 - Total Expenses: ₹${finData.totalExpenses.toLocaleString()}
@@ -139,7 +162,8 @@ Here is the user's current financial data for ${finData.month}:
       userPrompt = messages?.[messages.length - 1]?.content || input;
 
     } else if (action === "insights") {
-      const finData = await fetchFinancialData();
+      const summaryPeriod = period === "week" ? "week" : "month";
+      const finData = await fetchFinancialData(summaryPeriod);
 
       // Validate: if no expense data, return early without calling AI
       if (finData.expenseCount === 0 && finData.totalIncome === 0) {
@@ -161,7 +185,7 @@ Here is the user's current financial data for ${finData.month}:
 Analyze the user's expense data and give insights.
 
 Instructions:
-- Find total spending
+- Find total spending for the requested period
 - Find top category
 - Identify unusual spending
 - Suggest 2 ways to save money
@@ -171,7 +195,7 @@ Instructions:
 - DO NOT return JSON
 - Output only bullet points`;
 
-      userPrompt = `Expense Data:
+      userPrompt = `Expense Data for ${summaryPeriod}:
 ${JSON.stringify(finData.expenses.slice(0, 50))}
 
 Summary for ${finData.month}:

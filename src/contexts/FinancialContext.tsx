@@ -202,19 +202,12 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       return newExpense;
     } catch (error) {
       console.error('Error adding expense:', error);
-      const newExpense: ExpenseEntry = {
-      ...expense,
-      id: Date.now().toString()
-    };
-    setData(prev => ({
-      ...prev,
-      expenses: [...prev.expenses, newExpense]
-    }));
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to save expense to database. Saved locally instead."
+        description: "Failed to save expense. Please try again."
       });
+      return undefined;
     }
   };
 

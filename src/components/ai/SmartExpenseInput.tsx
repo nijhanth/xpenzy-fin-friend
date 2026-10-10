@@ -15,6 +15,7 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant
 interface CategorizedExpense {
   amount: number;
   category: string;
+  explanation?: string;
   note: string;
   isNewCategory?: boolean;
 }
@@ -90,7 +91,7 @@ export const SmartExpenseInput: React.FC = () => {
       toast({ title: 'Invalid', description: 'Amount must be greater than 0', variant: 'destructive' });
       return;
     }
-    await addExpense({
+    const savedExpense = await addExpense({
       amount: data.amount,
       date: new Date().toISOString().split('T')[0],
       category: data.category,
@@ -98,6 +99,7 @@ export const SmartExpenseInput: React.FC = () => {
       paymentMode: 'UPI',
       notes: data.note,
     });
+    if (!savedExpense) return;
     toast({ title: 'Expense Added! ✨', description: `₹${data.amount.toLocaleString()} for ${data.note}` });
     setShowPreview(false);
     setResult(null);
@@ -162,6 +164,7 @@ export const SmartExpenseInput: React.FC = () => {
                     <span className="text-sm text-muted-foreground">Description</span>
                     <span className="text-sm font-medium">{result.note}</span>
                   </div>
+                  {result.explanation && <p className="text-xs text-muted-foreground">AI suggestion: {result.explanation}</p>}
                 </div>
               ) : (
                 <div className="space-y-3">
