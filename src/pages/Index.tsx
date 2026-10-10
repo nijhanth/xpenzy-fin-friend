@@ -14,9 +14,12 @@ import { Reports } from './Reports';
 import { Notes } from './Notes';
 import { Security } from './Security';
 import { Settings } from './Settings';
+import { Dashboard } from './Dashboard';
+import { QuickAddExpense } from '@/components/forms/QuickAddExpense';
 
 const Index = () => {
-  const [currentScreen, setCurrentScreen] = useState('home');
+  const [currentScreen, setCurrentScreen] = useState('dashboard');
+  const [addOpen, setAddOpen] = useState(false;
   const { user, loading } = useAuth();
 
   useEffect(() => {
@@ -42,6 +45,8 @@ const Index = () => {
 
   const renderScreen = () => {
     switch (currentScreen) {
+      case 'dashboard':
+        return <Dashboard onAdd={() => setAddOpen(true)} onNavigate={setCurrentScreen} />;
       case 'home':
         return <Home />;
       case 'income':
@@ -67,13 +72,14 @@ const Index = () => {
       case 'settings':
         return <Settings />;
       default:
-        return <Home />;
+        return <Dashboard onAdd={() => setAddOpen(true)} onNavigate={setCurrentScreen} />;
     }
   };
 
   return (
-    <AppLayout activeTab={currentScreen} onTabChange={setCurrentScreen}>
+    <AppLayout activeTab={currentScreen} onTabChange={setCurrentScreen} onAdd={() => setAddOpen(true)}>
       {renderScreen()}
+      <QuickAddExpense open={addOpen} onOpenChange={setAddOpen} />
     </AppLayout>
   );
 };
