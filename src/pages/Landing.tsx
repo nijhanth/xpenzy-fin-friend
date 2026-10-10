@@ -72,7 +72,7 @@ const Landing = () => {
   ];
 
     return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="landing-page min-h-screen bg-background text-foreground">
       {/* Navigation */}
       <nav className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border">
         <div className="container mx-auto px-6 py-4">
@@ -106,13 +106,13 @@ const Landing = () => {
               )}
               <Button 
                 variant="ghost" 
-                onClick={() => navigate('/auth')}
+                onClick={() => navigate('/auth?mode=signin')}
                 className="font-medium"
               >
                 Sign In
               </Button>
               <Button 
-                onClick={() => navigate('/auth')}
+                onClick={() => navigate('/auth?mode=signup')}
                 className="bg-primary hover:bg-primary/90 font-medium"
               >
                 Get Started
@@ -123,11 +123,13 @@ const Landing = () => {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden">
+      <section className="hero-section relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-background via-background/95 to-primary/5"></div>
+        <div className="hero-orb hero-orb-one" aria-hidden="true" />
+        <div className="hero-orb hero-orb-two" aria-hidden="true" />
         <div className="container mx-auto px-6 py-24 relative">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-8">
+            <div className="hero-copy space-y-8">
               <Badge variant="secondary" className="w-fit">
                 <Zap className="w-4 h-4 mr-2" />
                 Personal finance, made simple
@@ -149,7 +151,7 @@ const Landing = () => {
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button 
                   size="lg" 
-                  onClick={() => navigate('/auth')}
+                  onClick={() => navigate('/auth?mode=signup')}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 py-6 text-lg group"
                 >
                   Get started — it’s free
@@ -168,11 +170,11 @@ const Landing = () => {
             </div>
 
             <div className="relative">
-              <div className="relative z-10">
+              <div className="hero-art relative z-10">
                 <img 
                   src={financeHero} 
                   alt="Financial Dashboard Preview" 
-                  className="w-full h-auto rounded-2xl shadow-2xl"
+                  className="w-full h-auto rounded-2xl shadow-2xl transition-transform duration-700 hover:scale-[1.02]"
                 />
               </div>
               <div className="absolute -inset-4 bg-gradient-to-r from-primary/20 to-accent/20 rounded-3xl blur-2xl opacity-50"></div>
@@ -198,7 +200,7 @@ const Landing = () => {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
-              <Card key={index} className="bg-card border-border hover:shadow-lg transition-all duration-300 group">
+              <Card key={index} style={{ animationDelay: `${index * 90}ms` }} className="feature-card bg-card border-border hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
                 <CardContent className="p-8">
                   <div className="mb-6">
                     <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -255,7 +257,7 @@ const Landing = () => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
                 size="lg" 
-                onClick={() => navigate('/auth')}
+                onClick={() => navigate('/auth?mode=signup')}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-12 py-6 text-lg group"
               >
                 Get Started Free

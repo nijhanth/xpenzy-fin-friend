@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { hasSupabaseConfig, supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,7 +57,7 @@ const AuthShell = ({ children, onHome }: { children: React.ReactNode; onHome: ()
           </button>
           <p className="text-muted-foreground mt-2">Your money, made clearer. <span className="text-primary font-medium">Free, always.</span></p>
         </div>
-        <div className="rounded-3xl p-6 sm:p-8 bg-card border border-border shadow-2xl shadow-primary/5">{children}</div>
+        <div className="auth-card rounded-3xl p-6 sm:p-8 bg-card border border-border shadow-2xl shadow-primary/5">{children}</div>
         {!hasSupabaseConfig && (
           <p role="status" className="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground">
             Local preview only. Add your Supabase URL and publishable key to `.env.local` to enable sign-in and sign-up.
@@ -70,7 +70,9 @@ const AuthShell = ({ children, onHome }: { children: React.ReactNode; onHome: ()
 );
 
 export const Auth = ({ onAuthSuccess }: AuthProps) => {
-  const [view, setView] = useState<View>('entry');
+  const [searchParams] = useSearchParams();
+  const requestedView = searchParams.get('mode');
+  const [view, setView] = useState<View>(requestedView === 'signup' ? 'signup' : requestedView === 'signin' ? 'signin' : 'entry');
 
   // Sign in / sign up fields
   const [email, setEmail] = useState('');
@@ -278,7 +280,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   const BackButton = ({ to }: { to: View }) => (
     <button
       type="button"
-      onClick={() => goTo(to)}
+      onClick={() => (to === 'entry' ? navigate('/') : goTo(to))}
       className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors"
     >
       <ArrowLeft className="h-4 w-4" /> Back
@@ -313,7 +315,8 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     return (
       <AuthShell onHome={() => navigate('/')}>
         <BackButton to="entry" />
-        <h2 className="text-2xl font-semibold text-foreground mb-6">Sign In</h2>
+        <h2 className="text-2xl font-semibold text-foreground mb-2">Welcome back</h2>
+        <p className="text-sm text-muted-foreground mb-6">Sign in to pick up where you left off.</p>
         <form onSubmit={handleSignIn} className="space-y-5" noValidate>
           <div className="space-y-2">
             <Label htmlFor="login-email">Email</Label>
@@ -408,7 +411,8 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     return (
       <AuthShell onHome={() => navigate('/')}>
         <BackButton to="entry" />
-        <h2 className="text-2xl font-semibold text-foreground mb-6">Create Account</h2>
+        <h2 className="text-2xl font-semibold text-foreground mb-2">Create your free account</h2>
+        <p className="text-sm text-muted-foreground mb-6">Start organizing your finances in just a minute.</p>
         <form onSubmit={handleSignUp} className="space-y-4" noValidate>
           <div className="space-y-2">
             <Label htmlFor="signup-name">Full Name</Label>
@@ -512,7 +516,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
           {errors.form && <p className="text-sm text-destructive">{errors.form}</p>}
 
           <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? 'Creating Account...' : 'Create Account'}
+            {isLoading ? 'Creating Account...' : 'Create free account'}
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">

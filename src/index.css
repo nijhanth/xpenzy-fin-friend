@@ -320,4 +320,27 @@
       transform: rotate(360deg);
     }
   }
+}/* Motion polish for the public landing and auth surfaces. */
+@keyframes xpenzy-fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes xpenzy-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -18px, 0); }
+}
+.landing-page { overflow: hidden; }
+.hero-section { isolation: isolate; }
+.hero-copy > * { animation: xpenzy-fade-up 650ms both; }
+.hero-copy > *:nth-child(2) { animation-delay: 90ms; }
+.hero-copy > *:nth-child(3) { animation-delay: 180ms; }
+.hero-copy > *:nth-child(4) { animation-delay: 260ms; }
+.hero-art { animation: xpenzy-fade-up 850ms 180ms both, xpenzy-drift 7s 1.1s ease-in-out infinite; }
+.hero-orb { position: absolute; z-index: -1; width: 20rem; height: 20rem; border-radius: 9999px; filter: blur(70px); opacity: .24; pointer-events: none; }
+.hero-orb-one { top: 5%; right: 8%; background: hsl(var(--primary)); animation: xpenzy-drift 9s ease-in-out infinite; }
+.hero-orb-two { bottom: 0; left: 20%; width: 14rem; height: 14rem; background: hsl(var(--accent)); animation: xpenzy-drift 11s ease-in-out infinite reverse; }
+.feature-card { animation: xpenzy-fade-up 600ms both; }
+.auth-card { animation: xpenzy-fade-up 500ms both; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
