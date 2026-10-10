@@ -20,7 +20,7 @@ interface Props {
 }
 
 export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
-  const { data, addExpense, deleteExpense } = useFinancial() as any;
+  const { data, addExpense, deleteExpense } = useFinancial();
   const [text, setText] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
@@ -81,21 +81,12 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
     if (!date || date > today()) return setError('Choose today or an earlier date.');
     setError(null); setSaving(true);
     try {
-      const before = new Set(data.expenses.map((e: any) => e.id));
-      await addExpense({ amount: value, date, category: category.trim(), subcategory: 'General', paymentMode: 'UPI', notes: note.trim() });
+      const added = await addExpense({ amount: value, date, category: category.trim(), subcategory: 'General', paymentMode: 'UPI', notes: note.trim() });
       localStorage.setItem(LAST_CAT_KEY, category.trim());
       onOpenChange(false);
       toast.success(`Saved ₹${value.toLocaleString('en-IN')} for ${category}`, {
-        action: deleteExpense ? {
-          label: 'Undo',
-          onClick: () => {
-            // find the newly added entry and remove it
-            setTimeout(() => {
-              const added = (window as any).__xpenzyLatestExpenses?.find((e: any) => !before.has(e.id));
-              if (added) deleteExpense(added.id);
-            }, 0);
-          },
-        } : undefined,
+        duration: 6000,
+        action: added ? { label: 'Undo', onClick: () => deleteExpense(added.id) } : undefined,
       });
     } finally {
       setSaving(false);

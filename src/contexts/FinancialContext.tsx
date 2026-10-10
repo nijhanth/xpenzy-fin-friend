@@ -8,7 +8,7 @@ interface FinancialContextType {
   data: FinancialData;
   isLoading: boolean;
   addIncome: (income: Omit<IncomeEntry, 'id'>) => void;
-  addExpense: (expense: Omit<ExpenseEntry, 'id'>) => void;
+  addExpense: (expense: Omit<ExpenseEntry, 'id'>) => Promise<ExpenseEntry | undefined> | void;
   addSavingsGoal: (savings: Omit<SavingsGoal, 'id'>) => void;
   addInvestment: (investment: Omit<InvestmentEntry, 'id'>) => void;
   addInvestmentTransaction: (transaction: Omit<InvestmentTransaction, 'id'>) => Promise<void>;
@@ -199,6 +199,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         expenses: [newExpense, ...prev.expenses]
       }));
       await refreshGoalAfterLinkedExpense(newExpense.goalId ?? null);
+      return newExpense;
     } catch (error) {
       console.error('Error adding expense:', error);
       const newExpense: ExpenseEntry = {
