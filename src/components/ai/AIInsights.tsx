@@ -121,7 +121,7 @@ export const AIInsightsCard: React.FC = () => {
                 This {value}
               </Button>
             ))}
-            <Button variant="ghost" size="icon" aria-label="Refresh AI summary" onClick={fetchInsights} disabled={isLoading}>
+            <Button variant="ghost" size="icon" aria-label="Refresh AI summary" onClick={() => fetchInsights(period)} disabled={isLoading}>
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             </Button>
           </div>
