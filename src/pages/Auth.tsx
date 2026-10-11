@@ -59,7 +59,7 @@ const AuthShell = ({ children, onHome }: { children: React.ReactNode; onHome: ()
           <p className="text-muted-foreground mt-2">Your money, made clearer. <span className="text-primary font-medium">Free, always.</span></p>
         </div>
         <div className="auth-card rounded-3xl p-6 sm:p-8 bg-card border border-border shadow-2xl shadow-primary/5">{children}</div>
-        <p className="text-center mt-5 text-xs text-muted-foreground">Secure account access Â· No payment details needed</p>
+        <p className="text-center mt-5 text-xs text-muted-foreground">Secure account access · No payment details needed</p>
       </div>
     </div>
   </div>
@@ -692,7 +692,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
           </div>
           {errors.signupOtp && <p className="text-sm text-destructive text-center">{errors.signupOtp}</p>}
           <Button type="submit" className="w-full" disabled={isLoading || signupOtp.length !== 6}>{isLoading ? 'Verifying...' : 'Verify email and continue'}</Button>
-          <p className="text-center text-sm text-muted-foreground">Didnâ€™t receive a code?{' '}
+          <p className="text-center text-sm text-muted-foreground">Didn't receive a code?{' '}
             <button type="button" onClick={handleResendSignupOtp} disabled={resendCooldown > 0 || isLoading} className="font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
               {resendCooldown > 0 ? 'Resend in ' + resendCooldown + 's' : 'Resend code'}
             </button>
