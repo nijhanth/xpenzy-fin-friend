@@ -221,14 +221,14 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
               ? 'A code was requested recently. Wait a while before trying again.'
               : resendError.message;
           setErrors({ form: friendly });
-          toast({ variant: 'destructive', title: 'Could not resend link', description: friendly });
+        toast({ variant: 'destructive', title: 'Could not resend code', description: friendly });
           return;
         }
 
         setSignupOtp('');
         startCooldown(120);
         goTo('signup-otp');
-        toast({ title: 'Check your email', description: 'If this signup is still unverified, a new confirmation link has been sent.' });
+        toast({ title: 'Check your email', description: 'If this signup is still unverified, a new code has been sent.' });
         return;
       }
 
@@ -241,7 +241,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
 
       setSignupOtp('');
       startCooldown(120);
-      toast({ title: 'Check your email', description: 'Tap the confirmation link we emailed you to finish signing up.' });
+      toast({ title: 'Check your email', description: 'Enter the 6-digit code we emailed you to finish signing up.' });
       goTo('signup-otp');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Check your connection and try again.';
@@ -288,11 +288,11 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
       });
       if (error) {
         setErrors({ signupOtp: error.message });
-        toast({ variant: 'destructive', title: 'Could not resend link', description: error.message });
+        toast({ variant: 'destructive', title: 'Could not resend code', description: error.message });
         return;
       }
       startCooldown(120);
-      toast({ title: 'New link sent', description: 'Check your inbox and spam folder.' });
+      toast({ title: 'New code sent', description: 'Check your inbox and spam folder.' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Check your connection and try again.';
       setErrors({ signupOtp: message });
@@ -685,26 +685,33 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
           <Mail className="h-7 w-7 text-primary" />
         </div>
-        <h2 className="text-2xl font-semibold text-foreground mb-2 text-center">Check your email</h2>
+        <h2 className="text-2xl font-semibold text-foreground mb-2 text-center">Enter your email code</h2>
         <p className="text-sm text-muted-foreground mb-6 text-center">
-          We sent a confirmation link to <span className="font-medium text-foreground">{email}</span>. Open the email and tap <span className="font-medium text-foreground">Confirm</span> to finish creating your account.
+          We sent a 6-digit verification code to <span className="font-medium text-foreground">{email}</span>. Enter it below to finish creating your account.
         </p>
-        <ol className="mb-6 space-y-2 rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground list-decimal list-inside">
-          <li>Open the email from Xpenzy (check spam if it isn't there).</li>
-          <li>Tap the confirmation link.</li>
-          <li>You'll come straight back to Xpenzy, signed in.</li>
-        </ol>
-        {errors.signupOtp && <p className="mb-4 text-sm text-destructive text-center">{errors.signupOtp}</p>}
-        <div className="space-y-3">
-          <Button type="button" className="w-full" onClick={() => goTo('signin')}>
-            I've confirmed, sign in
+        <form onSubmit={handleVerifySignupOtp} className="space-y-5" noValidate>
+          <div className="flex justify-center">
+            <InputOTP maxLength={6} value={signupOtp} onChange={setSignupOtp}>
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
+          {errors.signupOtp && <p className="text-sm text-destructive text-center">{errors.signupOtp}</p>}
+          <Button type="submit" className="w-full" disabled={isLoading || signupOtp.length !== 6}>
+            {isLoading ? 'Verifying...' : 'Verify email and continue'}
           </Button>
-          <p className="text-center text-sm text-muted-foreground">Didn't get the email?{' '}
+          <p className="text-center text-sm text-muted-foreground">Didn't get a code?{' '}
             <button type="button" onClick={handleResendSignupOtp} disabled={resendCooldown > 0 || isLoading} className="font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
-              {resendCooldown > 0 ? 'Resend in ' + resendCooldown + 's' : 'Resend link'}
+              {resendCooldown > 0 ? 'Resend in ' + resendCooldown + 's' : 'Resend code'}
             </button>
           </p>
-        </div>
+        </form>
       </AuthShell>
     );
   }
