@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
@@ -37,11 +38,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
+    // Detect return from the email confirmation link
+    const url = new URL(window.location.href);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const linkError = hashParams.get('error_description') || url.searchParams.get('error_description');
+    const cameFromConfirm = url.searchParams.get('confirmed') === '1';
+
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+
+      if (linkError) {
+        toast.error('Confirmation link problem', {
+          description: linkError.includes('expired') || linkError.includes('invalid')
+            ? 'This link has expired or was already used. Sign in, or sign up again to get a new link.'
+            : linkError.replace(/\+/g, ' '),
+        });
+      } else if (cameFromConfirm && session) {
+        toast.success('Email confirmed', { description: 'Welcome to Xpenzy — your account is ready.' });
+      }
+      if (linkError || cameFromConfirm) {
+        url.searchParams.delete('confirmed');
+        url.searchParams.delete('error_description');
+        url.searchParams.delete('error');
+        url.searchParams.delete('error_code');
+        window.history.replaceState(null, '', url.pathname + url.search);
+      }
     });
 
     return () => subscription.unsubscribe();
