@@ -71,6 +71,13 @@
       "when": 1791662671929,
       "tag": "0009_restore_10_profile_privacy_goal_linking_and_function_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791720000000,
+      "tag": "0010_wait_for_verified_email_for_profile",
+      "breakpoints": true
     }
   ]
 }
