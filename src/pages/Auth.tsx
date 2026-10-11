@@ -43,6 +43,8 @@ type View =
   | 'forgot-reset'
   | 'forgot-success';
 
+const EMAIL_OTP_LENGTH = 8;
+
 interface AuthProps {
   onAuthSuccess: () => void;
 }
@@ -241,7 +243,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
 
       setSignupOtp('');
       startCooldown(120);
-      toast({ title: 'Check your email', description: 'Enter the 6-digit code we emailed you to finish signing up.' });
+      toast({ title: 'Check your email', description: `Enter the ${EMAIL_OTP_LENGTH}-digit code we emailed you to finish signing up.` });
       goTo('signup-otp');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Check your connection and try again.';
@@ -254,8 +256,8 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
 
   const handleVerifySignupOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (signupOtp.length !== 6) {
-      setErrors({ signupOtp: 'Enter the 6-digit code from your email.' });
+    if (signupOtp.length !== EMAIL_OTP_LENGTH) {
+      setErrors({ signupOtp: `Enter the ${EMAIL_OTP_LENGTH}-digit code from your email.` });
       return;
     }
     setIsLoading(true);
@@ -345,7 +347,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
       }
 
       startCooldown(120);
-      toast({ title: 'Reset code sent', description: 'Check your inbox and spam folder for the 6-digit code.' });
+      toast({ title: 'Reset code sent', description: `Check your inbox and spam folder for the ${EMAIL_OTP_LENGTH}-digit code.` });
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Check your connection and try again.';
@@ -374,8 +376,8 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   // ---------- Forgot Password: Verify OTP ----------
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.length !== 6) {
-      setErrors({ otp: 'Enter the 6-digit code' });
+    if (otp.length !== EMAIL_OTP_LENGTH) {
+      setErrors({ otp: `Enter the ${EMAIL_OTP_LENGTH}-digit code` });
       return;
     }
     setIsLoading(true);
@@ -687,11 +689,11 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         </div>
         <h2 className="text-2xl font-semibold text-foreground mb-2 text-center">Enter your email code</h2>
         <p className="text-sm text-muted-foreground mb-6 text-center">
-          We sent a 6-digit verification code to <span className="font-medium text-foreground">{email}</span>. Enter it below to finish creating your account.
+          We sent an {EMAIL_OTP_LENGTH}-digit verification code to <span className="font-medium text-foreground">{email}</span>. Enter it below to finish creating your account.
         </p>
         <form onSubmit={handleVerifySignupOtp} className="space-y-5" noValidate>
           <div className="flex justify-center">
-            <InputOTP maxLength={6} value={signupOtp} onChange={setSignupOtp}>
+            <InputOTP maxLength={EMAIL_OTP_LENGTH} value={signupOtp} onChange={setSignupOtp}>
               <InputOTPGroup>
                 <InputOTPSlot index={0} />
                 <InputOTPSlot index={1} />
@@ -699,11 +701,13 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
                 <InputOTPSlot index={3} />
                 <InputOTPSlot index={4} />
                 <InputOTPSlot index={5} />
+                <InputOTPSlot index={6} />
+                <InputOTPSlot index={7} />
               </InputOTPGroup>
             </InputOTP>
           </div>
           {errors.signupOtp && <p className="text-sm text-destructive text-center">{errors.signupOtp}</p>}
-          <Button type="submit" className="w-full" disabled={isLoading || signupOtp.length !== 6}>
+          <Button type="submit" className="w-full" disabled={isLoading || signupOtp.length !== EMAIL_OTP_LENGTH}>
             {isLoading ? 'Verifying...' : 'Verify email and continue'}
           </Button>
           <p className="text-center text-sm text-muted-foreground">Didn't get a code?{' '}
@@ -757,11 +761,11 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         <BackButton to="forgot-email" />
         <h2 className="text-2xl font-semibold text-foreground mb-2">Enter reset code</h2>
         <p className="text-sm text-muted-foreground mb-6">
-          Enter the 6-digit code sent to <span className="font-medium text-foreground">{resetEmail}</span>.
+          Enter the {EMAIL_OTP_LENGTH}-digit code sent to <span className="font-medium text-foreground">{resetEmail}</span>.
         </p>
         <form onSubmit={handleVerifyOtp} className="space-y-5" noValidate>
           <div className="flex justify-center">
-            <InputOTP maxLength={6} value={otp} onChange={setOtp}>
+            <InputOTP maxLength={EMAIL_OTP_LENGTH} value={otp} onChange={setOtp}>
               <InputOTPGroup>
                 <InputOTPSlot index={0} />
                 <InputOTPSlot index={1} />
@@ -769,6 +773,8 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
                 <InputOTPSlot index={3} />
                 <InputOTPSlot index={4} />
                 <InputOTPSlot index={5} />
+                <InputOTPSlot index={6} />
+                <InputOTPSlot index={7} />
               </InputOTPGroup>
             </InputOTP>
           </div>
@@ -776,7 +782,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
             <p className="text-sm text-destructive text-center">{errors.otp}</p>
           )}
 
-          <Button type="submit" className="w-full" disabled={isLoading || otp.length !== 6}>
+          <Button type="submit" className="w-full" disabled={isLoading || otp.length !== EMAIL_OTP_LENGTH}>
             {isLoading ? 'Verifying...' : 'Verify Code'}
           </Button>
 
