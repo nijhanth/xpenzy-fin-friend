@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFinancial } from '@/contexts/FinancialContext';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`;
+const CHAT_URL = `${SUPABASE_URL}/functions/v1/ai-assistant`;
 const DEFAULTS = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education', 'Other'];
 const LAST_CAT_KEY = 'xpenzy:last-category';
 const toDateInputValue = (date: Date) => {
@@ -74,7 +74,8 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
           setAiNote('AI is temporarily busy. You can still enter the expense manually.');
           return;
         }
-        throw new Error('ai');
+        const detail = typeof response.error === 'string' ? response.error : `Request failed (${r.status})`;
+        throw new Error(detail);
       }
       const res = await r.json();
       if (res.amount) setAmount(String(res.amount));
@@ -89,8 +90,10 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
       }
       const explanation = typeof res.explanation === 'string' ? ` ${res.explanation}` : '';
       setAiNote(`AI suggests ${res.category || 'a category'}.${explanation} Review or change it before saving.`);
-    } catch {
-      setAiNote('Could not read that right now. Fill in the details below instead.');
+    } catch (cause) {
+      console.error('AI expense entry failed:', cause);
+      const detail = cause instanceof Error && cause.message !== 'Failed to fetch' ? ` (${cause.message})` : '';
+      setAiNote(`Could not read that right now${detail}. Fill in the details below instead.`);
     } finally {
       setAiBusy(false);
     }
