@@ -44,6 +44,19 @@ type View =
   | 'forgot-success';
 
 const EMAIL_OTP_LENGTH = 6;
+const PENDING_SIGNUP_EMAIL_KEY = 'xpenzy:pending-signup-email';
+
+const getPendingSignupEmail = () => {
+  try { return window.sessionStorage.getItem(PENDING_SIGNUP_EMAIL_KEY) || ''; } catch { return ''; }
+};
+
+const savePendingSignupEmail = (value: string) => {
+  try { window.sessionStorage.setItem(PENDING_SIGNUP_EMAIL_KEY, value); } catch { /* Storage may be unavailable in private browsing. */ }
+};
+
+const clearPendingSignupEmail = () => {
+  try { window.sessionStorage.removeItem(PENDING_SIGNUP_EMAIL_KEY); } catch { /* Storage may be unavailable in private browsing. */ }
+};
 
 interface AuthProps {
   onAuthSuccess: () => void;
@@ -70,10 +83,12 @@ const AuthShell = ({ children, onHome }: { children: React.ReactNode; onHome: ()
 export const Auth = ({ onAuthSuccess }: AuthProps) => {
   const [searchParams] = useSearchParams();
   const requestedView = searchParams.get('mode');
-  const [view, setView] = useState<View>(requestedView === 'signup' ? 'signup' : requestedView === 'signin' ? 'signin' : 'entry');
+  const [view, setView] = useState<View>(() => getPendingSignupEmail()
+    ? 'signup-otp'
+    : requestedView === 'signup' ? 'signup' : requestedView === 'signin' ? 'signin' : 'entry');
 
   // Sign in / sign up fields
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(getPendingSignupEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [signupOtp, setSignupOtp] = useState('');
@@ -216,6 +231,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
       }
 
       if (session) {
+        clearPendingSignupEmail();
         toast({ title: 'Account created', description: 'Your email is verified and your account is ready.' });
         return;
       }
@@ -240,6 +256,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         }
 
         setSignupOtp('');
+        savePendingSignupEmail(email.trim());
         startCooldown(120);
         goTo('signup-otp');
         toast({ title: 'Check your email', description: 'If this signup is still unverified, a new code has been sent.' });
@@ -254,6 +271,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
       }
 
       setSignupOtp('');
+      savePendingSignupEmail(email.trim());
       startCooldown(120);
       toast({ title: 'Check your email', description: `Enter the ${EMAIL_OTP_LENGTH}-digit code we emailed you to finish signing up.` });
       goTo('signup-otp');
@@ -281,6 +299,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         return;
       }
       toast({ title: 'Email verified', description: 'Your account is ready.' });
+      clearPendingSignupEmail();
       onAuthSuccess();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Check your connection and try again.';
@@ -438,7 +457,11 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   const BackButton = ({ to }: { to: View }) => (
     <button
       type="button"
-      onClick={() => (to === 'entry' ? navigate('/') : goTo(to))}
+      onClick={() => {
+        if (view === 'signup-otp' && to === 'signup') clearPendingSignupEmail();
+        if (to === 'entry') navigate('/');
+        else goTo(to);
+      }}
       className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors"
     >
       <ArrowLeft className="h-4 w-4" /> Back
@@ -707,14 +730,12 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
           <div className="flex justify-center">
             <InputOTP maxLength={EMAIL_OTP_LENGTH} value={signupOtp} onChange={setSignupOtp}>
               <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-                <InputOTPSlot index={6} />
-                <InputOTPSlot index={7} />
+              <InputOTPSlot index={0} className="h-10 w-9 sm:w-10" />
+              <InputOTPSlot index={1} className="h-10 w-9 sm:w-10" />
+              <InputOTPSlot index={2} className="h-10 w-9 sm:w-10" />
+              <InputOTPSlot index={3} className="h-10 w-9 sm:w-10" />
+              <InputOTPSlot index={4} className="h-10 w-9 sm:w-10" />
+              <InputOTPSlot index={5} className="h-10 w-9 sm:w-10" />
               </InputOTPGroup>
             </InputOTP>
           </div>
@@ -779,14 +800,12 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
           <div className="flex justify-center">
             <InputOTP maxLength={EMAIL_OTP_LENGTH} value={otp} onChange={setOtp}>
               <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-                <InputOTPSlot index={6} />
-                <InputOTPSlot index={7} />
+              <InputOTPSlot index={0} className="h-10 w-9 sm:w-10" />
+              <InputOTPSlot index={1} className="h-10 w-9 sm:w-10" />
+              <InputOTPSlot index={2} className="h-10 w-9 sm:w-10" />
+              <InputOTPSlot index={3} className="h-10 w-9 sm:w-10" />
+              <InputOTPSlot index={4} className="h-10 w-9 sm:w-10" />
+              <InputOTPSlot index={5} className="h-10 w-9 sm:w-10" />
               </InputOTPGroup>
             </InputOTP>
           </div>
