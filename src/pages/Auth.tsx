@@ -151,19 +151,31 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
     if (Object.keys(fieldErrors).length) return;
 
     setIsLoading(true);
-    const { error } = await signIn(email.trim(), password);
-    if (error) {
-      const msg = error.message || '';
-      const friendly =
-        msg.toLowerCase().includes('invalid')
-          ? 'Invalid email or password. Please try again.'
-          : msg;
+    try {
+      const { error } = await signIn(email.trim(), password);
+      if (error) {
+        const message = typeof error.message === 'string' ? error.message : '';
+        const normalizedMessage = message.toLowerCase();
+        const errorCode = typeof error.code === 'string' ? error.code : '';
+        const friendly = errorCode === 'invalid_credentials' || normalizedMessage.includes('invalid login credentials')
+          ? 'Invalid email or password. Please check your details or use Forgot password to reset it.'
+          : normalizedMessage.includes('email not confirmed')
+            ? 'Please confirm your email address before signing in. Check your inbox for the verification code.'
+            : normalizedMessage.includes('invalid api key')
+              ? 'Supabase rejected the app API key. Check the Supabase URL and publishable key configured for this deployment.'
+              : message || 'Sign in failed. Please try again.';
+        setErrors({ form: friendly });
+        toast({ variant: 'destructive', title: 'Sign In Failed', description: friendly });
+      } else {
+        toast({ title: 'Welcome back!', description: 'You have successfully signed in.' });
+      }
+    } catch (error) {
+      const friendly = error instanceof Error ? error.message : 'Check your connection and try again.';
       setErrors({ form: friendly });
       toast({ variant: 'destructive', title: 'Sign In Failed', description: friendly });
-    } else {
-      toast({ title: 'Welcome back!', description: 'You have successfully signed in.' });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   // ---------- Sign Up ----------
