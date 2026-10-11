@@ -22,12 +22,12 @@ export default defineConfig(({ mode }) => ({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB limit
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff,woff2}']
       },
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon-192x192.png', 'icon-512x512.png'],
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon-192x192.png', 'icon-512x512.png', 'xpenzy-logo.svg'],
       manifest: {
         name: 'Xpenzy',
         short_name: 'Xpenzy',
         description: 'Track your income, expenses, savings and investments with beautiful charts and insights',
-        theme_color: '#4CAF50',
+        theme_color: '#047857',
         background_color: '#FFFFFF',
         display: 'standalone',
         start_url: '/',

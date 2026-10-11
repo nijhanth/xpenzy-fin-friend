@@ -1,61 +1,41 @@
-import { SVGProps } from 'react';
+import { useId, type SVGProps } from 'react';
 
 interface FinanceLogoProps extends SVGProps<SVGSVGElement> {
   className?: string;
 }
 
-export const FinanceLogo = ({ className = "w-12 h-12", ...props }: FinanceLogoProps) => {
+/** Xpenzy's coin and upward chart mark, shared across the app's branded surfaces. */
+export const FinanceLogo = ({ className = 'w-12 h-12', ...props }: FinanceLogoProps) => {
+  const gradientId = `xpenzy-logo-gradient-${useId().replace(/:/g, '')}`;
+
   return (
     <svg
       viewBox="0 0 64 64"
       className={className}
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Xpenzy finance logo"
       {...props}
     >
       <defs>
-        <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="hsl(var(--primary))" />
-          <stop offset="100%" stopColor="hsl(var(--accent))" />
+        <linearGradient id={gradientId} x1="5" y1="4" x2="59" y2="60" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#10B981" />
+          <stop offset="1" stopColor="#047857" />
         </linearGradient>
       </defs>
-      
-      {/* Circular background */}
-      <circle
-        cx="32"
-        cy="32"
-        r="30"
-        fill="url(#logoGradient)"
-        className="drop-shadow-lg"
-      />
-      
-      {/* Chart bars */}
-      <rect x="16" y="36" width="4" height="16" fill="white" rx="2" />
-      <rect x="22" y="28" width="4" height="24" fill="white" rx="2" />
-      <rect x="28" y="32" width="4" height="20" fill="white" rx="2" />
-      <rect x="34" y="20" width="4" height="32" fill="white" rx="2" />
-      <rect x="40" y="24" width="4" height="28" fill="white" rx="2" />
-      <rect x="46" y="18" width="4" height="34" fill="white" rx="2" />
-      
-      {/* Trending arrow */}
-      <path
-        d="M42 22 L48 16 L54 22 M48 16 L48 26"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      
-      {/* Dollar sign */}
-      <circle cx="18" cy="18" r="8" fill="white" fillOpacity="0.9" />
-      <path
-        d="M18 12 L18 24 M15 15 C15 15 15 13 18 13 C21 13 21 15 21 15 C21 15 21 17 18 17 C15 17 15 19 15 19 C15 19 15 21 18 21 C21 21 21 19 21 19"
-        stroke="url(#logoGradient)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        fill="none"
-      />
+
+      <rect x="3" y="3" width="58" height="58" rx="19" fill={`url(#${gradientId})`} />
+      <path d="M14 49.5H50" stroke="white" strokeOpacity=".32" strokeWidth="2" strokeLinecap="round" />
+
+      {/* Coin */}
+      <circle cx="21" cy="21" r="9" fill="white" fillOpacity=".16" stroke="white" strokeWidth="2.5" />
+      <path d="M18.1 17.5H23.8M18.1 20.5H23.8M19.5 17.5L23.4 24.5" stroke="white" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+
+      {/* Rising portfolio line */}
+      <path d="M14.5 43.5L25.5 33L33 38L48.5 22.5" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M39.5 22.5H48.5V31.5" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="14.5" cy="43.5" r="2" fill="white" />
     </svg>
   );
 };

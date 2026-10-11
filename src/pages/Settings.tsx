@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/ui/user-menu';
+import { FinanceLogo } from '@/components/ui/finance-logo';
 import { PrivacySettings } from '@/components/ui/privacy-settings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -344,11 +345,7 @@ export const Settings = () => {
       <Card className="bg-gradient-card border-border shadow-card">
         <CardContent className="pt-6 text-center space-y-2">
           <div className="flex items-center gap-3">
-            <img 
-              src="/lovable-uploads/e88aa1f4-0c35-4871-9992-7efea8c237ed.png" 
-              alt="Xpenzy Logo" 
-              className="w-8 h-8 object-contain"
-            />
+            <FinanceLogo className="w-8 h-8 shrink-0" />
             <p className="text-2xl font-bold text-primary font-poppins font-semibold tracking-tight">Xpenzy</p>
           </div>
           <p className="text-sm text-muted-foreground">Version 1.0.0</p>

@@ -2,10 +2,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FinanceLogo } from '@/components/ui/finance-logo';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   TrendingUp, 
   PieChart, 
@@ -25,6 +26,11 @@ const Landing = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+  const userAgent = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(userAgent);
+  const isWindows = /Windows/i.test(userAgent);
 
   // Redirect to app if already authenticated
   useEffect(() => {
@@ -34,7 +40,18 @@ const Landing = () => {
   }, [user, loading, navigate]);
 
   const handleInstall = async () => {
-    await promptInstall();
+    if (isInstalled) return;
+
+    // Chromium browsers expose a native prompt; iOS Safari requires its Share menu.
+    if (isInstallable) {
+      try {
+        await promptInstall();
+        return;
+      } catch (error) {
+        console.error('Unable to open the browser install prompt:', error);
+      }
+    }
+    setShowInstallHelp(true);
   };
 
   const features = [
@@ -84,26 +101,6 @@ const Landing = () => {
               </h1>
             </div>
             <div className="flex items-center gap-4">
-              {(isInstallable || isInstalled) && (
-                <Button 
-                  variant="outline" 
-                  onClick={handleInstall}
-                  disabled={isInstalled}
-                  className="font-medium"
-                >
-                  {isInstalled ? (
-                    <>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Installed
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4 mr-2" />
-                      Install App
-                    </>
-                  )}
-                </Button>
-              )}
               <Button 
                 variant="ghost" 
                 onClick={() => navigate('/auth?mode=signin')}
@@ -157,6 +154,16 @@ const Landing = () => {
                   Get started — it’s free
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={handleInstall}
+                  disabled={isInstalled}
+                  className="font-semibold px-8 py-6 text-lg"
+                >
+                  {isInstalled ? <CheckCircle className="mr-2 w-5 h-5" /> : <Download className="mr-2 w-5 h-5" />}
+                  {isInstalled ? 'Installed' : 'Install App'}
+                </Button>
               </div>
 
               <div className="flex items-center gap-8 pt-4">
@@ -182,6 +189,46 @@ const Landing = () => {
           </div>
         </div>
       </section>
+
+      <Dialog open={showInstallHelp} onOpenChange={setShowInstallHelp}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Install Xpenzy</DialogTitle>
+            <DialogDescription>
+              {isIOS
+                ? 'Add Xpenzy to your Home Screen from Safari.'
+                : isAndroid
+                  ? 'Install Xpenzy from your browser menu.'
+                  : isWindows
+                    ? 'Install Xpenzy as an app from Microsoft Edge or Google Chrome.'
+                    : 'Use your browser menu to install Xpenzy on this device.'}
+            </DialogDescription>
+          </DialogHeader>
+          {isIOS ? (
+            <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+              <li>Open this page in Safari.</li>
+              <li>Tap the <strong className="text-foreground">Share</strong> button.</li>
+              <li>Choose <strong className="text-foreground">Add to Home Screen</strong>, then tap <strong className="text-foreground">Add</strong>.</li>
+            </ol>
+          ) : isAndroid ? (
+            <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+              <li>Open this page in Chrome.</li>
+              <li>Tap the <strong className="text-foreground">⋮</strong> menu.</li>
+              <li>Choose <strong className="text-foreground">Install app</strong> or <strong className="text-foreground">Add to Home screen</strong>, then confirm.</li>
+            </ol>
+          ) : isWindows ? (
+            <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+              <li>Open this page in Microsoft Edge or Google Chrome.</li>
+              <li>Select the <strong className="text-foreground">Install</strong> icon in the address bar, or open the browser menu.</li>
+              <li>Choose <strong className="text-foreground">Install Xpenzy</strong> and confirm.</li>
+            </ol>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Open your browser menu and choose <strong className="text-foreground">Install app</strong> or <strong className="text-foreground">Add to Home Screen</strong>.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Features Section */}
       <section className="py-24 bg-card/30">

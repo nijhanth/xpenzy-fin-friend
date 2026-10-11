@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="xpenzy-gradient" x1="5" y1="4" x2="59" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10B981" />
+      <stop offset="1" stop-color="#047857" />
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="58" height="58" rx="19" fill="url(#xpenzy-gradient)" />
+  <path d="M14 49.5H50" stroke="white" stroke-opacity=".32" stroke-width="2" stroke-linecap="round" />
+  <circle cx="21" cy="21" r="9" fill="white" fill-opacity=".16" stroke="white" stroke-width="2.5" />
+  <path d="M18.1 17.5H23.8M18.1 20.5H23.8M19.5 17.5L23.4 24.5" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M14.5 43.5L25.5 33L33 38L48.5 22.5" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M39.5 22.5H48.5V31.5" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="14.5" cy="43.5" r="2" fill="white" />
+</svg>
