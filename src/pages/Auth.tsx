@@ -43,7 +43,7 @@ type View =
   | 'forgot-reset'
   | 'forgot-success';
 
-const EMAIL_OTP_LENGTH = 8;
+const EMAIL_OTP_LENGTH = 6;
 
 interface AuthProps {
   onAuthSuccess: () => void;
