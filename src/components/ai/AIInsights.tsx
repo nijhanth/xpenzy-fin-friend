@@ -3,7 +3,7 @@ import { Sparkles, Loader2, RefreshCw, TrendingUp, TrendingDown, AlertTriangle, 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import ReactMarkdown from 'react-markdown';
 
 const CHAT_URL = `${SUPABASE_URL}/functions/v1/ai-assistant`;
@@ -31,6 +31,7 @@ export const AIInsightsCard: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          apikey: SUPABASE_PUBLISHABLE_KEY,
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
@@ -198,6 +199,7 @@ export const ExpensePredictionCard: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          apikey: SUPABASE_PUBLISHABLE_KEY,
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ action: 'predict' }),

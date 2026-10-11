@@ -4,7 +4,7 @@ import type { Database } from './types';
 import { brokeredPreviewStorage } from './previewAuthStorage';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://vlafgohsqzhzqtcmlapt.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_A5cdyOopLgqfSVDTibrXvg_EeWqrCUP';
+export const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_A5cdyOopLgqfSVDTibrXvg_EeWqrCUP';
 const clientUrl = SUPABASE_URL || 'https://supabase-not-configured.invalid';
 const clientKey = SUPABASE_PUBLISHABLE_KEY || 'preview-only-key';
 

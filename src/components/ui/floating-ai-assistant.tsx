@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import ReactMarkdown from 'react-markdown';
 
 const CHAT_URL = `${SUPABASE_URL}/functions/v1/ai-assistant`;
@@ -55,6 +55,7 @@ export const FloatingAIAssistant = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          apikey: SUPABASE_PUBLISHABLE_KEY,
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
