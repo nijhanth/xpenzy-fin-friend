@@ -148,7 +148,7 @@ export const AIInsightsCard: React.FC = () => {
           <div className="text-center py-6">
             <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-yellow-500/60" />
             <p className="text-sm text-muted-foreground mb-3">AI is temporarily unavailable. Check the Lovable AI setup and available credits, then try again.</p>
-            <Button onClick={fetchInsights} variant="outline" size="sm" disabled={isLoading}>
+            <Button onClick={() => fetchInsights(period)} variant="outline" size="sm" disabled={isLoading}>
               <RefreshCw className="w-4 h-4 mr-2" /> Retry
             </Button>
           </div>
