@@ -73,6 +73,7 @@ supabase functions deploy ai-assistant --project-ref vlafgohsqzhzqtcmlapt
 ```
 
 The function validates the user's access token itself, so its `verify_jwt` gateway setting is disabled in `supabase/config.toml`.
+In chat, explicit requests to create or change an expense budget are saved to the signed-in user's budget list; the assistant confirms only after the database write succeeds.
 
 Apply pending database migrations to the same project so expense and budget fields stay in sync with the app:
 

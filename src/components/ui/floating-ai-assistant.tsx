@@ -61,6 +61,7 @@ export const FloatingAIAssistant = () => {
         body: JSON.stringify({
           action: 'chat',
           messages: currentMessages.filter(m => m.id !== '1').map(m => ({ role: m.role, content: m.content })),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
 
@@ -96,7 +97,11 @@ export const FloatingAIAssistant = () => {
           if (jsonStr === '[DONE]') break;
           try {
             const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
+            const delta = parsed.choices?.[0]?.delta;
+            const content = delta?.content;
+            if (delta?.budgetChanged) {
+              window.dispatchEvent(new Event('xpenzy:budgets-changed'));
+            }
             if (content) {
               assistantContent += content;
               setMessages(prev => {

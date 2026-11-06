@@ -8,6 +8,11 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
+const chatReply = (content: string, budgetChanged = false) => new Response(
+  `data: ${JSON.stringify({ choices: [{ delta: { content, budgetChanged } }] })}\n\ndata: [DONE]\n\n`,
+  { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } },
+);
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -155,7 +160,8 @@ Instructions:
       const finData = await fetchFinancialData();
       systemPrompt = `You are Xpenzy AI, a smart financial assistant. You help users understand their spending, savings, and investments.
 Be concise, friendly, and use ₹ for currency. Use bullet points when listing items.
-    You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
+You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
+You can create or update an expense budget only when the user explicitly asks you to do so. Use the create_expense_budget tool for a clear request with a category, amount, and period. Never claim a budget was created or updated unless the tool succeeds. For hypothetical questions or suggestions, do not call the tool.
 Here is the user's current financial data for ${finData.month}:
 - Total Income: ₹${finData.totalIncome.toLocaleString()}
 - Total Expenses: ₹${finData.totalExpenses.toLocaleString()}
@@ -291,15 +297,35 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
       aiMessages.push({ role: "user", content: userPrompt });
     }
 
+    const chatTools = action === "chat" ? [{
+      type: "function",
+      function: {
+        name: "create_expense_budget",
+        description: "Create or update an expense budget only when the user explicitly requests this action.",
+        parameters: {
+          type: "object",
+          properties: {
+            category: { type: "string", description: "The expense category, such as Petrol or Groceries." },
+            amount: { type: "number", description: "The requested positive budget limit." },
+            period: { type: "string", enum: ["weekly", "monthly", "yearly"], description: "Budget period." },
+          },
+          required: ["category", "amount", "period"],
+          additionalProperties: false,
+        },
+      },
+    }] : [];
+
     const body: any = {
       model: "gemini-3.1-flash-lite",
       messages: aiMessages,
-      stream: action === "chat",
+      stream: false,
     };
-    if (useToolCalling) {
+    if (action === "chat") {
+      body.tools = chatTools;
+      body.tool_choice = "auto";
+    } else if (useToolCalling) {
       body.tools = tools;
       body.tool_choice = toolChoice;
-      body.stream = false;
     }
 
     const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
@@ -330,16 +356,76 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
       });
     }
 
-    // Stream for chat
-    if (action === "chat") {
-      return new Response(response.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-      });
-    }
-
     // Parse structured responses
     const result = await response.json();
     const choice = result.choices?.[0];
+
+    if (action === "chat") {
+      const toolCall = choice?.message?.tool_calls?.[0];
+      if (toolCall?.function?.name === "create_expense_budget") {
+        const args = JSON.parse(toolCall.function.arguments);
+        const category = typeof args.category === "string" ? args.category.trim() : "";
+        const amount = Number(args.amount);
+        const budgetPeriod = args.period;
+        if (!category || category.length > 100 || !Number.isFinite(amount) || amount <= 0
+          || !["weekly", "monthly", "yearly"].includes(budgetPeriod)) {
+          throw new Error("The requested budget needs a valid category, positive amount, and weekly, monthly, or yearly period.");
+        }
+
+        const dateParts = new Intl.DateTimeFormat("en-US", {
+          timeZone: safeTimeZone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).formatToParts(new Date());
+        const part = (type: string) => Number(dateParts.find((item) => item.type === type)?.value);
+        const year = part("year");
+        const month = part("month") - 1;
+        const week = Math.ceil(part("day") / 7);
+        const budgetValues = {
+          category,
+          limit_amount: amount,
+          period: budgetPeriod,
+          icon: "💰",
+          linked_type: "expenses",
+          linked_id: null,
+          year,
+          month: budgetPeriod === "weekly" || budgetPeriod === "monthly" ? month : null,
+          week: budgetPeriod === "weekly" ? week : null,
+          user_id: userId,
+        };
+
+        let existingBudgetQuery = supabase
+          .from("budget_categories")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("category", category)
+          .eq("period", budgetPeriod)
+          .eq("linked_type", "expenses")
+          .eq("year", year);
+        if (budgetPeriod === "monthly" || budgetPeriod === "weekly") {
+          existingBudgetQuery = existingBudgetQuery.eq("month", month);
+        }
+        if (budgetPeriod === "weekly") {
+          existingBudgetQuery = existingBudgetQuery.eq("week", week);
+        }
+        const { data: existingBudget, error: lookupError } = await existingBudgetQuery.limit(1).maybeSingle();
+        if (lookupError) throw lookupError;
+
+        const saveResult = existingBudget
+          ? await supabase.from("budget_categories").update(budgetValues).eq("id", existingBudget.id).eq("user_id", userId).select("id").single()
+          : await supabase.from("budget_categories").insert(budgetValues).select("id").single();
+        if (saveResult.error) throw saveResult.error;
+
+        const periodLabel = budgetPeriod.charAt(0).toUpperCase() + budgetPeriod.slice(1);
+        const verb = existingBudget ? "Updated" : "Created";
+        const savedMessage = `${verb} your ${periodLabel.toLowerCase()} budget for ${category} to ₹${amount.toLocaleString("en-IN")}. It is saved in your Xpenzy budget list.`;
+        return chatReply(savedMessage, true);
+      }
+
+      const content = choice?.message?.content || "";
+      return chatReply(content.trim() || "I couldn't generate a response. Please try again.");
+    }
 
     if (useToolCalling && choice?.message?.tool_calls?.length) {
       const args = JSON.parse(choice.message.tool_calls[0].function.arguments);

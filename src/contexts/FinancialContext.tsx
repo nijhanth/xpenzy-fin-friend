@@ -118,6 +118,25 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     loadAllData();
   }, [toast]);
 
+  React.useEffect(() => {
+    const refreshBudgets = async () => {
+      try {
+        const budgets = await budgetService.getAll();
+        setData(prev => ({ ...prev, budgets }));
+      } catch (error) {
+        console.error('Error refreshing budgets after AI update:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Budget saved, but refresh failed',
+          description: 'Reload the page to see the latest budget.',
+        });
+      }
+    };
+
+    window.addEventListener('xpenzy:budgets-changed', refreshBudgets);
+    return () => window.removeEventListener('xpenzy:budgets-changed', refreshBudgets);
+  }, [toast]);
+
   const addIncome = async (income: Omit<IncomeEntry, 'id'>) => {
     try {
       const newIncome = await incomeService.create(income);
