@@ -60,7 +60,7 @@ const getChatHistoryError = (action: 'load' | 'save', error: { message: string }
   new Error(`Could not ${action} chat history: ${error.message}`);
 
 export const FloatingAIAssistant = () => {
-  const { refreshBudgets } = useFinancial();
+  const { refreshBudgets, refreshExpenses } = useFinancial();
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id;
   const [isOpen, setIsOpen] = useState(false);
@@ -220,6 +220,9 @@ export const FloatingAIAssistant = () => {
             if (delta?.budgetChanged) {
               await refreshBudgets();
             }
+            if (delta?.expenseChanged) {
+              await refreshExpenses();
+            }
             if (content) {
               assistantContent += content;
               setMessages(prev => {
@@ -292,7 +295,7 @@ export const FloatingAIAssistant = () => {
                 Your data stays in your control
               </div>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), and your current-month financial summaries to the configured Gemini API. Your chat history is saved to your Xpenzy account in Supabase so it can be restored across devices. Nothing is sent until you continue and ask.
+                When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), and your current-month financial summaries to the configured Gemini API. Your chat history is saved to your Xpenzy account in Supabase so it can be restored across devices. If you explicitly ask to record an expense or change a budget, Xpenzy saves that action to your account. Nothing is sent or saved until you continue and ask.
               </p>
               <Button onClick={() => setHasAcceptedDataUse(true)}>Continue to AI</Button>
               <p className="text-xs text-muted-foreground">AI responses are suggestions, not financial advice. Review your records before acting.</p>

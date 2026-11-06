@@ -44,8 +44,8 @@ const trimChatMessages = (messages: unknown) => {
   return context;
 };
 
-const chatReply = (content: string, budgetChanged = false) => new Response(
-  `data: ${JSON.stringify({ choices: [{ delta: { content, budgetChanged } }] })}\n\ndata: [DONE]\n\n`,
+const chatReply = (content: string, changes: { budgetChanged?: boolean; expenseChanged?: boolean } = {}) => new Response(
+  `data: ${JSON.stringify({ choices: [{ delta: { content, ...changes } }] })}\n\ndata: [DONE]\n\n`,
   { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } },
 );
 
@@ -199,6 +199,7 @@ Instructions:
 Be concise, friendly, and use ₹ for currency. Use bullet points when listing items.
 You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
 You can create or update an expense budget only when the user explicitly asks you to do so. Use the create_expense_budget tool for a clear request with a category, amount, and period. Never claim a budget was created or updated unless the tool succeeds. For hypothetical questions or suggestions, do not call the tool.
+You can record an expense only when the user explicitly asks to add, log, or record one and provides a clear amount and category. Use the create_expense tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. Never claim an expense was recorded unless the tool succeeds. Do not record hypothetical expenses or merely discuss a past expense as a new record.
 Here is the user's current financial data for ${finData.month}:
 - Total Income: ₹${finData.totalIncome.toLocaleString()}
 - Total Expenses: ₹${finData.totalExpenses.toLocaleString()}
@@ -334,23 +335,44 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
       aiMessages.push({ role: "user", content: userPrompt });
     }
 
-    const chatTools = action === "chat" ? [{
-      type: "function",
-      function: {
-        name: "create_expense_budget",
-        description: "Create or update an expense budget only when the user explicitly requests this action.",
-        parameters: {
-          type: "object",
-          properties: {
-            category: { type: "string", description: "The expense category, such as Petrol or Groceries." },
-            amount: { type: "number", description: "The requested positive budget limit." },
-            period: { type: "string", enum: ["weekly", "monthly", "yearly"], description: "Budget period." },
+    const chatTools = action === "chat" ? [
+      {
+        type: "function",
+        function: {
+          name: "create_expense_budget",
+          description: "Create or update an expense budget only when the user explicitly requests this action.",
+          parameters: {
+            type: "object",
+            properties: {
+              category: { type: "string", description: "The expense category, such as Petrol or Groceries." },
+              amount: { type: "number", description: "The requested positive budget limit." },
+              period: { type: "string", enum: ["weekly", "monthly", "yearly"], description: "Budget period." },
+            },
+            required: ["category", "amount", "period"],
+            additionalProperties: false,
           },
-          required: ["category", "amount", "period"],
-          additionalProperties: false,
         },
       },
-    }] : [];
+      {
+        type: "function",
+        function: {
+          name: "create_expense",
+          description: "Record a new expense only when the user explicitly asks to add, log, or record one.",
+          parameters: {
+            type: "object",
+            properties: {
+              amount: { type: "number", description: "Positive expense amount." },
+              category: { type: "string", description: "Expense category, such as Food, Petrol, or Rent." },
+              date: { type: "string", description: "Expense date in YYYY-MM-DD format; omit to use today." },
+              paymentMode: { type: "string", enum: ["Cash", "UPI", "Card", "Bank Transfer", "Net Banking"] },
+              notes: { type: "string", description: "Optional short description." },
+            },
+            required: ["amount", "category"],
+            additionalProperties: false,
+          },
+        },
+      },
+    ] : [];
 
     const body: any = {
       model: "gemini-3.1-flash-lite",
@@ -457,7 +479,49 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         const periodLabel = budgetPeriod.charAt(0).toUpperCase() + budgetPeriod.slice(1);
         const verb = existingBudget ? "Updated" : "Created";
         const savedMessage = `${verb} your ${periodLabel.toLowerCase()} budget for ${category} to ₹${amount.toLocaleString("en-IN")}. It is saved in your Xpenzy budget list.`;
-        return chatReply(savedMessage, true);
+        return chatReply(savedMessage, { budgetChanged: true });
+      }
+
+      if (toolCall?.function?.name === "create_expense") {
+        const args = JSON.parse(toolCall.function.arguments);
+        const amount = Number(args.amount);
+        const category = typeof args.category === "string" ? args.category.trim() : "";
+        const notes = typeof args.notes === "string" ? args.notes.trim() : "";
+        const paymentMode = args.paymentMode ?? "UPI";
+        const todayParts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: safeTimeZone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).formatToParts(new Date());
+        const today = `${todayParts.find((part) => part.type === "year")?.value}-${todayParts.find((part) => part.type === "month")?.value}-${todayParts.find((part) => part.type === "day")?.value}`;
+        const date = args.date ?? today;
+        const validDate = typeof date === "string"
+          && /^\d{4}-\d{2}-\d{2}$/.test(date)
+          && !Number.isNaN(Date.parse(`${date}T00:00:00Z`))
+          && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+        const paymentModes = ["Cash", "UPI", "Card", "Bank Transfer", "Net Banking"];
+        if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000
+          || !category || category.length > 100
+          || typeof notes !== "string" || notes.length > 500
+          || !paymentModes.includes(paymentMode)
+          || !validDate) {
+          throw new Error("The requested expense needs a valid positive amount, category, date, and payment method.");
+        }
+
+        const { error: expenseError } = await supabase.from("expense_entries").insert({
+          amount,
+          category,
+          subcategory: "General",
+          date,
+          payment_mode: paymentMode,
+          notes,
+          user_id: userId,
+        });
+        if (expenseError) throw expenseError;
+
+        const savedMessage = `Recorded your ${category} expense of ₹${amount.toLocaleString("en-IN")} on ${date} using ${paymentMode}. It is saved in your Xpenzy expenses.`;
+        return chatReply(savedMessage, { expenseChanged: true });
       }
 
       const content = choice?.message?.content || "";

@@ -73,7 +73,7 @@ supabase functions deploy ai-assistant --project-ref vlafgohsqzhzqtcmlapt
 ```
 
 The function validates the user's access token itself, so its `verify_jwt` gateway setting is disabled in `supabase/config.toml`.
-In chat, explicit requests to create or change an expense budget are saved to the signed-in user's budget list; the assistant confirms only after the database write succeeds.
+In chat, explicit requests to create or change an expense budget or record an expense are saved to the signed-in user's financial data; the assistant confirms only after the database write succeeds.
 Chat history is stored per user in Supabase, with up to 20 recent messages retained and an estimated 6,000-token context limit per AI request.
 
 Apply pending database migrations to the same project so expense and budget fields, including the private AI chat history table, stay in sync with the app:

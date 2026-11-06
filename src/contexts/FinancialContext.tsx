@@ -8,6 +8,7 @@ interface FinancialContextType {
   data: FinancialData;
   isLoading: boolean;
   refreshBudgets: () => Promise<void>;
+  refreshExpenses: () => Promise<void>;
   addIncome: (income: Omit<IncomeEntry, 'id'>) => void;
   addExpense: (expense: Omit<ExpenseEntry, 'id'>) => Promise<ExpenseEntry | undefined> | void;
   addSavingsGoal: (savings: Omit<SavingsGoal, 'id'>) => void;
@@ -80,6 +81,20 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         variant: 'destructive',
         title: 'Budget saved, but refresh failed',
         description: 'Reload the page to see the latest budget.',
+      });
+    }
+  };
+
+  const refreshExpenses = async () => {
+    try {
+      const expenses = await expenseService.getAll();
+      setData(prev => ({ ...prev, expenses }));
+    } catch (error) {
+      console.error('Error refreshing expenses after AI update:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Expense saved, but refresh failed',
+        description: 'Reload the page to see the latest expense.',
       });
     }
   };
@@ -762,6 +777,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       data,
       isLoading,
       refreshBudgets,
+      refreshExpenses,
       addIncome,
       addExpense,
       addSavingsGoal,
