@@ -149,14 +149,52 @@ export const useAppUpdate = () => {
     }
 
     setStatus('updating');
-    const reloadOnControllerChange = () => window.location.reload();
-    navigator.serviceWorker.addEventListener('controllerchange', reloadOnControllerChange, { once: true });
-    waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    let finished = false;
+    let activationReloadTimeout: number | undefined;
+    const cleanup = () => {
+      navigator.serviceWorker.removeEventListener('controllerchange', reloadApp);
+      waitingWorker.removeEventListener('statechange', handleWorkerStateChange);
+      window.clearTimeout(timeoutId);
+      if (activationReloadTimeout !== undefined) window.clearTimeout(activationReloadTimeout);
+    };
+    const reloadApp = () => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      window.location.reload();
+    };
+    const handleWorkerStateChange = () => {
+      if (waitingWorker.state === 'activated') {
+        activationReloadTimeout = window.setTimeout(reloadApp, 1000);
+      } else if (waitingWorker.state === 'redundant') {
+        finished = true;
+        cleanup();
+        console.error('The waiting service worker became redundant before activating.');
+        setStatus('error');
+      }
+    };
+    const timeoutId = window.setTimeout(() => {
+      if (waitingWorker.state === 'activated') {
+        reloadApp();
+      } else {
+        finished = true;
+        cleanup();
+        console.error('The waiting service worker did not activate within 20 seconds.');
+        setStatus('error');
+      }
+    }, 20000);
 
-    window.setTimeout(() => {
-      navigator.serviceWorker.removeEventListener('controllerchange', reloadOnControllerChange);
-      setStatus((current) => current === 'updating' ? 'available' : current);
-    }, 15000);
+    navigator.serviceWorker.addEventListener('controllerchange', reloadApp, { once: true });
+    waitingWorker.addEventListener('statechange', handleWorkerStateChange);
+    try {
+      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+      handleWorkerStateChange();
+    } catch (error) {
+      finished = true;
+      cleanup();
+      console.error('Failed to request service worker activation:', error);
+      setStatus('error');
+    }
   }, [checkForUpdates]);
 
   return { status, history, historyError, checkForUpdates, applyUpdate };

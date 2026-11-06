@@ -499,10 +499,12 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
                   {updateStatus === 'available'
                     ? 'Install the latest version now.'
                     : updateStatus === 'error'
-                      ? 'Check your internet connection and try again.'
+                      ? 'The update could not finish. Check your connection and try again.'
                       : updateStatus === 'current'
                         ? 'You’re using the latest version available.'
-                        : 'Updates are checked automatically when the app is opened.'}
+                        : updateStatus === 'updating'
+                          ? 'Activating the update. The app will restart automatically.'
+                          : 'Updates are checked automatically when the app is opened.'}
                 </p>
               </div>
             </div>
@@ -510,6 +512,11 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
               <Button onClick={applyUpdate} className="shrink-0">
                 <Download className="mr-2 h-4 w-4" aria-hidden />
                 Update now
+              </Button>
+            ) : updateStatus === 'updating' ? (
+              <Button disabled className="shrink-0">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                Restarting…
               </Button>
             ) : updateStatus === 'current' || updateStatus === 'error' ? (
               <Button variant="outline" onClick={() => { void checkForUpdates(); }} className="shrink-0">
