@@ -178,7 +178,12 @@ export const Home = () => {
     return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key)).slice(-12);
   }, [data.income, data.expenses]);
 
-  const currentMonth = new Date().toLocaleDateString('en', { month: 'long', year: 'numeric' });
+  const currentDate = new Date().toLocaleDateString('en', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 
   return (
     <div className="w-full p-4 space-y-6 animate-fade-in font-xpenzy">
@@ -189,7 +194,7 @@ export const Home = () => {
           <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-foreground tracking-tight">
             {getSecureDisplayName()}
           </h1>
-          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">{currentMonth}</p>
+          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">{currentDate}</p>
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell />
