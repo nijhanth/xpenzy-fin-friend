@@ -19,7 +19,7 @@ interface FinancialContextType {
   updateSavingsTransaction: (id: string, transaction: Partial<SavingsTransaction>) => Promise<void>;
   deleteSavingsTransaction: (id: string) => Promise<void>;
   getSavingsTransactions: (savingsGoalId: string) => SavingsTransaction[];
-  addBudget: (budget: Omit<BudgetCategory, 'id'>) => void;
+  addBudget: (budget: Omit<BudgetCategory, 'id'>) => Promise<BudgetCategory | undefined>;
   updateSavingsGoal: (id: string, current: number) => void;
   updateInvestment: (id: string, current: number) => void;
   addMoneyToInvestment: (investmentId: string, amount: number, date: string) => void;
@@ -38,6 +38,14 @@ interface FinancialContextType {
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return 'Unexpected database error.';
+};
 
 export const useFinancial = () => {
   const context = useContext(FinancialContext);
@@ -205,7 +213,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to save expense. Please try again."
+        description: `Failed to save expense: ${getErrorMessage(error)}`
       });
       return undefined;
     }
@@ -691,29 +699,28 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const addBudget = async (budget: Omit<BudgetCategory, 'id'>) => {
-    console.log('addBudget function called', budget);
+  const addBudget = async (budget: Omit<BudgetCategory, 'id'>): Promise<BudgetCategory | undefined> => {
     try {
       const newBudget = await budgetService.create(budget);
       setData(prev => ({
         ...prev,
         budgets: [newBudget, ...prev.budgets]
       }));
+      if (!newBudget.year && !newBudget.month && !newBudget.week && !newBudget.linked_type) {
+        toast({
+          title: 'Budget saved with limited tracking',
+          description: 'Apply the latest Supabase database migration to enable date-specific and linked budgets.'
+        });
+      }
+      return newBudget;
     } catch (error) {
       console.error('Error adding budget:', error);
-      const newBudget: BudgetCategory = {
-        ...budget,
-        id: Date.now().toString()
-      };
-      setData(prev => ({
-        ...prev,
-        budgets: [...prev.budgets, newBudget]
-      }));
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to save budget to database. Saved locally instead."
+        description: `Failed to save budget: ${getErrorMessage(error)}`
       });
+      return undefined;
     }
   };
 

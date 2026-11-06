@@ -108,19 +108,20 @@ export const expenseService = {
   },
 
   async create(expense: Omit<ExpenseEntry, 'id'>): Promise<ExpenseEntry> {
+    const expenseRow = {
+      amount: expense.amount,
+      date: expense.date,
+      category: expense.category,
+      subcategory: expense.subcategory,
+      payment_mode: expense.paymentMode,
+      notes: expense.notes,
+      custom_category: expense.customCategory,
+      user_id: (await supabase.auth.getUser()).data.user?.id,
+      ...(expense.goalId ? { goal_id: expense.goalId } : {})
+    };
     const { data, error } = await supabase
       .from('expense_entries')
-      .insert([{
-        amount: expense.amount,
-        date: expense.date,
-        category: expense.category,
-        subcategory: expense.subcategory,
-        payment_mode: expense.paymentMode,
-        notes: expense.notes,
-        custom_category: expense.customCategory,
-        goal_id: expense.goalId ?? null,
-        user_id: (await supabase.auth.getUser()).data.user?.id
-      }] as any)
+      .insert([expenseRow] as any)
       .select()
       .single();
     
@@ -360,6 +361,9 @@ export const budgetService = {
   },
 
   async create(budget: Omit<BudgetCategory, 'id'>): Promise<BudgetCategory> {
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    if (!userId) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from('budget_categories')
       .insert([{
@@ -375,12 +379,39 @@ export const budgetService = {
         week: budget.week,
         linked_type: budget.linked_type || 'expenses',
         linked_id: budget.linked_id,
-        user_id: (await supabase.auth.getUser()).data.user?.id
+        user_id: userId
       }])
       .select()
       .single();
-    
-    if (error) throw error;
+
+    if (error) {
+      const missingTrackingColumn = error.code === 'PGRST204'
+        && /could not find the '(?:current|icon|start_date|end_date|year|month|week|linked_type|linked_id)' column of 'budget_categories' in the schema cache/i.test(error.message);
+      if (!missingTrackingColumn) throw error;
+
+      const legacyResult = await supabase
+        .from('budget_categories')
+        .insert([{
+          category: budget.category,
+          limit_amount: budget.limit_amount,
+          period: budget.period,
+          user_id: userId
+        }])
+        .select()
+        .single();
+      if (legacyResult.error) throw legacyResult.error;
+
+      return {
+        id: legacyResult.data.id,
+        category: legacyResult.data.category,
+        limit_amount: legacyResult.data.limit_amount,
+        current: 0,
+        period: legacyResult.data.period as 'monthly' | 'weekly' | 'yearly',
+        icon: '💰',
+        user_id: legacyResult.data.user_id
+      };
+    }
+
     return {
       id: data.id,
       category: data.category,

@@ -162,7 +162,7 @@ export const Budget = () => {
     return <CheckCircle className="w-4 h-4 text-green-500" />;
   };
 
-  const handleAddBudget = () => {
+  const handleAddBudget = async () => {
     if (!newBudget.name || !newBudget.limit) {
       toast({
         title: "Error",
@@ -209,7 +209,8 @@ export const Budget = () => {
       });
       setEditingBudget(null);
     } else {
-      addBudget(budgetData);
+      const savedBudget = await addBudget(budgetData);
+      if (!savedBudget) return;
       toast({
         title: "Budget Added",
         description: `Budget for ${newBudget.name} has been created with current spending of ₹${currentSpent.toLocaleString()}`,

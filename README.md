@@ -64,6 +64,22 @@ This project is built with:
 
 Simply open [Lovable](https://lovable.dev/projects/2d3feb60-d41b-4220-86af-fa27729889a5) and click on Share -> Publish.
 
+### Deploying the AI assistant
+
+The AI assistant requires the `ai-assistant` Supabase Edge Function to be deployed to the same Supabase project configured for the app. Set the `LOVABLE_API_KEY` Edge Function secret in the Supabase project, then deploy the function:
+
+```sh
+supabase functions deploy ai-assistant --project-ref vlafgohsqzhzqtcmlapt
+```
+
+The function validates the user's access token itself, so its `verify_jwt` gateway setting is disabled in `supabase/config.toml`.
+
+Apply pending database migrations to the same project so expense and budget fields stay in sync with the app:
+
+```sh
+supabase db push --project-ref vlafgohsqzhzqtcmlapt
+```
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!

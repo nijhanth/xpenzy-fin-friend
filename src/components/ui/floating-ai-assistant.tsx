@@ -110,11 +110,14 @@ export const FloatingAIAssistant = () => {
           } catch { buffer = line + '\n' + buffer; break; }
         }
       }
-    } catch (e: any) {
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error';
       setMessages(prev => [...prev, {
         id: 'err-' + Date.now(),
         role: 'assistant',
-        content: `Sorry, I encountered an error: ${e.message}. Please try again.`,
+        content: errorMessage === 'Failed to fetch'
+          ? 'Sorry, I could not reach the AI service. The ai-assistant function may not be deployed to this Supabase project. Please try again after it has been deployed.'
+          : `Sorry, I encountered an error: ${errorMessage}. Please try again.`,
       }]);
     } finally {
       setIsLoading(false);

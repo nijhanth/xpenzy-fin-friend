@@ -2,3 +2,6 @@ project_id = "vlafgohsqzhzqtcmlapt"
 
 [functions.check-reset-account]
 verify_jwt = false
+
+[functions.ai-assistant]
+verify_jwt = false
