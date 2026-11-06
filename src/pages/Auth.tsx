@@ -63,8 +63,8 @@ interface AuthProps {
 }
 
 const AuthShell = ({ children, onHome }: { children: React.ReactNode; onHome: () => void }) => (
-  <div className="min-h-screen relative overflow-hidden bg-[radial-gradient(ellipse_at_top_left,_hsl(var(--primary)/.16),_transparent_42%),linear-gradient(135deg,hsl(var(--background)),hsl(var(--secondary)/.55))] font-poppins">
-    <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-8">
+  <div className="min-h-screen min-h-[100svh] relative overflow-x-hidden bg-[radial-gradient(ellipse_at_top_left,_hsl(var(--primary)/.16),_transparent_42%),linear-gradient(135deg,hsl(var(--background)),hsl(var(--secondary)/.55))] font-poppins">
+    <div className="relative z-10 min-h-screen min-h-[100svh] flex items-center justify-center px-4 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
       <div className="w-full max-w-md">
         <div className="text-center mb-7">
           <button type="button" onClick={onHome} className="inline-flex flex-col items-center justify-center hover:opacity-80 transition-opacity">

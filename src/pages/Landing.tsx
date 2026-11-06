@@ -91,7 +91,7 @@ const Landing = () => {
     return (
     <div className="landing-page min-h-screen bg-background text-foreground">
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border">
+      <nav className="sticky top-0 z-50 pt-[env(safe-area-inset-top)] backdrop-blur-lg bg-background/80 border-b border-border">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
