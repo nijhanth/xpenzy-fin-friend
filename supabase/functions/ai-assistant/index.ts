@@ -131,6 +131,14 @@ serve(async (req) => {
       }
 
       return {
+        today: periodEnd,
+        todayLabel: localToday.toLocaleDateString("en-IN", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          timeZone: "UTC",
+        }),
         month: range === "week" ? `week of ${periodStart}` : localToday.toLocaleString("en", { month: "long", year: "numeric", timeZone: "UTC" }),
         totalIncome,
         totalExpenses,
@@ -238,6 +246,7 @@ You may remember a stable response preference or non-sensitive fact the user sha
         : "Personal memory is disabled for this user. Do not save or use personal memories.";
       systemPrompt = `You are Xpenzy AI, a smart financial assistant. You help users understand their spending, savings, and investments.
 Be concise, friendly, and use ₹ for currency. Use bullet points when listing items.
+Today's date in the user's local timezone is ${finData.todayLabel} (${finData.today}, timezone ${safeTimeZone}). Treat this as the authoritative current date when answering date questions or interpreting "today", "yesterday", and relative dates. You have access to this date even though you do not have access to the user's full device calendar.
 You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
 You can create or update an expense budget only when the user explicitly asks you to do so. Use the create_expense_budget tool for a clear request with a category, amount, and period. Never claim a budget was created or updated unless the tool succeeds. For hypothetical questions or suggestions, do not call the tool.
 You can record an expense only when the user explicitly asks to add, log, or record one and provides a clear amount and category. Use the create_expense tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. Never claim an expense was recorded unless the tool succeeds. Do not record hypothetical expenses or merely discuss a past expense as a new record.
