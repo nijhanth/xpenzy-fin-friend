@@ -5,7 +5,21 @@ import { CacheFirst, NetworkFirst } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 
-// Precache all assets
+// Prefer the latest deployed app shell; use the precache only while offline.
+registerRoute(
+  ({ request }) => request.mode === 'navigate',
+  async ({ request }) => {
+    try {
+      return await fetch(request, { cache: 'no-store' });
+    } catch (error) {
+      const cachedAppShell = await caches.match(new URL('/index.html', self.location.origin).toString());
+      if (cachedAppShell) return cachedAppShell;
+      throw error;
+    }
+  },
+);
+
+// Precache all assets after registering the network-first navigation route.
 precacheAndRoute(self.__WB_MANIFEST || []);
 cleanupOutdatedCaches();
 
