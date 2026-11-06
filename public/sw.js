@@ -9,9 +9,10 @@ import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 precacheAndRoute(self.__WB_MANIFEST || []);
 cleanupOutdatedCaches();
 
-// Claim clients immediately
-self.skipWaiting();
-self.clients.claim();
+// The app asks the user before activating an available update.
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
 // Cache Google Fonts
 registerRoute(

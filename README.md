@@ -64,6 +64,8 @@ This project is built with:
 
 Simply open [Lovable](https://lovable.dev/projects/2d3feb60-d41b-4220-86af-fa27729889a5) and click on Share -> Publish.
 
+Installed app updates are checked when Xpenzy opens or returns to the foreground, and periodically while it is open. The dashboard shows an **Update now** button when a published update is ready; otherwise it shows that the app is up to date and allows a manual check.
+
 ### Deploying the AI assistant
 
 The AI assistant uses Gemini 3.1 Flash-Lite through Google's OpenAI-compatible Gemini API. Add your Gemini API key as the `GEMINI_API_KEY` Edge Function secret in the Supabase project, then deploy the function:

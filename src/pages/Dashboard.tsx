@@ -4,9 +4,13 @@ import {
   ArrowRight,
   ArrowUpRight,
   CalendarDays,
+  Check,
   CircleDollarSign,
+  Download,
+  Loader2,
   PiggyBank,
   Plus,
+  RefreshCw,
   ReceiptText,
   Target,
   TrendingDown,
@@ -14,6 +18,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAppUpdate } from '@/hooks/useAppUpdate';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,9 +33,11 @@ interface Props {
 export const Dashboard = ({ onAdd, onNavigate }: Props) => {
   const { data, isLoading } = useFinancial();
   const { user } = useAuth();
+  const { status: updateStatus, checkForUpdates, applyUpdate } = useAppUpdate();
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
+  const dayOfMonth = now.getDate();
   const monthKey = `${year}-${String(month).padStart(2, '0')}`;
   const monthName = now.toLocaleString('en-IN', { month: 'long' });
   const stats = useMemo(() => {
@@ -90,9 +97,9 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       activity,
       savings,
       investments,
-      dailyAverage: spent / Math.max(now.getDate(), 1),
+      dailyAverage: spent / Math.max(dayOfMonth, 1),
     };
-  }, [data, monthKey, month, year]);
+  }, [data, monthKey, month, year, dayOfMonth]);
 
   const firstName = (user?.user_metadata?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name || '').trim().split(/\s+/)[0];
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
@@ -117,6 +124,57 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
           <span className="hidden sm:inline">Add expense</span><span className="sm:hidden">Add</span>
         </Button>
       </header>
+
+      {updateStatus !== 'unsupported' && (
+        <div
+          className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              {updateStatus === 'checking' || updateStatus === 'updating'
+                ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                : updateStatus === 'available'
+                  ? <Download className="h-4 w-4" aria-hidden />
+                  : <Check className="h-4 w-4" aria-hidden />}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {updateStatus === 'available'
+                  ? 'A new Xpenzy update is ready'
+                  : updateStatus === 'updating'
+                    ? 'Updating Xpenzy…'
+                    : updateStatus === 'checking'
+                      ? 'Checking for app updates…'
+                      : updateStatus === 'error'
+                        ? 'Could not check for updates'
+                      : 'Xpenzy is up to date'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {updateStatus === 'available'
+                  ? 'Install the latest version now.'
+                  : updateStatus === 'error'
+                    ? 'Check your internet connection and try again.'
+                  : updateStatus === 'current'
+                    ? 'You’re using the latest version available.'
+                    : 'This app checks for published updates automatically.'}
+              </p>
+            </div>
+          </div>
+          {updateStatus === 'available' ? (
+            <Button onClick={applyUpdate} className="shrink-0">
+              <Download className="mr-2 h-4 w-4" aria-hidden />
+              Update now
+            </Button>
+          ) : updateStatus === 'current' || updateStatus === 'error' ? (
+            <Button variant="outline" onClick={() => { void checkForUpdates(); }} className="shrink-0">
+              <RefreshCw className="mr-2 h-4 w-4" aria-hidden />
+              {updateStatus === 'error' ? 'Try again' : 'Check for updates'}
+            </Button>
+          ) : null}
+        </div>
+      )}
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.75fr)]" aria-label="Monthly finances">
         <div className="relative overflow-hidden rounded-2xl p-5 text-white shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.7)] sm:p-7" style={{ background: 'linear-gradient(135deg, #18352e 0%, #214b40 54%, #2da66a 100%)' }}>
