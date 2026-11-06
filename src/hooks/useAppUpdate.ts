@@ -3,6 +3,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 type UpdateStatus = 'checking' | 'current' | 'available' | 'updating' | 'error' | 'unsupported';
 const UPDATE_HISTORY_KEY = 'xpenzy-app-update-history-v1';
 const MAX_UPDATE_HISTORY = 10;
+const UPDATE_CHECK_TIMEOUT_MS = 15000;
+
+const withTimeout = <T,>(promise: Promise<T>, message: string): Promise<T> =>
+  new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => reject(new Error(message)), UPDATE_CHECK_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      },
+    );
+  });
 
 export interface AppUpdateHistoryEntry {
   version: string;
@@ -56,15 +72,27 @@ export const useAppUpdate = () => {
   }, []);
 
   const checkForUpdates = useCallback(async (showChecking = true) => {
-    const registration = registrationRef.current;
+    if (showChecking) setStatus('checking');
+    let registration = registrationRef.current;
+    if (!registration) {
+      try {
+        registration = await withTimeout(
+          navigator.serviceWorker.getRegistration('/'),
+          'Service worker registration lookup timed out.',
+        ) ?? null;
+      } catch (error) {
+        console.error('Failed to find service worker registration:', error);
+        setStatus('error');
+        return;
+      }
+    }
     if (!registration) {
       setStatus('unsupported');
       return;
     }
-
-    if (showChecking) setStatus('checking');
+    registrationRef.current = registration;
     try {
-      await registration.update();
+      await withTimeout(registration.update(), 'The app update check timed out.');
       if (registration.waiting) {
         setStatus('available');
       } else if (!registration.installing) {
@@ -84,22 +112,34 @@ export const useAppUpdate = () => {
 
     let cancelled = false;
     let installingWorker: ServiceWorker | null = null;
+    let activeRegistration: ServiceWorkerRegistration | null = null;
     const handleWorkerStateChange = () => {
       if (!installingWorker || cancelled) return;
       if (installingWorker.state === 'installed') {
-        setStatus(registrationRef.current?.waiting ? 'available' : 'current');
+        setStatus(activeRegistration?.waiting ? 'available' : 'current');
       } else if (installingWorker.state === 'activated') {
         setStatus('current');
+      } else if (installingWorker.state === 'redundant') {
+        setStatus(activeRegistration?.waiting ? 'available' : 'current');
       }
     };
 
-    const handleUpdateFound = () => {
-      installingWorker = registrationRef.current?.installing ?? null;
+    const watchInstallingWorker = (worker: ServiceWorker | null) => {
+      installingWorker?.removeEventListener('statechange', handleWorkerStateChange);
+      installingWorker = worker;
       installingWorker?.addEventListener('statechange', handleWorkerStateChange);
+      handleWorkerStateChange();
+    };
+
+    const handleUpdateFound = () => {
+      watchInstallingWorker(activeRegistration?.installing ?? null);
     };
 
     const initialize = async () => {
-      const registration = await navigator.serviceWorker.getRegistration('/');
+      const registration = await withTimeout(
+        navigator.serviceWorker.getRegistration('/'),
+        'Service worker registration lookup timed out.',
+      );
       if (cancelled) return;
       if (!registration) {
         setStatus('unsupported');
@@ -107,11 +147,12 @@ export const useAppUpdate = () => {
       }
 
       registrationRef.current = registration;
+      activeRegistration = registration;
       registration.addEventListener('updatefound', handleUpdateFound);
       if (registration.waiting) {
         setStatus('available');
       } else if (registration.installing) {
-        handleUpdateFound();
+        watchInstallingWorker(registration.installing);
       } else {
         setStatus('current');
       }
