@@ -545,7 +545,7 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
             <ul className="space-y-2" aria-label="Recent app update history">
               {history.map((entry) => (
                 <li key={entry.buildId} className="flex flex-col gap-1 rounded-lg border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-sm font-medium text-foreground">Build {entry.buildId}</span>
+                  <span className="text-sm font-medium text-foreground">Version {entry.version}</span>
                   <span className="text-xs text-muted-foreground">
                     Installed {new Date(entry.installedAt).toLocaleString()}
                   </span>
@@ -563,7 +563,7 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
             <FinanceLogo className="w-8 h-8 shrink-0" />
             <p className="text-2xl font-bold text-primary font-poppins font-semibold tracking-tight">Xpenzy</p>
           </div>
-          <p className="text-sm text-muted-foreground">Build {__APP_BUILD_ID__}</p>
+          <p className="text-sm text-muted-foreground">Version {__APP_VERSION__}</p>
           <p className="text-xs text-muted-foreground">
             Built {new Date(__APP_BUILD_DATE__).toLocaleString()}
           </p>
