@@ -4,6 +4,7 @@ type UpdateStatus = 'checking' | 'current' | 'available' | 'updating' | 'error' 
 const UPDATE_HISTORY_KEY = 'xpenzy-app-update-history-v1';
 const MAX_UPDATE_HISTORY = 10;
 const UPDATE_CHECK_TIMEOUT_MS = 15000;
+const WORKER_INSTALL_TIMEOUT_MS = 30000;
 
 const withTimeout = <T,>(promise: Promise<T>, message: string): Promise<T> =>
   new Promise((resolve, reject) => {
@@ -18,6 +19,29 @@ const withTimeout = <T,>(promise: Promise<T>, message: string): Promise<T> =>
         reject(error);
       },
     );
+  });
+
+const waitForWorkerInstall = (
+  registration: ServiceWorkerRegistration,
+  worker: ServiceWorker,
+): Promise<'available' | 'current' | 'timeout'> =>
+  new Promise((resolve) => {
+    const finish = (result: 'available' | 'current' | 'timeout') => {
+      window.clearTimeout(timeoutId);
+      worker.removeEventListener('statechange', handleStateChange);
+      resolve(result);
+    };
+    const handleStateChange = () => {
+      if (registration.waiting || (worker.state === 'installed' && registration.active)) {
+        finish('available');
+      } else if (worker.state === 'activated' || worker.state === 'redundant') {
+        finish(registration.waiting ? 'available' : 'current');
+      }
+    };
+    const timeoutId = window.setTimeout(() => finish('timeout'), WORKER_INSTALL_TIMEOUT_MS);
+
+    worker.addEventListener('statechange', handleStateChange);
+    handleStateChange();
   });
 
 export interface AppUpdateHistoryEntry {
@@ -95,7 +119,13 @@ export const useAppUpdate = () => {
       await withTimeout(registration.update(), 'The app update check timed out.');
       if (registration.waiting) {
         setStatus('available');
-      } else if (!registration.installing) {
+      } else if (registration.installing) {
+        const installStatus = await waitForWorkerInstall(registration, registration.installing);
+        if (installStatus === 'timeout') {
+          throw new Error('The app update download is taking too long. Check your connection and try again.');
+        }
+        setStatus(installStatus);
+      } else {
         setStatus('current');
       }
     } catch (error) {
@@ -116,7 +146,7 @@ export const useAppUpdate = () => {
     const handleWorkerStateChange = () => {
       if (!installingWorker || cancelled) return;
       if (installingWorker.state === 'installed') {
-        setStatus(activeRegistration?.waiting ? 'available' : 'current');
+        setStatus(activeRegistration?.waiting || activeRegistration?.active ? 'available' : 'current');
       } else if (installingWorker.state === 'activated') {
         setStatus('current');
       } else if (installingWorker.state === 'redundant') {

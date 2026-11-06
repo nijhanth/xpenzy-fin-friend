@@ -3,7 +3,8 @@ export const registerServiceWorker = async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/',
-        type: 'module'
+        type: 'module',
+        updateViaCache: 'none',
       });
 
       console.log('Service Worker registered successfully:', registration);
