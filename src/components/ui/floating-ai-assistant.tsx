@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Send, Sparkles, Loader2 } from 'lucide-react';
+import { X, Send, Sparkles, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -68,6 +68,7 @@ export const FloatingAIAssistant = () => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isClearingMemories, setIsClearingMemories] = useState(false);
   const [hasAcceptedDataUse, setHasAcceptedDataUse] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -147,6 +148,20 @@ export const FloatingAIAssistant = () => {
       await persistMessage(message, userId);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not save chat history.');
+    }
+  };
+
+  const clearMemories = async () => {
+    if (!user || isClearingMemories) return;
+    if (!window.confirm('Clear the preferences and non-sensitive details Xpenzy AI remembers? Your chat history and financial records will not be deleted.')) return;
+
+    setIsClearingMemories(true);
+    const { error } = await supabase.from('ai_user_memories').delete().eq('user_id', user.id);
+    setIsClearingMemories(false);
+    if (error) {
+      toast.error(`Could not clear AI memories: ${error.message}`);
+    } else {
+      toast.success('AI memories cleared. Your chat history and financial records were kept.');
     }
   };
 
@@ -282,9 +297,24 @@ export const FloatingAIAssistant = () => {
                 </div>
                 Xpenzy AI
               </CardTitle>
-              <Button variant="ghost" size="icon" aria-label="Close Xpenzy AI assistant" onClick={() => setIsOpen(false)} className="h-8 w-8">
-                <X className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center gap-1">
+                {user && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Clear AI memories"
+                    title="Clear AI memories"
+                    onClick={() => { void clearMemories(); }}
+                    disabled={isClearingMemories || isLoading}
+                    className="h-8 w-8"
+                  >
+                    {isClearingMemories ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon" aria-label="Close Xpenzy AI assistant" onClick={() => setIsOpen(false)} className="h-8 w-8">
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </CardHeader>
           
@@ -295,7 +325,7 @@ export const FloatingAIAssistant = () => {
                 Your data stays in your control
               </div>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), and your current-month financial summaries to the configured Gemini API. Your chat history is saved to your Xpenzy account in Supabase so it can be restored across devices. If you explicitly ask to record an expense or change a budget, Xpenzy saves that action to your account. Nothing is sent or saved until you continue and ask.
+                When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), and your current-month financial summaries to the configured Gemini API. Your chat history is saved to your Xpenzy account in Supabase. Xpenzy may also remember stable, non-sensitive preferences and facts you mention to personalize future answers; it does not train Gemini on your chats. Use the trash icon to clear these memories. Explicit requests to record an expense or change a budget are saved to your account.
               </p>
               <Button onClick={() => setHasAcceptedDataUse(true)}>Continue to AI</Button>
               <p className="text-xs text-muted-foreground">AI responses are suggestions, not financial advice. Review your records before acting.</p>

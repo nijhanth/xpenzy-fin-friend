@@ -11,6 +11,14 @@ const corsHeaders = {
 const MAX_CHAT_MESSAGES = 20;
 const MAX_CHAT_TOKENS = 6000;
 const CHARACTERS_PER_ESTIMATED_TOKEN = 3;
+const MAX_USER_MEMORIES = 20;
+const MAX_MEMORY_TOKENS = 1000;
+const MAX_MEMORY_CHARACTERS = MAX_MEMORY_TOKENS * CHARACTERS_PER_ESTIMATED_TOKEN;
+
+const isSafeUserMemory = (memory: string) =>
+  memory.length > 0
+  && memory.length <= 200
+  && !/\b(password|passcode|pin|otp|api[\s_-]?key|access token|secret|social security|ssn|credit card|card number|bank account|routing number|salary|income|balance|debt|loan|credit score|medical|diagnos\w*|political|religious|sexual|home address|phone number|email address)\b/i.test(memory);
 
 const trimChatMessages = (messages: unknown) => {
   if (!Array.isArray(messages)) return [];
@@ -195,11 +203,29 @@ Instructions:
 
     } else if (action === "chat") {
       const finData = await fetchFinancialData();
+      const { data: userMemories, error: memoriesError } = await supabase
+        .from("ai_user_memories")
+        .select("memory")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(MAX_USER_MEMORIES);
+      if (memoriesError) throw memoriesError;
+      const memories = (userMemories || []).map((item) => item.memory);
+      let memoryCharacterCount = 0;
+      const boundedMemories: string[] = [];
+      for (const memory of memories) {
+        if (memoryCharacterCount + memory.length > MAX_MEMORY_CHARACTERS) break;
+        boundedMemories.push(memory);
+        memoryCharacterCount += memory.length;
+      }
+
       systemPrompt = `You are Xpenzy AI, a smart financial assistant. You help users understand their spending, savings, and investments.
 Be concise, friendly, and use ₹ for currency. Use bullet points when listing items.
 You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
 You can create or update an expense budget only when the user explicitly asks you to do so. Use the create_expense_budget tool for a clear request with a category, amount, and period. Never claim a budget was created or updated unless the tool succeeds. For hypothetical questions or suggestions, do not call the tool.
 You can record an expense only when the user explicitly asks to add, log, or record one and provides a clear amount and category. Use the create_expense tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. Never claim an expense was recorded unless the tool succeeds. Do not record hypothetical expenses or merely discuss a past expense as a new record.
+Remember these stable, non-sensitive preferences and facts about the user, and use them only when relevant: ${JSON.stringify(boundedMemories)}.
+You may remember a stable response preference or non-sensitive fact the user shares by calling remember_user_preference. Do this when such a detail is clearly useful for future chats, even if the user did not say “remember.” Store one concise standalone fact, not a quotation. Never store financial details, health or other sensitive personal information, secrets, credentials, identifiers, temporary facts, or anything the user only asks about hypothetically. Do not claim Gemini is being trained; these are private account memories.
 Here is the user's current financial data for ${finData.month}:
 - Total Income: ₹${finData.totalIncome.toLocaleString()}
 - Total Expenses: ₹${finData.totalExpenses.toLocaleString()}
@@ -372,6 +398,21 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           },
         },
       },
+      {
+        type: "function",
+        function: {
+          name: "remember_user_preference",
+          description: "Save one stable, non-sensitive user preference or fact for personalizing future chats. Do not save sensitive details, financial information, secrets, identifiers, or temporary facts.",
+          parameters: {
+            type: "object",
+            properties: {
+              memory: { type: "string", description: "One concise, standalone, non-sensitive preference or fact, at most 200 characters." },
+            },
+            required: ["memory"],
+            additionalProperties: false,
+          },
+        },
+      },
     ] : [];
 
     const body: any = {
@@ -420,7 +461,52 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
     const choice = result.choices?.[0];
 
     if (action === "chat") {
-      const toolCall = choice?.message?.tool_calls?.[0];
+      const toolCalls = choice?.message?.tool_calls || [];
+      let rememberedPreference = false;
+      for (const toolCall of toolCalls) {
+        if (toolCall?.function?.name !== "remember_user_preference") continue;
+        const args = JSON.parse(toolCall.function.arguments);
+        const memory = typeof args.memory === "string" ? args.memory.trim() : "";
+        if (!isSafeUserMemory(memory)) {
+          console.warn("Skipped an AI memory that did not pass safety validation.");
+          continue;
+        }
+
+        const { data: existingMemories, error: existingMemoryError } = await supabase
+          .from("ai_user_memories")
+          .select("memory")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(MAX_USER_MEMORIES);
+        if (existingMemoryError) throw existingMemoryError;
+
+        if (!(existingMemories || []).some((item) => item.memory.toLocaleLowerCase() === memory.toLocaleLowerCase())) {
+          const { error: insertMemoryError } = await supabase.from("ai_user_memories").insert({
+            user_id: userId,
+            memory,
+          });
+          if (insertMemoryError) throw insertMemoryError;
+
+          const { data: expiredMemories, error: expiredQueryError } = await supabase
+            .from("ai_user_memories")
+            .select("id")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false })
+            .range(MAX_USER_MEMORIES, MAX_USER_MEMORIES + 999);
+          if (expiredQueryError) throw expiredQueryError;
+          if (expiredMemories.length > 0) {
+            const { error: deleteExpiredError } = await supabase
+              .from("ai_user_memories")
+              .delete()
+              .eq("user_id", userId)
+              .in("id", expiredMemories.map((item) => item.id));
+            if (deleteExpiredError) throw deleteExpiredError;
+          }
+        }
+        rememberedPreference = true;
+      }
+
+      const toolCall = toolCalls.find((call: any) => call?.function?.name !== "remember_user_preference");
       if (toolCall?.function?.name === "create_expense_budget") {
         const args = JSON.parse(toolCall.function.arguments);
         const category = typeof args.category === "string" ? args.category.trim() : "";
@@ -525,7 +611,11 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
       }
 
       const content = choice?.message?.content || "";
-      return chatReply(content.trim() || "I couldn't generate a response. Please try again.");
+      const reply = content.trim()
+        || (rememberedPreference
+          ? "Got it. I’ll keep that preference in mind for future chats."
+          : "I couldn't generate a response. Please try again.");
+      return chatReply(reply);
     }
 
     if (useToolCalling && choice?.message?.tool_calls?.length) {
