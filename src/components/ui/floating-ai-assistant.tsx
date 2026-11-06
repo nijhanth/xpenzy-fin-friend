@@ -7,8 +7,13 @@ import { cn } from '@/lib/utils';
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import ReactMarkdown from 'react-markdown';
 import { useFinancial } from '@/contexts/FinancialContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 const CHAT_URL = `${SUPABASE_URL}/functions/v1/ai-assistant`;
+const MAX_HISTORY_MESSAGES = 20;
+const MAX_CONTEXT_TOKENS = 6000;
+const CHARACTERS_PER_ESTIMATED_TOKEN = 3;
 
 interface Message {
   id: string;
@@ -16,20 +21,93 @@ interface Message {
   content: string;
 }
 
+const welcomeMessage: Message = {
+  id: '1',
+  role: 'assistant',
+  content: "Hi! I'm **Xpenzy AI** 🤖\n\nI can help you with:\n- 📊 Spending analysis\n- 💡 Money-saving tips\n- 📈 Financial insights\n\nAsk me anything about your finances!",
+};
+
+const estimateTokens = (content: string) =>
+  Math.ceil(Array.from(content).length / CHARACTERS_PER_ESTIMATED_TOKEN);
+
+const limitContext = (messages: Message[]) => {
+  const recentMessages = messages.slice(-MAX_HISTORY_MESSAGES);
+  const context: Message[] = [];
+  let tokenCount = 0;
+
+  for (let index = recentMessages.length - 1; index >= 0; index--) {
+    const message = recentMessages[index];
+    const messageTokens = estimateTokens(message.content);
+    const remainingTokens = MAX_CONTEXT_TOKENS - tokenCount;
+
+    if (messageTokens <= remainingTokens) {
+      context.unshift(message);
+      tokenCount += messageTokens;
+      continue;
+    }
+
+    if (context.length === 0 && message.role === 'user' && remainingTokens > 0) {
+      const maxCharacters = remainingTokens * CHARACTERS_PER_ESTIMATED_TOKEN;
+      context.unshift({ ...message, content: Array.from(message.content).slice(-maxCharacters).join('') });
+    }
+    break;
+  }
+
+  return context;
+};
+
+const getChatHistoryError = (action: 'load' | 'save', error: { message: string }) =>
+  new Error(`Could not ${action} chat history: ${error.message}`);
+
 export const FloatingAIAssistant = () => {
   const { refreshBudgets } = useFinancial();
+  const { user, loading: authLoading } = useAuth();
+  const userId = user?.id;
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: "Hi! I'm **Xpenzy AI** 🤖\n\nI can help you with:\n- 📊 Spending analysis\n- 💡 Money-saving tips\n- 📈 Financial insights\n\nAsk me anything about your finances!",
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([welcomeMessage]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [hasAcceptedDataUse, setHasAcceptedDataUse] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    let cancelled = false;
+    const loadHistory = async () => {
+      setIsHistoryLoading(true);
+      setMessages([welcomeMessage]);
+      if (!userId) {
+        setIsHistoryLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('ai_chat_messages')
+        .select('id, role, content')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(MAX_HISTORY_MESSAGES);
+
+      if (cancelled) return;
+      if (error) {
+        toast.error(getChatHistoryError('load', error).message);
+        setMessages([welcomeMessage]);
+      } else {
+        const history = (data || []).reverse().map((message) => ({
+          id: message.id,
+          role: message.role,
+          content: message.content,
+        }));
+        setMessages(history.length > 0 ? history : [welcomeMessage]);
+      }
+      setIsHistoryLoading(false);
+    };
+
+    void loadHistory();
+    return () => { cancelled = true; };
+  }, [authLoading, userId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -37,11 +115,47 @@ export const FloatingAIAssistant = () => {
     }
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
+  const persistMessage = async (message: Message, userId: string) => {
+    const { error: insertError } = await supabase.from('ai_chat_messages').insert({
+      id: message.id,
+      user_id: userId,
+      role: message.role,
+      content: message.content,
+    });
+    if (insertError) throw getChatHistoryError('save', insertError);
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: inputValue };
-    const currentMessages = [...messages, userMsg];
+    const { data: expiredMessages, error: queryError } = await supabase
+      .from('ai_chat_messages')
+      .select('id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(MAX_HISTORY_MESSAGES, MAX_HISTORY_MESSAGES + 999);
+    if (queryError) throw getChatHistoryError('save', queryError);
+
+    if (expiredMessages.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('ai_chat_messages')
+        .delete()
+        .eq('user_id', userId)
+        .in('id', expiredMessages.map((expiredMessage) => expiredMessage.id));
+      if (deleteError) throw getChatHistoryError('save', deleteError);
+    }
+  };
+
+  const persistWithNotice = async (message: Message, userId: string) => {
+    try {
+      await persistMessage(message, userId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save chat history.');
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isLoading || isHistoryLoading || !user) return;
+
+    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: inputValue };
+    const currentMessages = [...messages.filter((message) => message.id !== '1'), userMsg]
+      .slice(-MAX_HISTORY_MESSAGES);
     setMessages(currentMessages);
     setInputValue('');
     setIsLoading(true);
@@ -49,6 +163,7 @@ export const FloatingAIAssistant = () => {
     let assistantContent = '';
 
     try {
+      await persistWithNotice(userMsg, user.id);
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error('Please sign in to use AI assistant');
@@ -62,7 +177,7 @@ export const FloatingAIAssistant = () => {
         },
         body: JSON.stringify({
           action: 'chat',
-          messages: currentMessages.filter(m => m.id !== '1').map(m => ({ role: m.role, content: m.content })),
+          messages: limitContext(currentMessages).map(({ role, content }) => ({ role, content })),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
@@ -83,6 +198,7 @@ export const FloatingAIAssistant = () => {
 
       const decoder = new TextDecoder();
       let buffer = '';
+      const assistantId = crypto.randomUUID();
 
       while (true) {
         const { done, value } = await reader.read();
@@ -108,24 +224,33 @@ export const FloatingAIAssistant = () => {
               assistantContent += content;
               setMessages(prev => {
                 const last = prev[prev.length - 1];
-                if (last?.role === 'assistant' && last.id.startsWith('ai-')) {
-                  return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m);
+                if (last?.role === 'assistant' && last.id === assistantId) {
+                  return prev.map((message, index) => index === prev.length - 1
+                    ? { ...message, content: assistantContent }
+                    : message);
                 }
-                return [...prev, { id: 'ai-' + Date.now(), role: 'assistant', content: assistantContent }];
+                return [...prev, { id: assistantId, role: 'assistant', content: assistantContent }]
+                  .slice(-MAX_HISTORY_MESSAGES);
               });
             }
           } catch { buffer = line + '\n' + buffer; break; }
         }
       }
+
+      if (assistantContent) {
+        await persistWithNotice({ id: assistantId, role: 'assistant', content: assistantContent }, user.id);
+      }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-      setMessages(prev => [...prev, {
-        id: 'err-' + Date.now(),
+      const errorMessageEntry: Message = {
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: errorMessage === 'Failed to fetch'
-          ? 'Sorry, I could not reach the AI service. The ai-assistant function may not be deployed to this Supabase project. Please try again after it has been deployed.'
+          ? 'Sorry, I could not reach the AI service. The ai-assistant Supabase function may not be deployed. Please try again after deployment.'
           : `Sorry, I encountered an error: ${errorMessage}. Please try again.`,
-      }]);
+      };
+      setMessages(prev => [...prev, errorMessageEntry].slice(-MAX_HISTORY_MESSAGES));
+      await persistWithNotice(errorMessageEntry, user.id);
     } finally {
       setIsLoading(false);
     }
@@ -167,7 +292,7 @@ export const FloatingAIAssistant = () => {
                 Your data stays in your control
               </div>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                When you ask a question, Xpenzy sends your current-month recorded transactions, budget, savings and investment summaries to the configured Lovable AI service to prepare an answer. Nothing is sent until you continue and ask.
+                When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), and your current-month financial summaries to the configured Gemini API. Your chat history is saved to your Xpenzy account in Supabase so it can be restored across devices. Nothing is sent until you continue and ask.
               </p>
               <Button onClick={() => setHasAcceptedDataUse(true)}>Continue to AI</Button>
               <p className="text-xs text-muted-foreground">AI responses are suggestions, not financial advice. Review your records before acting.</p>
@@ -222,13 +347,13 @@ export const FloatingAIAssistant = () => {
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                     className="min-w-0 flex-1"
-                    disabled={isLoading}
+                    disabled={isLoading || isHistoryLoading}
                   />
                   <Button
                     onClick={handleSendMessage}
                     size="icon"
                     aria-label="Send question"
-                    disabled={isLoading || !inputValue.trim()}
+                    disabled={isLoading || isHistoryLoading || !inputValue.trim()}
                   >
                     <Send className="w-4 h-4" />
                   </Button>

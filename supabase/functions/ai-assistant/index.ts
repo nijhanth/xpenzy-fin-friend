@@ -8,6 +8,42 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
+const MAX_CHAT_MESSAGES = 20;
+const MAX_CHAT_TOKENS = 6000;
+const CHARACTERS_PER_ESTIMATED_TOKEN = 3;
+
+const trimChatMessages = (messages: unknown) => {
+  if (!Array.isArray(messages)) return [];
+
+  const validMessages = messages
+    .filter((message): message is { role: "user" | "assistant"; content: string } =>
+      typeof message?.content === "string"
+      && (message.role === "user" || message.role === "assistant"))
+    .slice(-MAX_CHAT_MESSAGES);
+  const context: Array<{ role: "user" | "assistant"; content: string }> = [];
+  let tokenCount = 0;
+
+  for (let index = validMessages.length - 1; index >= 0; index--) {
+    const message = validMessages[index];
+    const messageTokens = Math.ceil(Array.from(message.content).length / CHARACTERS_PER_ESTIMATED_TOKEN);
+    const remainingTokens = MAX_CHAT_TOKENS - tokenCount;
+
+    if (messageTokens <= remainingTokens) {
+      context.unshift(message);
+      tokenCount += messageTokens;
+      continue;
+    }
+
+    if (context.length === 0 && message.role === "user" && remainingTokens > 0) {
+      const maxCharacters = remainingTokens * CHARACTERS_PER_ESTIMATED_TOKEN;
+      context.unshift({ ...message, content: Array.from(message.content).slice(-maxCharacters).join("") });
+    }
+    break;
+  }
+
+  return context;
+};
+
 const chatReply = (content: string, budgetChanged = false) => new Response(
   `data: ${JSON.stringify({ choices: [{ delta: { content, budgetChanged } }] })}\n\ndata: [DONE]\n\n`,
   { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } },
@@ -42,6 +78,7 @@ serve(async (req) => {
     const userId = user.id;
 
     const { action, input, messages, period, timeZone } = await req.json();
+    const chatMessages = trimChatMessages(messages);
     let safeTimeZone = typeof timeZone === "string" ? timeZone : "UTC";
     try {
       new Intl.DateTimeFormat("en", { timeZone: safeTimeZone }).format(new Date());
@@ -171,7 +208,7 @@ Here is the user's current financial data for ${finData.month}:
 - Investments: ${JSON.stringify(finData.investments)}
 - Budgets: ${JSON.stringify(finData.budgets)}
 - Recent expenses: ${JSON.stringify(finData.expenses.slice(0, 20))}`;
-      userPrompt = messages?.[messages.length - 1]?.content || input;
+      userPrompt = chatMessages[chatMessages.length - 1]?.content || input;
 
     } else if (action === "insights") {
       const summaryPeriod = period === "week" ? "week" : "month";
@@ -289,8 +326,8 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
       { role: "system", content: systemPrompt },
     ];
 
-    if (action === "chat" && messages?.length) {
-      for (const m of messages) {
+    if (action === "chat" && chatMessages.length) {
+      for (const m of chatMessages) {
         aiMessages.push({ role: m.role, content: m.content });
       }
     } else {
