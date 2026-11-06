@@ -537,6 +537,7 @@ export type Database = {
       }
       user_preferences: {
         Row: {
+          ai_memory_enabled: boolean
           budget_alerts: boolean
           created_at: string
           id: string
@@ -548,6 +549,7 @@ export type Database = {
           weekly_reports: boolean
         }
         Insert: {
+          ai_memory_enabled?: boolean
           budget_alerts?: boolean
           created_at?: string
           id?: string
@@ -559,6 +561,7 @@ export type Database = {
           weekly_reports?: boolean
         }
         Update: {
+          ai_memory_enabled?: boolean
           budget_alerts?: boolean
           created_at?: string
           id?: string

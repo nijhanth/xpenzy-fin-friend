@@ -748,7 +748,7 @@ const dataExportService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    const [expenses, income, investments, investmentTransactions, savings, savingsTransactions, budgets, notes, preferences, profile] = await Promise.all([
+    const [expenses, income, investments, investmentTransactions, savings, savingsTransactions, budgets, notes, preferences, profile, aiChatHistory, aiMemories] = await Promise.all([
       supabase.from('expense_entries').select('*').eq('user_id', user.id),
       supabase.from('income_entries').select('*').eq('user_id', user.id),
       supabase.from('investment_entries').select('*').eq('user_id', user.id),
@@ -759,12 +759,18 @@ const dataExportService = {
       supabase.from('notes').select('*').eq('user_id', user.id),
       supabase.from('user_preferences').select('*').eq('user_id', user.id).single(),
       supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+      supabase.from('ai_chat_messages').select('role, content, created_at').eq('user_id', user.id).order('created_at', { ascending: true }),
+      supabase.from('ai_user_memories').select('memory, created_at').eq('user_id', user.id).order('created_at', { ascending: true }),
     ]);
+    if (aiChatHistory.error) throw aiChatHistory.error;
+    if (aiMemories.error) throw aiMemories.error;
 
     return {
       user: { id: user.id, email: user.email },
       profile: profile.data,
       preferences: preferences.data,
+      aiChatHistory: aiChatHistory.data,
+      aiMemories: aiMemories.data,
       expenses: expenses.data,
       income: income.data,
       investments: investments.data,
@@ -781,7 +787,7 @@ const dataExportService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    await Promise.all([
+    const results = await Promise.all([
       supabase.from('expense_entries').delete().eq('user_id', user.id),
       supabase.from('income_entries').delete().eq('user_id', user.id),
       supabase.from('investment_transactions').delete().eq('user_id', user.id),
@@ -790,7 +796,11 @@ const dataExportService = {
       supabase.from('savings_goals').delete().eq('user_id', user.id),
       supabase.from('budget_categories').delete().eq('user_id', user.id),
       supabase.from('notes').delete().eq('user_id', user.id),
+      supabase.from('ai_chat_messages').delete().eq('user_id', user.id),
+      supabase.from('ai_user_memories').delete().eq('user_id', user.id),
     ]);
+    const failedResult = results.find((result) => result.error);
+    if (failedResult?.error) throw failedResult.error;
   }
 };
 

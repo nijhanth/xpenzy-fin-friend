@@ -11,9 +11,11 @@ import {
   Shield,
   ChevronRight,
   Edit,
-  FileText
+  FileText,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { UserMenu } from '@/components/ui/user-menu';
 import { FinanceLogo } from '@/components/ui/finance-logo';
 import { PrivacySettings } from '@/components/ui/privacy-settings';
@@ -30,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export const Settings = () => {
   const { user } = useAuth();
+  const userId = user?.id;
   const { toast } = useToast();
   const { requestPermission } = useNotifications();
   
@@ -37,6 +40,9 @@ export const Settings = () => {
   const [pushNotifications, setPushNotifications] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(true);
   const [budgetAlerts, setBudgetAlerts] = useState(true);
+  const [aiMemoryEnabled, setAiMemoryEnabled] = useState(true);
+  const [aiMemories, setAiMemories] = useState<Array<{ id: string; memory: string }>>([]);
+  const [isUpdatingAIMemory, setIsUpdatingAIMemory] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -58,15 +64,29 @@ export const Settings = () => {
           setPushNotifications(prefs.push_notifications);
           setWeeklyReports(prefs.weekly_reports);
           setBudgetAlerts(prefs.budget_alerts);
+          setAiMemoryEnabled(prefs.ai_memory_enabled ?? true);
         }
+
+        const { data: memories, error: memoriesError } = await supabase
+          .from('ai_user_memories')
+          .select('id, memory')
+          .eq('user_id', userId!)
+          .order('created_at', { ascending: false });
+        if (memoriesError) throw memoriesError;
+        setAiMemories(memories || []);
       } catch (error) {
-        console.error('Error loading preferences:', error);
+        console.error('Error loading preferences and AI memories:', error);
+        toast({
+          title: 'Settings could not be fully loaded',
+          description: error instanceof Error ? error.message : 'Please try again.',
+          variant: 'destructive',
+        });
       } finally {
         setIsLoading(false);
       }
     };
-    loadPreferences();
-  }, []);
+    if (userId) void loadPreferences();
+  }, [toast, userId]);
 
   const updatePreference = async (key: string, value: any) => {
     try {
@@ -113,6 +133,48 @@ export const Settings = () => {
   const handleBudgetAlertsChange = async (value: boolean) => {
     setBudgetAlerts(value);
     await updatePreference('budget_alerts', value);
+  };
+
+  const handleAIMemoryChange = async (value: boolean) => {
+    setIsUpdatingAIMemory(true);
+    try {
+      await database.userPreferences.upsert({ ai_memory_enabled: value });
+      setAiMemoryEnabled(value);
+      toast({
+        title: value ? 'AI memory enabled' : 'AI memory disabled',
+        description: value
+          ? 'Xpenzy AI can remember stable, non-sensitive preferences.'
+          : 'Xpenzy AI will stop saving and using personal memories.',
+      });
+    } catch (error) {
+      console.error('Error updating AI memory preference:', error);
+      toast({
+        title: 'Could not update AI memory setting',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdatingAIMemory(false);
+    }
+  };
+
+  const handleClearAIMemories = async () => {
+    if (!user?.id || aiMemories.length === 0) return;
+    if (!window.confirm('Delete all saved AI memories? This will not delete your chat history or financial records.')) return;
+
+    setIsUpdatingAIMemory(true);
+    const { error } = await supabase.from('ai_user_memories').delete().eq('user_id', user.id);
+    setIsUpdatingAIMemory(false);
+    if (error) {
+      toast({
+        title: 'Could not delete AI memories',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } else {
+      setAiMemories([]);
+      toast({ title: 'AI memories deleted' });
+    }
   };
 
   const handleEditProfile = async () => {
@@ -303,6 +365,58 @@ export const Settings = () => {
         </CardContent>
       </Card>
 
+      {/* AI Personalization */}
+      <Card className="bg-gradient-card border-border shadow-card">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <Sparkles className="w-5 h-5" />
+            AI Personalization
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-medium">Remember my preferences</p>
+              <p className="text-sm text-muted-foreground">
+                Save stable, non-sensitive details for future chats. This does not train Gemini.
+              </p>
+            </div>
+            <Switch
+              checked={aiMemoryEnabled}
+              onCheckedChange={handleAIMemoryChange}
+              disabled={isLoading || isUpdatingAIMemory}
+              aria-label="Remember my preferences"
+            />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">Saved memories ({aiMemories.length})</p>
+              {aiMemories.length > 0 ? (
+                <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                  {aiMemories.map(({ id, memory }) => (
+                    <li key={id} className="rounded-md bg-muted px-3 py-2">{memory}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">No saved memories.</p>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { void handleClearAIMemories(); }}
+              disabled={isLoading || isUpdatingAIMemory || aiMemories.length === 0}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Clear
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Data & Privacy */}
       <Card className="bg-gradient-card border-border shadow-card">
         <CardHeader>
@@ -393,8 +507,8 @@ export const Settings = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete all your
-              expenses, income, investments, savings, budgets, and notes data.
+              This action cannot be undone. This will permanently delete your
+              expenses, income, investments, savings, budgets, notes, AI chat history, and saved AI memories.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -432,7 +546,14 @@ export const Settings = () => {
               <h3 className="font-semibold mb-2">2. Data Usage</h3>
               <p className="text-muted-foreground">
                 Your data is used solely for providing personal finance management services. 
-                We do not sell, share, or distribute your financial information to third parties.
+                We do not sell your financial information. When you use AI features, the relevant
+                chat context and financial summaries are sent to the configured Gemini API to
+                generate a response.
+              </p>
+              <p className="mt-2 text-muted-foreground">
+                If AI personalization is enabled, Xpenzy stores a limited number of stable,
+                non-sensitive preferences in your account for future chats. This does not train
+                Gemini. You can turn memory off or clear saved memories in Settings.
               </p>
             </section>
             

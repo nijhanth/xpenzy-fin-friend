@@ -76,9 +76,9 @@ supabase functions deploy ai-assistant --project-ref vlafgohsqzhzqtcmlapt
 
 The function validates the user's access token itself, so its `verify_jwt` gateway setting is disabled in `supabase/config.toml`.
 In chat, explicit requests to create or change an expense budget or record an expense are saved to the signed-in user's financial data; the assistant confirms only after the database write succeeds.
-Chat history is stored per user in Supabase, with up to 20 recent messages retained and an estimated 6,000-token context limit per AI request. The assistant may also store up to 20 stable, non-sensitive preferences or facts in a separate per-user memory table for future chats; these memories can be cleared from the chat panel and are not used to train Gemini.
+Chat history is stored per user in Supabase, with up to 20 recent messages retained and an estimated 6,000-token context limit per AI request. When AI personalization is enabled in Settings, the assistant may store up to 20 stable, non-sensitive preferences or facts in a separate per-user memory table for future chats. Users can review, disable, or clear these memories; they are not used to train Gemini.
 
-Apply pending database migrations to the same project so expense and budget fields, including the private AI chat history and memory tables, stay in sync with the app:
+Apply pending database migrations to the same project so expense and budget fields, including the private AI chat history and memory tables and the AI-memory preference, stay in sync with the app:
 
 ```sh
 supabase db push --project-ref vlafgohsqzhzqtcmlapt
