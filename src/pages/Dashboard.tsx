@@ -99,14 +99,19 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
   const budgetUsed = stats.budget > 0 ? Math.min(100, (stats.spent / stats.budget) * 100) : 0;
   const progressTone = budgetUsed >= 100 ? 'bg-red-400' : budgetUsed >= 80 ? 'bg-amber-300' : 'bg-emerald-300';
-  const monthLabel = `${monthName} ${year}`;
+  const dateLabel = now.toLocaleDateString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-8 pt-5 sm:space-y-8 sm:px-6 sm:pt-8">
       <header className="flex items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-            <CalendarDays className="h-3.5 w-3.5" /> {monthLabel}
+            <CalendarDays className="h-3.5 w-3.5" /> {dateLabel}
           </div>
           <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             {greeting}{firstName ? `, ${firstName}` : ''}
