@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 interface FinancialContextType {
   data: FinancialData;
   isLoading: boolean;
+  refreshBudgets: () => Promise<void>;
   addIncome: (income: Omit<IncomeEntry, 'id'>) => void;
   addExpense: (expense: Omit<ExpenseEntry, 'id'>) => Promise<ExpenseEntry | undefined> | void;
   addSavingsGoal: (savings: Omit<SavingsGoal, 'id'>) => void;
@@ -69,6 +70,20 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const { toast } = useToast();
 
+  const refreshBudgets = async () => {
+    try {
+      const budgets = await budgetService.getAll();
+      setData(prev => ({ ...prev, budgets }));
+    } catch (error) {
+      console.error('Error refreshing budgets after AI update:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Budget saved, but refresh failed',
+        description: 'Reload the page to see the latest budget.',
+      });
+    }
+  };
+
   // Load all data on component mount, but only if user is authenticated
   React.useEffect(() => {
     const loadAllData = async () => {
@@ -116,25 +131,6 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     loadAllData();
-  }, [toast]);
-
-  React.useEffect(() => {
-    const refreshBudgets = async () => {
-      try {
-        const budgets = await budgetService.getAll();
-        setData(prev => ({ ...prev, budgets }));
-      } catch (error) {
-        console.error('Error refreshing budgets after AI update:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Budget saved, but refresh failed',
-          description: 'Reload the page to see the latest budget.',
-        });
-      }
-    };
-
-    window.addEventListener('xpenzy:budgets-changed', refreshBudgets);
-    return () => window.removeEventListener('xpenzy:budgets-changed', refreshBudgets);
   }, [toast]);
 
   const addIncome = async (income: Omit<IncomeEntry, 'id'>) => {
@@ -765,6 +761,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     <FinancialContext.Provider value={{
       data,
       isLoading,
+      refreshBudgets,
       addIncome,
       addExpense,
       addSavingsGoal,

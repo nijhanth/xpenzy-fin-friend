@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import ReactMarkdown from 'react-markdown';
+import { useFinancial } from '@/contexts/FinancialContext';
 
 const CHAT_URL = `${SUPABASE_URL}/functions/v1/ai-assistant`;
 
@@ -16,6 +17,7 @@ interface Message {
 }
 
 export const FloatingAIAssistant = () => {
+  const { refreshBudgets } = useFinancial();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -100,7 +102,7 @@ export const FloatingAIAssistant = () => {
             const delta = parsed.choices?.[0]?.delta;
             const content = delta?.content;
             if (delta?.budgetChanged) {
-              window.dispatchEvent(new Event('xpenzy:budgets-changed'));
+              await refreshBudgets();
             }
             if (content) {
               assistantContent += content;
