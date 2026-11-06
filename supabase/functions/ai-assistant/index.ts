@@ -292,7 +292,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
     }
 
     const body: any = {
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3.1-flash-lite",
       messages: aiMessages,
       stream: action === "chat",
     };
@@ -313,7 +313,9 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
 
     if (!response.ok) {
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
+        return new Response(JSON.stringify({
+          error: "Gemini API free-tier quota or rate limit reached. Check your Google AI Studio rate limits or try again later.",
+        }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

@@ -66,7 +66,7 @@ Simply open [Lovable](https://lovable.dev/projects/2d3feb60-d41b-4220-86af-fa277
 
 ### Deploying the AI assistant
 
-The AI assistant uses Gemini 3.1 Pro Preview through Google's OpenAI-compatible Gemini API. Add your Gemini API key as the `GEMINI_API_KEY` Edge Function secret in the Supabase project, then deploy the function:
+The AI assistant uses Gemini 3.1 Flash-Lite through Google's OpenAI-compatible Gemini API. Add your Gemini API key as the `GEMINI_API_KEY` Edge Function secret in the Supabase project, then deploy the function:
 
 ```sh
 supabase functions deploy ai-assistant --project-ref vlafgohsqzhzqtcmlapt

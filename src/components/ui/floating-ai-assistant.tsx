@@ -70,7 +70,7 @@ export const FloatingAIAssistant = () => {
           throw new Error('AI is not configured or has no available credits. You can still use Xpenzy without AI.');
         }
         if (resp.status === 429) {
-          throw new Error('AI is temporarily busy. Please try again later.');
+          throw new Error('Gemini free-tier quota or rate limit reached. Check Google AI Studio usage, then try again later.');
         }
         throw new Error(err.error || 'AI service error');
       }
