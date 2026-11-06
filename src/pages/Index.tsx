@@ -16,11 +16,13 @@ import { Security } from './Security';
 import { Settings } from './Settings';
 import { Dashboard } from './Dashboard';
 import { QuickAddExpense } from '@/components/forms/QuickAddExpense';
+import { useAppUpdate } from '@/hooks/useAppUpdate';
 
 const Index = () => {
   const [currentScreen, setCurrentScreen] = useState('dashboard');
   const [addOpen, setAddOpen] = useState(false);
   const { user, loading } = useAuth();
+  const appUpdate = useAppUpdate();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -70,7 +72,7 @@ const Index = () => {
       case 'security':
         return <Security />;
       case 'settings':
-        return <Settings />;
+        return <Settings appUpdate={appUpdate} />;
       default:
         return <Dashboard onAdd={() => setAddOpen(true)} onNavigate={setCurrentScreen} />;
     }

@@ -1,10 +1,59 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 type UpdateStatus = 'checking' | 'current' | 'available' | 'updating' | 'error' | 'unsupported';
+const UPDATE_HISTORY_KEY = 'xpenzy-app-update-history-v1';
+const MAX_UPDATE_HISTORY = 10;
+
+export interface AppUpdateHistoryEntry {
+  version: string;
+  buildId: string;
+  buildDate: string;
+  installedAt: string;
+}
+
+const isValidDate = (value: string) => !Number.isNaN(Date.parse(value));
+
+const isUpdateHistoryEntry = (entry: unknown): entry is AppUpdateHistoryEntry =>
+  typeof entry === 'object'
+  && entry !== null
+  && 'version' in entry && typeof entry.version === 'string'
+  && 'buildId' in entry && typeof entry.buildId === 'string'
+  && 'buildDate' in entry && typeof entry.buildDate === 'string' && isValidDate(entry.buildDate)
+  && 'installedAt' in entry && typeof entry.installedAt === 'string' && isValidDate(entry.installedAt);
 
 export const useAppUpdate = () => {
   const [status, setStatus] = useState<UpdateStatus>('checking');
+  const [history, setHistory] = useState<AppUpdateHistoryEntry[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
+
+  useEffect(() => {
+    try {
+      const savedHistory = localStorage.getItem(UPDATE_HISTORY_KEY);
+      const parsedHistory: unknown = savedHistory ? JSON.parse(savedHistory) : [];
+      if (!Array.isArray(parsedHistory)) throw new Error('Stored app update history is invalid.');
+
+      const validHistory = parsedHistory.filter(isUpdateHistoryEntry);
+      const currentVersion = {
+        version: __APP_VERSION__,
+        buildId: __APP_BUILD_ID__,
+        buildDate: __APP_BUILD_DATE__,
+      };
+      const currentEntry = validHistory.find((entry) => entry.buildId === currentVersion.buildId);
+      const nextHistory = [
+        currentEntry
+          ? { ...currentEntry, ...currentVersion }
+          : { ...currentVersion, installedAt: new Date().toISOString() },
+        ...validHistory.filter((entry) => entry.buildId !== currentVersion.buildId),
+      ].slice(0, MAX_UPDATE_HISTORY);
+
+      localStorage.setItem(UPDATE_HISTORY_KEY, JSON.stringify(nextHistory));
+      setHistory(nextHistory);
+    } catch (error) {
+      console.error('Failed to load or save app update history:', error);
+      setHistoryError(error instanceof Error ? error.message : 'App update history could not be saved.');
+    }
+  }, []);
 
   const checkForUpdates = useCallback(async (showChecking = true) => {
     const registration = registrationRef.current;
@@ -110,5 +159,5 @@ export const useAppUpdate = () => {
     }, 15000);
   }, [checkForUpdates]);
 
-  return { status, checkForUpdates, applyUpdate };
+  return { status, history, historyError, checkForUpdates, applyUpdate };
 };

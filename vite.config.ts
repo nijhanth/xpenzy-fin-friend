@@ -1,11 +1,27 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
+const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
+const buildDate = new Date().toISOString();
+let buildId = buildDate;
+try {
+  buildId = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
+} catch {
+  buildId = buildDate;
+}
+
 export default defineConfig(({ mode }) => ({
+  define: {
+    __APP_VERSION__: JSON.stringify(packageJson.version),
+    __APP_BUILD_ID__: JSON.stringify(buildId),
+    __APP_BUILD_DATE__: JSON.stringify(buildDate),
+  },
   server: {
     host: "::",
     port: 8080,

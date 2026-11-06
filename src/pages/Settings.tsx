@@ -13,6 +13,9 @@ import {
   Edit,
   FileText,
   Sparkles,
+  Check,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,8 +32,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { database } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
+import type { useAppUpdate } from '@/hooks/useAppUpdate';
 
-export const Settings = () => {
+interface SettingsProps {
+  appUpdate: ReturnType<typeof useAppUpdate>;
+}
+
+export const Settings = ({ appUpdate }: SettingsProps) => {
   const { user } = useAuth();
   const userId = user?.id;
   const { toast } = useToast();
@@ -49,6 +57,7 @@ export const Settings = () => {
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [displayName, setDisplayName] = useState('');
+  const { status: updateStatus, history, historyError, checkForUpdates, applyUpdate } = appUpdate;
 
   // Load user preferences
   useEffect(() => {
@@ -455,6 +464,91 @@ export const Settings = () => {
         </CardContent>
       </Card>
 
+      <Card className="bg-gradient-card border-border shadow-card">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <RefreshCw className="w-5 h-5" />
+            App updates
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                {updateStatus === 'checking' || updateStatus === 'updating'
+                  ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  : updateStatus === 'available'
+                    ? <Download className="h-4 w-4" aria-hidden />
+                    : <Check className="h-4 w-4" aria-hidden />}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {updateStatus === 'available'
+                    ? 'A new Xpenzy update is ready'
+                    : updateStatus === 'updating'
+                      ? 'Updating Xpenzy…'
+                      : updateStatus === 'checking'
+                        ? 'Checking for app updates…'
+                        : updateStatus === 'error'
+                          ? 'Could not check for updates'
+                          : updateStatus === 'unsupported'
+                            ? 'App updates are unavailable in this browser'
+                            : 'Xpenzy is up to date'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {updateStatus === 'available'
+                    ? 'Install the latest version now.'
+                    : updateStatus === 'error'
+                      ? 'Check your internet connection and try again.'
+                      : updateStatus === 'current'
+                        ? 'You’re using the latest version available.'
+                        : 'Updates are checked automatically when the app is opened.'}
+                </p>
+              </div>
+            </div>
+            {updateStatus === 'available' ? (
+              <Button onClick={applyUpdate} className="shrink-0">
+                <Download className="mr-2 h-4 w-4" aria-hidden />
+                Update now
+              </Button>
+            ) : updateStatus === 'current' || updateStatus === 'error' ? (
+              <Button variant="outline" onClick={() => { void checkForUpdates(); }} className="shrink-0">
+                <RefreshCw className="mr-2 h-4 w-4" aria-hidden />
+                {updateStatus === 'error' ? 'Try again' : 'Check for updates'}
+              </Button>
+            ) : null}
+          </div>
+
+          <Separator />
+          <div>
+            <p className="text-sm font-medium text-foreground">Update history</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Last update recorded on this device: {history[0] ? new Date(history[0].installedAt).toLocaleString() : 'Not recorded yet'}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This device keeps the 10 most recent installed builds. History starts with this release.
+            </p>
+          </div>
+          {historyError && (
+            <p className="text-sm text-destructive" role="alert">
+              Could not save update history: {historyError}
+            </p>
+          )}
+          {history.length > 0 && (
+            <ul className="space-y-2" aria-label="Recent app update history">
+              {history.map((entry) => (
+                <li key={entry.buildId} className="flex flex-col gap-1 rounded-lg border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-sm font-medium text-foreground">Build {entry.buildId}</span>
+                  <span className="text-xs text-muted-foreground">
+                    Installed {new Date(entry.installedAt).toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
       {/* App Info */}
       <Card className="bg-gradient-card border-border shadow-card">
         <CardContent className="pt-6 text-center space-y-2">
@@ -462,7 +556,10 @@ export const Settings = () => {
             <FinanceLogo className="w-8 h-8 shrink-0" />
             <p className="text-2xl font-bold text-primary font-poppins font-semibold tracking-tight">Xpenzy</p>
           </div>
-          <p className="text-sm text-muted-foreground">Version 1.0.0</p>
+          <p className="text-sm text-muted-foreground">Build {__APP_BUILD_ID__}</p>
+          <p className="text-xs text-muted-foreground">
+            Built {new Date(__APP_BUILD_DATE__).toLocaleString()}
+          </p>
           <p className="text-xs text-muted-foreground">Personal Finance Manager</p>
         </CardContent>
       </Card>
