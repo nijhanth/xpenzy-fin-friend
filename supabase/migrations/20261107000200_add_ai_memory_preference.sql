@@ -15,20 +15,42 @@ ALTER TABLE public.user_preferences
 
 ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Users can view their own preferences" ON public.user_preferences;
-CREATE POLICY "Users can view their own preferences"
-  ON public.user_preferences FOR SELECT TO authenticated
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'user_preferences'
+      AND policyname = 'Users can view their own preferences'
+  ) THEN
+    CREATE POLICY "Users can view their own preferences"
+      ON public.user_preferences FOR SELECT TO authenticated
+      USING (auth.uid() = user_id);
+  END IF;
 
-DROP POLICY IF EXISTS "Users can insert their own preferences" ON public.user_preferences;
-CREATE POLICY "Users can insert their own preferences"
-  ON public.user_preferences FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'user_preferences'
+      AND policyname = 'Users can insert their own preferences'
+  ) THEN
+    CREATE POLICY "Users can insert their own preferences"
+      ON public.user_preferences FOR INSERT TO authenticated
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
 
-DROP POLICY IF EXISTS "Users can update their own preferences" ON public.user_preferences;
-CREATE POLICY "Users can update their own preferences"
-  ON public.user_preferences FOR UPDATE TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'user_preferences'
+      AND policyname = 'Users can update their own preferences'
+  ) THEN
+    CREATE POLICY "Users can update their own preferences"
+      ON public.user_preferences FOR UPDATE TO authenticated
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+END
+$$;
 
 GRANT SELECT, INSERT, UPDATE ON public.user_preferences TO authenticated;
