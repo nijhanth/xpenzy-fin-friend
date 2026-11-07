@@ -113,6 +113,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
   const categoryDateFilter = useDateRangeFilter();
   const cashFlowDateFilter = useDateRangeFilter();
   const activityDateFilter = useDateRangeFilter('this_week');
+  const topExpensesDateFilter = useDateRangeFilter();
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
@@ -130,6 +131,10 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
     const cashFlowInvestmentTransactions = data.investmentTransactions.filter((entry) => inRange(entry.date, cashFlowDateFilter.range));
     const activityExpenses = data.expenses.filter((entry) => inRange(entry.date, activityDateFilter.range));
     const activityIncome = data.income.filter((entry) => inRange(entry.date, activityDateFilter.range));
+    const topExpenses = data.expenses
+      .filter((entry) => inRange(entry.date, topExpensesDateFilter.range))
+      .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0) || b.date.localeCompare(a.date))
+      .slice(0, 5);
     const spent = monthExpenses.reduce((total, entry) => total + Number(entry.amount || 0), 0);
     const received = monthIncome.reduce((total, entry) => total + Number(entry.amount || 0), 0);
     const rangeStartMonth = new Date(`${budgetDateFilter.range.start.slice(0, 7)}-01T00:00:00`);
@@ -249,12 +254,13 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       budgetCategories,
       weeklyCashFlow: weeklyCashFlowTrend,
       categoryDistribution,
+      topExpenses,
       activity,
       savings,
       investments,
       dailyAverage: spent / Math.max(dayOfMonth, 1),
     };
-  }, [data, monthKey, month, year, dayOfMonth, budgetDateFilter.range, categoryDateFilter.range, cashFlowDateFilter.range, activityDateFilter.range]);
+  }, [data, monthKey, month, year, dayOfMonth, budgetDateFilter.range, categoryDateFilter.range, cashFlowDateFilter.range, activityDateFilter.range, topExpensesDateFilter.range]);
 
   const firstName = (user?.user_metadata?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name || '').trim().split(/\s+/)[0];
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
@@ -448,6 +454,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
         </div>
       </section>
 
+      <section className="grid gap-5 lg:grid-cols-2" aria-label="Expense and transaction activity">
       <section className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
         <div className="flex flex-col gap-3 border-b border-border/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div><h2 className="font-semibold text-foreground">Recent activity</h2><p className="mt-1 text-xs text-muted-foreground">Income and expenses | {activityDateFilter.label}</p></div>
@@ -485,6 +492,42 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
           <button onClick={() => onNavigate('income')} className="flex items-center justify-center gap-2 px-3 py-3 text-xs font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"><TrendingUp className="h-3.5 w-3.5 text-emerald-600" /> Add income</button>
           <button onClick={() => onNavigate('expenses')} className="flex items-center justify-center gap-2 border-l border-border/70 px-3 py-3 text-xs font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"><TrendingDown className="h-3.5 w-3.5 text-rose-600" /> View expenses</button>
         </div>
+      </section>
+      <section className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-border/70 px-5 py-4 sm:px-6">
+          <div><h2 className="font-semibold text-foreground">Top 5 expenses</h2><p className="mt-1 text-xs text-muted-foreground">Largest individual expenses | {topExpensesDateFilter.label}</p></div>
+          <DateRangeFilterControl
+            filter={topExpensesDateFilter}
+            widget="Top 5 expenses"
+            options={[
+              { value: 'this_week', label: 'This week' },
+              { value: 'this_month', label: 'This month' },
+              { value: 'last_month', label: 'Last month' },
+              { value: 'last_3_months', label: 'Last 3 months' },
+              { value: 'this_year', label: 'This year' },
+              { value: 'custom', label: 'Custom range' },
+            ]}
+          />
+        </div>
+        {isLoading ? (
+          <div className="space-y-3 p-5">{[1, 2, 3, 4, 5].map((item) => <Skeleton key={item} className="h-14 w-full" />)}</div>
+        ) : stats.topExpenses.length ? (
+          <ol className="divide-y divide-border/70">
+            {stats.topExpenses.map((expense, index) => (
+              <li key={expense.id} className="flex items-center justify-between gap-3 px-5 py-3.5 sm:px-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-xs font-semibold tabular-nums text-rose-600 dark:text-rose-400">{String(index + 1).padStart(2, '0')}</span>
+                  <div className="min-w-0"><p className="truncate text-sm font-medium text-foreground">{expense.notes?.trim() || expense.category}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{expense.category} · {new Date(`${expense.date}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                </div>
+                <p className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{inr(Number(expense.amount || 0))}</p>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="px-5 py-10 text-center sm:px-6"><ReceiptText className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden /><p className="mt-3 font-medium text-foreground">No expenses in this range</p><p className="mt-1 text-sm text-muted-foreground">Choose another period to see your largest expenses.</p></div>
+        )}
+        <div className="border-t border-border/70 bg-muted/20 px-5 py-3 sm:px-6"><button onClick={() => onNavigate('expenses')} className="text-xs font-semibold text-primary hover:underline">View all expenses <ArrowRight className="ml-1 inline h-3.5 w-3.5" aria-hidden /></button></div>
+      </section>
       </section>
     </div>
   );

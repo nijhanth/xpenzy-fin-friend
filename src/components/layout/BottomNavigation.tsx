@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
-  Home, List, Target, BarChart3, MoreHorizontal, Wallet, PiggyBank, TrendingUp,
-  MessageSquare, Calendar, StickyNote, Shield, Settings, LayoutGrid,
+  Home, List, Target, MoreHorizontal, Wallet, PiggyBank, TrendingUp,
+  MessageSquare, Calendar, StickyNote, Shield, Settings,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
@@ -10,14 +10,12 @@ const mainItems = [
   { id: 'dashboard', label: 'Home', icon: Home },
   { id: 'expenses', label: 'Transactions', icon: List },
   { id: 'budget', label: 'Budgets', icon: Target },
-  { id: 'reports', label: 'Insights', icon: BarChart3 },
 ];
 
 const moreItems = [
   { id: 'income', label: 'Income', icon: Wallet },
   { id: 'savings', label: 'Savings', icon: PiggyBank },
   { id: 'investments', label: 'Investments', icon: TrendingUp },
-  { id: 'home', label: 'Detailed overview', icon: LayoutGrid },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'notes', label: 'Notes', icon: StickyNote },
   { id: 'message', label: 'Messages', icon: MessageSquare },
