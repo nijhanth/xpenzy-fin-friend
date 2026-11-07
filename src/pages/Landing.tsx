@@ -15,6 +15,7 @@ import {
   Smartphone, 
   Zap,
   Target,
+  Sparkles,
   ArrowRight,
   CheckCircle,
   Download
@@ -56,9 +57,14 @@ const Landing = () => {
 
   const features = [
     {
+      icon: Sparkles,
+      title: "Xpenzy AI Assistant",
+      description: "Ask questions about your finances, get personalized guidance, and record expenses or update budgets by chat. AI can remember helpful preferences when enabled."
+    },
+    {
       icon: TrendingUp,
       title: "Smart Analytics",
-      description: "Advanced insights into your spending patterns and financial trends with AI-powered recommendations."
+      description: "See AI-generated insights into your spending patterns and financial trends, with practical recommendations based on your data."
     },
     {
       icon: PieChart,
