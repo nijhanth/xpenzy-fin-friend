@@ -71,51 +71,6 @@ export type Database = {
         }
         Relationships: []
       }
-      ai_chat_messages: {
-        Row: {
-          content: string
-          created_at: string
-          id: string
-          role: "user" | "assistant"
-          user_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          id?: string
-          role: "user" | "assistant"
-          user_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          id?: string
-          role?: "user" | "assistant"
-          user_id?: string
-        }
-        Relationships: []
-      }
-      ai_user_memories: {
-        Row: {
-          created_at: string
-          id: string
-          memory: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          memory: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          memory?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       conversation_participants: {
         Row: {
           conversation_id: string
@@ -537,7 +492,6 @@ export type Database = {
       }
       user_preferences: {
         Row: {
-          ai_memory_enabled: boolean
           budget_alerts: boolean
           created_at: string
           id: string
@@ -549,7 +503,6 @@ export type Database = {
           weekly_reports: boolean
         }
         Insert: {
-          ai_memory_enabled?: boolean
           budget_alerts?: boolean
           created_at?: string
           id?: string
@@ -561,7 +514,6 @@ export type Database = {
           weekly_reports?: boolean
         }
         Update: {
-          ai_memory_enabled?: boolean
           budget_alerts?: boolean
           created_at?: string
           id?: string
