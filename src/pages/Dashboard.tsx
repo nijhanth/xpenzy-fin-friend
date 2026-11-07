@@ -4,6 +4,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   CalendarDays,
+  ChartNoAxesColumn,
   CircleDollarSign,
   PiggyBank,
   Plus,
@@ -124,62 +125,34 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
         </Button>
       </header>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.75fr)]" aria-label="Monthly finances">
-        <div className="relative overflow-hidden rounded-2xl p-5 text-white shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.7)] sm:p-7" style={{ background: 'linear-gradient(135deg, #18352e 0%, #214b40 54%, #2da66a 100%)' }}>
+      <section aria-label="Monthly cash flow">
+        <div className="relative overflow-hidden rounded-2xl p-5 text-primary-foreground shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.7)] sm:p-7" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))' }}>
           <div className="relative flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-white/70">Monthly cash flow</p>
-              {isLoading ? <Skeleton className="mt-3 h-11 w-44 bg-white/15" /> : (
+              <p className="text-sm font-medium text-primary-foreground/70">Monthly cash flow</p>
+              {isLoading ? <Skeleton className="mt-3 h-11 w-44 bg-primary-foreground/15" /> : (
                 <p className="mt-2 text-4xl font-bold tracking-tight tabular-nums sm:text-5xl">{inr(stats.net)}</p>
               )}
-              <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium ${stats.net >= 0 ? 'text-emerald-100' : 'text-rose-100'}`}>
+              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/15 bg-primary-foreground/10 px-3 py-1.5 text-xs font-medium text-primary-foreground/90">
                 {stats.net >= 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
                 {stats.net >= 0 ? 'Income is ahead of spending' : 'Spending is ahead of income'}
               </div>
             </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 backdrop-blur-sm sm:h-14 sm:w-14">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary-foreground/15 bg-primary-foreground/10 backdrop-blur-sm sm:h-14 sm:w-14">
               <Wallet className="h-6 w-6 sm:h-7 sm:w-7" />
             </div>
           </div>
-          <div className="relative mt-7 grid grid-cols-2 gap-4 border-t border-white/15 pt-4 sm:mt-8 sm:gap-8">
+          <div className="relative mt-7 grid grid-cols-2 gap-4 border-t border-primary-foreground/15 pt-4 sm:mt-8 sm:gap-8">
             <div>
-              <p className="flex items-center gap-1.5 text-xs text-white/65"><TrendingUp className="h-3.5 w-3.5" /> Income received</p>
+              <p className="flex items-center gap-1.5 text-xs text-primary-foreground/70"><TrendingUp className="h-3.5 w-3.5" /> Income received</p>
               <p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{isLoading ? '—' : inr(stats.received)}</p>
             </div>
             <div>
-              <p className="flex items-center gap-1.5 text-xs text-white/65"><TrendingDown className="h-3.5 w-3.5" /> Expenses recorded</p>
+              <p className="flex items-center gap-1.5 text-xs text-primary-foreground/70"><TrendingDown className="h-3.5 w-3.5" /> Expenses recorded</p>
               <p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{isLoading ? '—' : inr(stats.spent)}</p>
             </div>
           </div>
         </div>
-
-        <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground"><Target className="h-4 w-4 text-primary" /> Monthly budget</div>
-              <p className="mt-1 text-xs text-muted-foreground">{stats.budget > 0 ? `${Math.round(budgetUsed)}% of your limit used` : 'Create a plan for your spending'}</p>
-            </div>
-            <button onClick={() => onNavigate('budget')} className="text-xs font-semibold text-primary hover:underline">View budgets</button>
-          </div>
-          {isLoading ? <Skeleton className="mt-5 h-14 w-full" /> : stats.budget > 0 ? (
-            <>
-              <div className="mt-5 flex items-end justify-between gap-3">
-                <p className="text-2xl font-bold tabular-nums text-foreground">{inr(stats.spent)}<span className="text-sm font-normal text-muted-foreground"> / {inr(stats.budget)}</span></p>
-                <span className={`pb-1 text-xs font-semibold ${stats.remaining >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
-                  {stats.remaining >= 0 ? `${inr(stats.remaining)} left` : `${inr(Math.abs(stats.remaining))} over`}
-                </span>
-              </div>
-              <div role="progressbar" aria-label="Monthly budget used" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(budgetUsed)} className="mt-3 h-2.5 overflow-hidden rounded-full bg-muted">
-                <div className={`h-full rounded-full transition-all ${progressTone}`} style={{ width: `${budgetUsed}%` }} />
-              </div>
-              <p className="mt-3 text-xs leading-5 text-muted-foreground">{stats.budgetCategories.length ? 'Category budgets are shown below.' : `Your average daily spend is ${inr(stats.dailyAverage)}.`}</p>
-            </>
-          ) : (
-            <div className="mt-5 rounded-xl bg-muted/60 p-4">
-              <p className="text-sm text-muted-foreground">Set a monthly limit to track how much you have left to spend.</p>
-              <Button variant="outline" size="sm" className="mt-3 rounded-lg" onClick={() => onNavigate('budget')}>Set a budget <ArrowRight className="ml-1.5 h-3.5 w-3.5" /></Button>
-            </div>
-          )}
         </div>
       </section>
 
@@ -204,29 +177,51 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       <section className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6">
           <div className="flex items-start justify-between gap-3">
-            <div><h2 className="font-semibold text-foreground">Budget by category</h2><p className="mt-1 text-xs text-muted-foreground">How your spending compares to your limits</p></div>
-            <button onClick={() => onNavigate('budget')} aria-label="Open budgets" className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"><ArrowRight className="h-4 w-4" /></button>
+            <div><div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><h2 className="font-semibold text-foreground">Monthly budget</h2></div><p className="mt-1 text-xs text-muted-foreground">Your spending and category limits · {monthName}</p></div>
+            <Button variant="ghost" size="sm" className="shrink-0 text-primary" onClick={() => onNavigate('budget')}>Manage <ArrowRight className="ml-1 h-4 w-4" aria-hidden /></Button>
           </div>
-          {isLoading ? <div className="mt-5 space-y-4">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-12 w-full" />)}</div> : stats.budgetCategories.length ? (
-            <div className="mt-5 space-y-4">
+          {isLoading ? <div className="mt-5 grid gap-5 sm:grid-cols-[10rem_minmax(0,1fr)]"><Skeleton className="mx-auto h-36 w-36 rounded-full" /><div className="space-y-4">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-10 w-full" />)}</div></div> : stats.budget > 0 ? (
+            <>
+              <div className="mt-5 grid items-center gap-5 sm:grid-cols-[10rem_minmax(0,1fr)]">
+                <div className="relative mx-auto flex h-36 w-36 items-center justify-center rounded-full bg-muted" role="progressbar" aria-label="Monthly budget used" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(budgetUsed)}>
+                  <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true">
+                    <circle cx="60" cy="60" r="48" fill="none" stroke="hsl(var(--muted))" strokeWidth="11" />
+                    <circle cx="60" cy="60" r="48" fill="none" className={budgetUsed >= 100 ? 'text-destructive' : budgetUsed >= 80 ? 'text-warning' : 'text-primary'} stroke="currentColor" strokeWidth="11" strokeLinecap="round" strokeDasharray={`${budgetUsed * 3.016} 301.6`} />
+                  </svg>
+                  <div className="relative text-center"><p className="text-2xl font-bold tabular-nums text-foreground">{Math.round(budgetUsed)}%</p><p className="text-[11px] text-muted-foreground">used</p></div>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-muted-foreground">Spent this month</p>
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{inr(stats.spent)}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">of {inr(stats.budget)} total budget</p>
+                  <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${stats.remaining >= 0 ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
+                    {stats.remaining >= 0 ? <ArrowDownRight className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
+                    {stats.remaining >= 0 ? `${inr(stats.remaining)} budget remaining` : `${inr(Math.abs(stats.remaining))} over budget`}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 border-t border-border/70 pt-4">
+                <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground"><ChartNoAxesColumn className="h-3.5 w-3.5" /> CATEGORY PROGRESS</div>
+                {stats.budgetCategories.length ? <div className="space-y-4">
               {stats.budgetCategories.map((item) => {
                 const percent = item.limit > 0 ? Math.min(100, item.spent / item.limit * 100) : 0;
-                const tone = percent >= 100 ? 'bg-red-500' : percent >= 80 ? 'bg-amber-400' : 'bg-primary';
+                const tone = percent >= 100 ? 'bg-destructive' : percent >= 80 ? 'bg-warning' : 'bg-primary';
                 return <div key={item.category}>
                   <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
                     <span className="truncate font-medium text-foreground">{item.category}</span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">{inr(item.spent)} <span className="text-muted-foreground/60">/ {inr(item.limit)}</span></span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${tone}`} style={{ width: `${percent}%` }} /></div>
+                  <div role="progressbar" aria-label={`${item.category} budget used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)} className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full transition-all ${tone}`} style={{ width: `${percent}%` }} /></div>
                 </div>;
               })}
-              <button onClick={() => onNavigate('budget')} className="pt-1 text-xs font-semibold text-primary hover:underline">Manage category budgets</button>
-            </div>
+                </div> : <p className="text-sm text-muted-foreground">Add category limits to see how spending compares.</p>}
+              </div>
+            </>
           ) : (
             <div className="mt-5 rounded-xl border border-dashed border-border px-4 py-7 text-center">
               <Target className="mx-auto h-7 w-7 text-muted-foreground/70" />
-              <p className="mt-2 text-sm font-medium text-foreground">No category budgets yet</p>
-              <p className="mt-1 text-xs text-muted-foreground">Add limits to see your progress in this space.</p>
+              <p className="mt-2 text-sm font-medium text-foreground">No monthly budget yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">Set category limits to see your progress here.</p>
               <Button variant="outline" size="sm" className="mt-3 rounded-lg" onClick={() => onNavigate('budget')}>Create a budget</Button>
             </div>
           )}
