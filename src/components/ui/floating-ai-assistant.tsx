@@ -540,7 +540,7 @@ export const FloatingAIAssistant = () => {
       )}
 
       {isOpen && (
-        <Card className="fixed bottom-24 right-4 z-40 flex h-[min(480px,calc(100dvh-7rem))] w-[calc(100vw-2rem)] max-w-[340px] animate-slide-up flex-col border bg-card shadow-elevated">
+        <Card className="fixed bottom-24 right-4 z-40 flex h-[min(560px,calc(100dvh-7rem))] w-[calc(100vw-2rem)] max-w-[380px] animate-slide-up flex-col border bg-card shadow-elevated">
           <CardHeader className="pb-3 border-b border-border">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
@@ -570,21 +570,20 @@ export const FloatingAIAssistant = () => {
             </div>
           </CardHeader>
           
-          {!hasAcceptedDataUse ? (
-            <div className="flex flex-1 flex-col justify-center gap-4 p-5">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Sparkles className="h-4 w-4 text-primary" aria-hidden />
-                Your data stays in your control
+          <>
+            {!hasAcceptedDataUse && (
+              <div className="shrink-0 space-y-3 border-b border-border bg-muted/40 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Sparkles className="h-4 w-4 text-primary" aria-hidden />
+                  Allow AI chat and screenshot reading
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), and your current-month financial summaries to the configured Gemini API. If you attach a payment screenshot, it is sent to Gemini to read and is not stored by Xpenzy; extracted transaction details are only saved after you review and confirm them. Your chat history is saved to your Xpenzy account in Supabase. Xpenzy may also remember stable, non-sensitive preferences and facts you mention to personalize future answers; it does not train Gemini on your chats. Use the trash icon to clear these memories. Explicit requests to record a transaction or change a budget are saved to your account.
+                </p>
+                <Button type="button" size="sm" onClick={() => setHasAcceptedDataUse(true)}>Continue to AI</Button>
               </div>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), and your current-month financial summaries to the configured Gemini API. If you attach a payment screenshot, it is sent to Gemini to read and is not stored by Xpenzy; extracted transaction details are only saved after you review and confirm them. Your chat history is saved to your Xpenzy account in Supabase. Xpenzy may also remember stable, non-sensitive preferences and facts you mention to personalize future answers; it does not train Gemini on your chats. Use the trash icon to clear these memories. Explicit requests to record a transaction or change a budget are saved to your account.
-              </p>
-              <Button onClick={() => setHasAcceptedDataUse(true)}>Continue to AI</Button>
-              <p className="text-xs text-muted-foreground">AI responses are suggestions, not financial advice. Review your records before acting.</p>
-            </div>
-          ) : (
-            <>
-              <div className="flex-1 space-y-3 overflow-y-auto p-4" ref={scrollRef} aria-live="polite">
+            )}
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" ref={scrollRef} aria-live="polite">
                 {messages.map((message) => (
                   <div key={message.id} className={cn("flex", message.role === 'user' ? "justify-end" : "justify-start")}>
                     <div className={cn(
@@ -741,7 +740,7 @@ export const FloatingAIAssistant = () => {
                 )}
               </div>
 
-              <div className="border-t border-border p-3">
+              <div className="shrink-0 border-t border-border p-3">
                 {imageDataUrl && (
                   <div className="mb-2 flex items-center gap-2 rounded-lg border border-border p-2">
                     <img src={imageDataUrl} alt="Selected payment screenshot preview" className="h-12 w-12 rounded object-cover" />
@@ -772,7 +771,7 @@ export const FloatingAIAssistant = () => {
                       }
                     }}
                     className="min-w-0 flex-1"
-                    disabled={isLoading || isHistoryLoading}
+                    disabled={!hasAcceptedDataUse || isLoading || isHistoryLoading}
                   />
                   <input
                     ref={fileInputRef}
@@ -780,6 +779,7 @@ export const FloatingAIAssistant = () => {
                     accept="image/jpeg,image/png,image/webp"
                     className="hidden"
                     aria-label="Upload payment screenshot"
+                    disabled={!hasAcceptedDataUse || isLoading || isHistoryLoading}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (file) void selectImage(file);
@@ -793,7 +793,7 @@ export const FloatingAIAssistant = () => {
                     aria-label="Upload payment screenshot"
                     title="Upload or paste a payment screenshot"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isLoading || isHistoryLoading}
+                    disabled={!hasAcceptedDataUse || isLoading || isHistoryLoading}
                   >
                     <ImagePlus className="h-4 w-4" />
                   </Button>
@@ -801,15 +801,18 @@ export const FloatingAIAssistant = () => {
                     onClick={handleSendMessage}
                     size="icon"
                     aria-label={imageDataUrl ? 'Read screenshot' : 'Send question'}
-                    disabled={isLoading || isHistoryLoading || (!inputValue.trim() && !imageDataUrl)}
+                    disabled={!hasAcceptedDataUse || isLoading || isHistoryLoading || (!inputValue.trim() && !imageDataUrl)}
                   >
                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : imageDataUrl ? <Sparkles className="w-4 h-4" /> : <Send className="w-4 h-4" />}
                   </Button>
                 </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">JPEG, PNG, or WebP up to 3 MB. Verify extracted details before saving.</p>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {hasAcceptedDataUse
+                    ? 'JPEG, PNG, or WebP up to 3 MB. Verify extracted details before saving.'
+                    : 'Continue to AI above to enable messaging and screenshot upload.'}
+                </p>
               </div>
-            </>
-          )}
+          </>
         </Card>
       )}
     </>
