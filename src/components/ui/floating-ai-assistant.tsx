@@ -60,7 +60,7 @@ const getChatHistoryError = (action: 'load' | 'save', error: { message: string }
   new Error(`Could not ${action} chat history: ${error.message}`);
 
 export const FloatingAIAssistant = () => {
-  const { refreshBudgets, refreshExpenses } = useFinancial();
+  const { refreshBudgets, refreshExpenses, refreshIncome, refreshSavings } = useFinancial();
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id;
   const [isOpen, setIsOpen] = useState(false);
@@ -238,6 +238,12 @@ export const FloatingAIAssistant = () => {
             if (delta?.expenseChanged) {
               await refreshExpenses();
             }
+            if (delta?.incomeChanged) {
+              await refreshIncome();
+            }
+            if (delta?.savingsChanged) {
+              await refreshSavings();
+            }
             if (content) {
               assistantContent += content;
               setMessages(prev => {
@@ -247,7 +253,7 @@ export const FloatingAIAssistant = () => {
                     ? { ...message, content: assistantContent }
                     : message);
                 }
-                return [...prev, { id: assistantId, role: 'assistant', content: assistantContent }]
+                return [...prev, { id: assistantId, role: 'assistant' as const, content: assistantContent }]
                   .slice(-MAX_HISTORY_MESSAGES);
               });
             }

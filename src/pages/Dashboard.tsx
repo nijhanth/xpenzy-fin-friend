@@ -18,8 +18,21 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 const inr = (amount: number) => `₹${Math.round(amount).toLocaleString('en-IN')}`;
+const chartColors = ['hsl(var(--primary))', '#34d399', '#60a5fa', '#fbbf24', '#a78bfa'];
 
 interface Props {
   onAdd: () => void;
@@ -57,7 +70,25 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
         spent: categories[entry.category] || 0,
       }))
       .sort((a, b) => (b.limit > 0 ? b.spent / b.limit : 0) - (a.limit > 0 ? a.spent / a.limit : 0))
-      .slice(0, 4);
+      .slice(0, 3);
+    const weeksInMonth = Math.ceil(new Date(year, month, 0).getDate() / 7);
+    const weeklyCashFlow = Array.from({ length: weeksInMonth }, (_, index) => ({
+      week: `Week ${index + 1}`,
+      income: 0,
+      expenses: 0,
+    }));
+    for (const entry of monthIncome) {
+      const weekIndex = Math.ceil(Number(entry.date.slice(8, 10)) / 7) - 1;
+      if (weeklyCashFlow[weekIndex]) weeklyCashFlow[weekIndex].income += Number(entry.amount || 0);
+    }
+    for (const entry of monthExpenses) {
+      const weekIndex = Math.ceil(Number(entry.date.slice(8, 10)) / 7) - 1;
+      if (weeklyCashFlow[weekIndex]) weeklyCashFlow[weekIndex].expenses += Number(entry.amount || 0);
+    }
+    const sortedCategories = Object.entries(categories).sort((a, b) => b[1] - a[1]);
+    const categoryDistribution = sortedCategories.slice(0, 4).map(([name, value]) => ({ name, value }));
+    const otherCategoryTotal = sortedCategories.slice(4).reduce((total, [, value]) => total + value, 0);
+    if (otherCategoryTotal > 0) categoryDistribution.push({ name: 'Other', value: otherCategoryTotal });
     const activity = [
       ...monthExpenses.map((entry) => ({
         id: `expense-${entry.id}`,
@@ -89,6 +120,8 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       monthIncome,
       categories: topCategories,
       budgetCategories,
+      weeklyCashFlow,
+      categoryDistribution,
       activity,
       savings,
       investments,
@@ -153,7 +186,6 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
             </div>
           </div>
         </div>
-        </div>
       </section>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Financial totals">
@@ -174,7 +206,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
         ))}
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+      <section className="grid gap-5 lg:grid-cols-2" aria-label="Spending charts">
         <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div><div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><h2 className="font-semibold text-foreground">Monthly budget</h2></div><p className="mt-1 text-xs text-muted-foreground">Your spending and category limits · {monthName}</p></div>
@@ -229,22 +261,68 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
 
         <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6">
           <div className="flex items-start justify-between gap-3">
-            <div><h2 className="font-semibold text-foreground">Where it went</h2><p className="mt-1 text-xs text-muted-foreground">Top spending categories · {monthName}</p></div>
+            <div><h2 className="font-semibold text-foreground">Spending by category</h2><p className="mt-1 text-xs text-muted-foreground">Expense breakdown · {monthName}</p></div>
             <button onClick={() => onNavigate('expenses')} className="text-xs font-semibold text-primary hover:underline">All expenses</button>
           </div>
-          {isLoading ? <div className="mt-5 space-y-4">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-10 w-full" />)}</div> : stats.categories.length ? (
-            <div className="mt-5 space-y-4">
-              {stats.categories.map(([category, amount]) => {
-                const share = stats.spent > 0 ? amount / stats.spent * 100 : 0;
-                return <div key={category}>
-                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="truncate font-medium text-foreground">{category}</span><span className="shrink-0 font-semibold tabular-nums text-foreground">{inr(amount)} <span className="font-normal text-muted-foreground">{Math.round(share)}%</span></span></div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60" style={{ width: `${share}%` }} /></div>
-                </div>;
-              })}
-              <div className="flex items-center justify-between border-t border-border/70 pt-3 text-xs"><span className="text-muted-foreground">Average per day</span><span className="font-semibold tabular-nums text-foreground">{inr(stats.dailyAverage)}</span></div>
+          {isLoading ? <Skeleton className="mt-5 h-56 w-full" /> : stats.categoryDistribution.length ? (
+            <div className="mt-3 flex flex-col items-center gap-4 sm:flex-row">
+              <div className="h-52 w-full sm:w-1/2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={stats.categoryDistribution} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="82%" paddingAngle={3} stroke="none">
+                      {stats.categoryDistribution.map((entry, index) => <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => inr(value)} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="w-full space-y-2 sm:w-1/2">
+                {stats.categoryDistribution.map((entry, index) => (
+                  <li key={entry.name} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="flex min-w-0 items-center gap-2 text-muted-foreground"><span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }} /><span className="truncate">{entry.name}</span></span>
+                    <span className="shrink-0 font-medium tabular-nums text-foreground">{inr(entry.value)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : (
-            <div className="mt-5 rounded-xl bg-muted/50 px-4 py-8 text-center"><ReceiptText className="mx-auto h-7 w-7 text-muted-foreground/70" /><p className="mt-2 text-sm font-medium text-foreground">No spending to break down</p><p className="mt-1 text-xs text-muted-foreground">Your categories will appear when you add expenses.</p></div>
+            <div className="mt-5 flex h-56 items-center justify-center rounded-xl bg-muted/40 px-4 text-center text-sm text-muted-foreground">Add expenses to see your category breakdown.</div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6 lg:col-span-2">
+          <div className="flex items-start justify-between gap-3">
+            <div><h2 className="font-semibold text-foreground">Weekly cash flow</h2><p className="mt-1 text-xs text-muted-foreground">Income and spending this month</p></div>
+          </div>
+          {isLoading ? <Skeleton className="mt-5 h-48 w-full" /> : stats.monthIncome.length || stats.monthExpenses.length ? (
+            <div className="mt-4 h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats.weeklyCashFlow} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="dashboard-income-fill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#34d399" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="dashboard-expense-fill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#fb7185" stopOpacity={0.22} />
+                      <stop offset="95%" stopColor="#fb7185" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="week" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} tickFormatter={(value: number) => value >= 1000 ? `₹${Math.round(value / 1000)}k` : `₹${value}`} width={48} />
+                  <Tooltip formatter={(value: number, name: string) => [inr(value), name === 'income' ? 'Income' : 'Expenses']} />
+                  <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} fill="url(#dashboard-income-fill)" />
+                  <Area type="monotone" dataKey="expenses" stroke="#f43f5e" strokeWidth={2} fill="url(#dashboard-expense-fill)" />
+                </AreaChart>
+              </ResponsiveContainer>
+              <div className="mt-2 flex justify-center gap-5 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />Income</span>
+                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-rose-500" />Expenses</span>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-5 flex h-48 items-center justify-center rounded-xl bg-muted/40 px-4 text-center text-sm text-muted-foreground">Add income or expenses to see your weekly trend.</div>
           )}
         </div>
       </section>

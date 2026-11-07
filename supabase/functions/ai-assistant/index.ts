@@ -53,7 +53,12 @@ const trimChatMessages = (messages: unknown) => {
   return context;
 };
 
-const chatReply = (content: string, changes: { budgetChanged?: boolean; expenseChanged?: boolean } = {}) => new Response(
+const chatReply = (content: string, changes: {
+  budgetChanged?: boolean;
+  expenseChanged?: boolean;
+  incomeChanged?: boolean;
+  savingsChanged?: boolean;
+} = {}) => new Response(
   `data: ${JSON.stringify({ choices: [{ delta: { content, ...changes } }] })}\n\ndata: [DONE]\n\n`,
   { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } },
 );
@@ -250,6 +255,8 @@ Today's date in the user's local timezone is ${finData.todayLabel} (${finData.to
 You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
 You can create or update an expense budget only when the user explicitly asks you to do so. Use the create_expense_budget tool for a clear request with a category, amount, and period. Never claim a budget was created or updated unless the tool succeeds. For hypothetical questions or suggestions, do not call the tool.
 You can record an expense only when the user explicitly asks to add, log, or record one and provides a clear amount and category. Use the create_expense tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. Never claim an expense was recorded unless the tool succeeds. Do not record hypothetical expenses or merely discuss a past expense as a new record.
+You can record income only when the user explicitly asks to add, log, or record it and provides a clear amount and category. Use the create_income tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. If the category is Custom, require a clear custom category. Never claim income was recorded unless the tool succeeds. Do not record hypothetical income or merely discuss past income as a new record.
+You can create a savings goal only when the user explicitly asks you to create one and provides a clear goal name and target amount. Use the create_savings_goal tool for such a request. If the starting amount is omitted, use zero; if the date is omitted, use today. Never claim a goal was created unless the tool succeeds. Do not create goals for hypothetical questions or suggestions.
 ${memoryInstructions}
 Here is the user's current financial data for ${finData.month}:
 - Total Income: ₹${finData.totalIncome.toLocaleString()}
@@ -419,6 +426,45 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
               notes: { type: "string", description: "Optional short description." },
             },
             required: ["amount", "category"],
+            additionalProperties: false,
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "create_income",
+          description: "Record new income only when the user explicitly asks to add, log, or record it.",
+          parameters: {
+            type: "object",
+            properties: {
+              amount: { type: "number", description: "Positive income amount." },
+              category: { type: "string", enum: ["Salary", "Freelance", "Gift", "Investment", "Business", "Custom"] },
+              customCategory: { type: "string", description: "Required when category is Custom." },
+              date: { type: "string", description: "Income date in YYYY-MM-DD format; omit to use today." },
+              paymentMode: { type: "string", enum: ["Cash", "UPI", "Card", "Bank Transfer", "Net Banking"] },
+              notes: { type: "string", description: "Optional short description." },
+            },
+            required: ["amount", "category"],
+            additionalProperties: false,
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "create_savings_goal",
+          description: "Create a savings goal only when the user explicitly asks to create one.",
+          parameters: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Savings goal name." },
+              target: { type: "number", description: "Positive target amount in rupees." },
+              current: { type: "number", description: "Optional amount already saved; defaults to zero." },
+              date: { type: "string", description: "Goal date in YYYY-MM-DD format; omit to use today." },
+              notes: { type: "string", description: "Optional short description." },
+            },
+            required: ["name", "target"],
             additionalProperties: false,
           },
         },
@@ -633,6 +679,92 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
 
         const savedMessage = `Recorded your ${category} expense of ₹${amount.toLocaleString("en-IN")} on ${date} using ${paymentMode}. It is saved in your Xpenzy expenses.`;
         return chatReply(savedMessage, { expenseChanged: true });
+      }
+
+      if (toolCall?.function?.name === "create_income") {
+        const args = JSON.parse(toolCall.function.arguments);
+        const amount = Number(args.amount);
+        const category = args.category;
+        const customCategory = typeof args.customCategory === "string" ? args.customCategory.trim() : "";
+        const notes = typeof args.notes === "string" ? args.notes.trim() : "";
+        const paymentMode = args.paymentMode ?? "UPI";
+        const categories = ["Salary", "Freelance", "Gift", "Investment", "Business", "Custom"];
+        const paymentModes = ["Cash", "UPI", "Card", "Bank Transfer", "Net Banking"];
+        const todayParts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: safeTimeZone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).formatToParts(new Date());
+        const today = `${todayParts.find((part) => part.type === "year")?.value}-${todayParts.find((part) => part.type === "month")?.value}-${todayParts.find((part) => part.type === "day")?.value}`;
+        const date = args.date ?? today;
+        const validDate = typeof date === "string"
+          && /^\d{4}-\d{2}-\d{2}$/.test(date)
+          && !Number.isNaN(Date.parse(`${date}T00:00:00Z`))
+          && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+        if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000
+          || !categories.includes(category)
+          || (category === "Custom" && (!customCategory || customCategory.length > 100))
+          || (category !== "Custom" && customCategory)
+          || typeof notes !== "string" || notes.length > 500
+          || !paymentModes.includes(paymentMode)
+          || !validDate) {
+          throw new Error("The requested income needs a valid positive amount, category, date, and payment method.");
+        }
+
+        const savedCategory = category === "Custom" ? customCategory : category;
+        const { error: incomeError } = await supabase.from("income_entries").insert({
+          amount,
+          category: savedCategory,
+          custom_category: category === "Custom" ? customCategory : null,
+          date,
+          payment_mode: paymentMode,
+          notes,
+          user_id: userId,
+        });
+        if (incomeError) throw incomeError;
+
+        const savedMessage = `Recorded your ${savedCategory} income of ₹${amount.toLocaleString("en-IN")} on ${date} using ${paymentMode}. It is saved in your Xpenzy income.`;
+        return chatReply(savedMessage, { incomeChanged: true });
+      }
+
+      if (toolCall?.function?.name === "create_savings_goal") {
+        const args = JSON.parse(toolCall.function.arguments);
+        const name = typeof args.name === "string" ? args.name.trim() : "";
+        const target = Number(args.target);
+        const current = args.current === undefined ? 0 : Number(args.current);
+        const notes = typeof args.notes === "string" ? args.notes.trim() : "";
+        const todayParts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: safeTimeZone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).formatToParts(new Date());
+        const today = `${todayParts.find((part) => part.type === "year")?.value}-${todayParts.find((part) => part.type === "month")?.value}-${todayParts.find((part) => part.type === "day")?.value}`;
+        const date = args.date ?? today;
+        const validDate = typeof date === "string"
+          && /^\d{4}-\d{2}-\d{2}$/.test(date)
+          && !Number.isNaN(Date.parse(`${date}T00:00:00Z`))
+          && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+        if (!name || name.length > 100 || !Number.isFinite(target) || target <= 0 || target > 1_000_000_000
+          || !Number.isFinite(current) || current < 0 || current > 1_000_000_000
+          || typeof notes !== "string" || notes.length > 500
+          || !validDate) {
+          throw new Error("The savings goal needs a valid name, positive target, non-negative starting amount, and date.");
+        }
+
+        const { error: savingsError } = await supabase.from("savings_goals").insert({
+          name,
+          target,
+          current,
+          date,
+          notes,
+          user_id: userId,
+        });
+        if (savingsError) throw savingsError;
+
+        const savedMessage = `Created your "${name}" savings goal with a target of ₹${target.toLocaleString("en-IN")}. It is saved in your Xpenzy savings goals.`;
+        return chatReply(savedMessage, { savingsChanged: true });
       }
 
       const content = choice?.message?.content || "";
