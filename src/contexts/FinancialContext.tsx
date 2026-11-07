@@ -11,6 +11,8 @@ interface FinancialContextType {
   refreshExpenses: () => Promise<void>;
   refreshIncome: () => Promise<void>;
   refreshSavings: () => Promise<void>;
+  refreshSavingsTransactions: () => Promise<void>;
+  refreshInvestmentTransactions: () => Promise<void>;
   addIncome: (income: Omit<IncomeEntry, 'id'>) => void;
   addExpense: (expense: Omit<ExpenseEntry, 'id'>) => Promise<ExpenseEntry | undefined> | void;
   addSavingsGoal: (savings: Omit<SavingsGoal, 'id'>) => void;
@@ -125,6 +127,38 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         variant: 'destructive',
         title: 'Savings goal saved, but refresh failed',
         description: 'Reload the page to see the latest savings goal.',
+      });
+    }
+  };
+
+  const refreshSavingsTransactions = async () => {
+    try {
+      const savingsTransactions = await savingsTransactionService.getAll();
+      setData(prev => ({ ...prev, savingsTransactions }));
+      const savings = await savingsService.getAll();
+      setData(prev => ({ ...prev, savings }));
+    } catch (error) {
+      console.error('Error refreshing savings transactions after AI update:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Savings saved, but refresh failed',
+        description: 'Reload the page to see the latest savings transaction.',
+      });
+    }
+  };
+
+  const refreshInvestmentTransactions = async () => {
+    try {
+      const investmentTransactions = await investmentTransactionService.getAll();
+      setData(prev => ({ ...prev, investmentTransactions }));
+      const investments = await investmentService.getAll();
+      setData(prev => ({ ...prev, investments }));
+    } catch (error) {
+      console.error('Error refreshing investment transactions after AI update:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Investment saved, but refresh failed',
+        description: 'Reload the page to see the latest investment transaction.',
       });
     }
   };
@@ -810,6 +844,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       refreshExpenses,
       refreshIncome,
       refreshSavings,
+      refreshSavingsTransactions,
+      refreshInvestmentTransactions,
       addIncome,
       addExpense,
       addSavingsGoal,
