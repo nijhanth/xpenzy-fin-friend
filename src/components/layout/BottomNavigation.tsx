@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Home, List, Target, BarChart3, MoreHorizontal, Plus, Wallet, PiggyBank, TrendingUp,
+  Home, List, Target, BarChart3, MoreHorizontal, Wallet, PiggyBank, TrendingUp,
   MessageSquare, Calendar, StickyNote, Shield, Settings, LayoutGrid,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -28,10 +28,9 @@ const moreItems = [
 interface Props {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onAdd: () => void;
 }
 
-export const BottomNavigation = ({ activeTab, onTabChange, onAdd }: Props) => {
+export const BottomNavigation = ({ activeTab, onTabChange }: Props) => {
   const [moreOpen, setMoreOpen] = useState(false);
   const inMore = moreItems.some((i) => i.id === activeTab);
 
@@ -54,19 +53,7 @@ export const BottomNavigation = ({ activeTab, onTabChange, onAdd }: Props) => {
     <>
       <nav aria-label="Main" className="fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur border-t border-border">
         <div className="max-w-2xl mx-auto flex items-center px-2 pb-[env(safe-area-inset-bottom)]">
-          {mainItems.slice(0, 2).map((i) => (
-            <NavBtn key={i.id} {...i} active={activeTab === i.id} onClick={() => onTabChange(i.id)} />
-          ))}
-          <div className="flex-1 flex justify-center">
-            <button
-              onClick={onAdd}
-              aria-label="Add expense"
-              className="-mt-6 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/40"
-            >
-              <Plus className="w-7 h-7" />
-            </button>
-          </div>
-          {mainItems.slice(2).map((i) => (
+          {mainItems.map((i) => (
             <NavBtn key={i.id} {...i} active={activeTab === i.id} onClick={() => onTabChange(i.id)} />
           ))}
           <NavBtn id="more" label="More" icon={MoreHorizontal} active={inMore} onClick={() => setMoreOpen(true)} />

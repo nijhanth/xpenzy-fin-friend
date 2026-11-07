@@ -7,13 +7,12 @@ interface AppLayoutProps {
   className?: string;
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onAdd: () => void;
 }
 
-export const AppLayout = ({ children, className, activeTab, onTabChange, onAdd }: AppLayoutProps) => (
+export const AppLayout = ({ children, className, activeTab, onTabChange }: AppLayoutProps) => (
   <div className="min-h-screen bg-background relative font-xpenzy">
     <main className={cn('pt-[env(safe-area-inset-top)] pb-24 min-h-screen', className)}>{children}</main>
-    <BottomNavigation activeTab={activeTab} onTabChange={onTabChange} onAdd={onAdd} />
+    <BottomNavigation activeTab={activeTab} onTabChange={onTabChange} />
     <FloatingAIAssistant />
   </div>
 );

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
-import { PiggyBank, Target, Plus, TrendingUp, Award, BarChart3, Wallet, History, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
+import { PiggyBank, Target, Plus, TrendingUp, Award, Wallet, History, ChevronDown, ChevronUp, CheckCircle2, Sparkles, WalletCards, CalendarDays } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -41,6 +41,10 @@ const savingsTips = [
   "Compare prices before making big purchases"
 ];
 
+const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', {
+  style: 'currency', currency: 'INR', maximumFractionDigits: 0,
+}).format(amount);
+
 export const Savings = () => {
   const { data, getSavingsTransactions, deleteSavingsTransaction, markGoalCompleted, restoreGoal } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -66,8 +70,14 @@ export const Savings = () => {
   const activeTargets = activeGoals.reduce((sum, g) => sum + g.target, 0);
   const activeUsed = activeGoals.reduce((sum, g) => sum + (g.used_amount ?? 0), 0);
   const activeRemainingSaved = Math.max(0, activeGoalAllocation - activeUsed);
-  const overallProgress = activeTargets > 0 ? (activeRemainingSaved / activeTargets) * 100 : 0;
+  const overallProgress = activeTargets > 0 ? Math.min((activeRemainingSaved / activeTargets) * 100, 100) : 0;
   const hasActiveGoals = activeGoals.length > 0;
+  const today = new Date();
+  const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const monthlyContributions = data.savingsTransactions
+    .filter(transaction => transaction.date?.startsWith(currentMonthKey))
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const completedGoalsCount = data.savings.filter(goal => (goal.status ?? 'active') === 'completed').length;
 
   // Real money currently in account = lifetime saved minus everything spent from goals
   const savingsBalance = Math.max(0, lifetimeGoalSavings - totalUsedFromGoals);
@@ -152,8 +162,8 @@ export const Savings = () => {
     return trendData;
   }, [data.savings, getSavingsTransactions, timePeriod]);
 
-  const avgSavings = savingsTrend.length > 0 
-    ? savingsTrend.reduce((sum, d) => sum + d.daily, 0) / savingsTrend.length 
+  const avgSavings = savingsTrend.length > 0
+    ? savingsTrend.reduce((sum, d) => sum + d.amount, 0) / savingsTrend.length
     : 0;
 
   const handleEdit = (entryId: string) => {
@@ -214,13 +224,21 @@ export const Savings = () => {
   };
 
   return (
-    <div className="p-4 space-y-6 animate-fade-in">
+    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 pb-8 animate-fade-in sm:p-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-foreground">Savings Tracker</h1>
+      <div className="relative isolate flex flex-col gap-5 overflow-hidden rounded-2xl border border-savings/15 bg-gradient-to-br from-card via-card to-savings/10 p-5 shadow-card sm:flex-row sm:items-center sm:justify-between sm:p-7">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 h-56 w-56 rounded-full bg-savings/10 blur-3xl" />
+        <div className="relative min-w-0 flex-1">
+          <Badge variant="secondary" className="mb-3 gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Savings overview</Badge>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Build your savings, one goal at a time</h1>
+          <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">See your available balance, track goal progress, and keep contributions moving.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge variant="outline" className="gap-1.5 bg-background/70"><Target className="h-3.5 w-3.5 text-savings" />{activeGoals.length} active {activeGoals.length === 1 ? 'goal' : 'goals'}</Badge>
+            <Badge variant="outline" className="gap-1.5 bg-background/70"><CalendarDays className="h-3.5 w-3.5 text-savings" />{formatCurrency(monthlyContributions)} added this month</Badge>
+            <Badge variant="outline" className="gap-1.5 bg-background/70"><WalletCards className="h-3.5 w-3.5 text-savings" />{formatCurrency(Math.abs(availableBalance))} {availableBalance >= 0 ? 'unassigned' : 'allocation shortfall'}</Badge>
+          </div>
         </div>
-        <Button className="bg-savings text-white" onClick={() => setIsFormOpen(true)}>
+        <Button size="lg" className="relative shrink-0 bg-savings text-white shadow-sm" onClick={() => setIsFormOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Add Goal
         </Button>
@@ -247,10 +265,10 @@ export const Savings = () => {
       </Card>
 
       {/* Overall Progress */}
-      <Card className="bg-gradient-card border-border shadow-card">
-        <CardContent className="pt-6">
-          <div className="text-center space-y-4">
-            <div className="relative w-32 h-32 mx-auto">
+      <Card className="border-border/80 bg-gradient-card shadow-sm">
+        <CardContent className="p-5 sm:p-6">
+          <div className="mx-auto grid w-full max-w-2xl items-center gap-5 sm:grid-cols-[auto_1fr]">
+            <div className="relative mx-auto h-28 w-28 sm:mx-0 sm:h-32 sm:w-32">
               {/* Circular Progress */}
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
                 <circle
@@ -280,7 +298,7 @@ export const Savings = () => {
                 </div>
               </div>
             </div>
-            <div>
+            <div className="text-center sm:text-left">
               <p className="text-lg font-semibold text-foreground">₹{totalSavings.toLocaleString()}</p>
               <p className="text-sm text-muted-foreground">
                 {hasActiveGoals ? `of ₹${totalTargets.toLocaleString()} active goal` : 'No active goals'}
@@ -291,35 +309,31 @@ export const Savings = () => {
       </Card>
 
       {/* Savings Goals */}
-      <Card className="bg-gradient-card border-border shadow-card">
+      <Card className="border-border/80 bg-gradient-card shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Target className="w-5 h-5" />
             Savings Goals
           </CardTitle>
-          <Button variant="outline" size="sm">
-            <BarChart3 className="w-4 h-4 mr-2" />
-            View Report
-          </Button>
+          <Badge variant="secondary">{activeGoals.length} active</Badge>
         </CardHeader>
         <CardContent>
-          {data.savings.length > 0 ? (
-            <div className="space-y-6">
-              {data.savings.filter(g => (g.status ?? 'active') === 'active').map((goal) => {
-                const progress = (goal.current / goal.target) * 100;
+          {activeGoals.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              {activeGoals.map((goal) => {
                 const used = goal.used_amount ?? 0;
-                const remaining = Math.max(0, goal.target - used);
+                const netSaved = Math.max(0, goal.current - used);
+                const progress = goal.target > 0 ? (netSaved / goal.target) * 100 : 0;
+                const remaining = Math.max(0, goal.target - netSaved);
 
                 return (
-                  <div key={goal.id} className="space-y-3 p-4 rounded-xl bg-background/50 border border-border/50">
+                  <div key={goal.id} className="flex flex-col justify-between gap-4 rounded-2xl border border-border/70 bg-background/60 p-4 shadow-sm transition-shadow hover:shadow-card">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-foreground">{goal.name}</h3>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-foreground">{goal.name}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">Saved {formatCurrency(netSaved)} of {formatCurrency(goal.target)}</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm text-muted-foreground">
-                          Saved: ₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()}
-                        </p>
                         <Button
                           size="sm"
                           variant="outline"
@@ -420,8 +434,8 @@ export const Savings = () => {
           ) : (
             <div className="py-12 text-center text-muted-foreground">
               <Target className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-medium mb-2">No Savings Goals</h3>
-              <p className="text-sm mb-4">Set your first savings goal to start tracking progress</p>
+              <h3 className="text-lg font-medium mb-2">No active savings goals</h3>
+              <p className="text-sm mb-4">Create an active goal to start tracking progress</p>
               <Button onClick={() => setIsFormOpen(true)} className="bg-savings text-white">
                 <Plus className="w-4 h-4 mr-2" />
                 Add First Goal
@@ -434,11 +448,12 @@ export const Savings = () => {
       {/* Completed Goals (History) */}
       {data.savings.some(g => (g.status ?? 'active') === 'completed') && (
         <Card className="bg-gradient-card border-border shadow-card">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <Award className="w-5 h-5 text-success" />
               Completed Goals
             </CardTitle>
+            <Badge variant="outline">{completedGoalsCount} completed</Badge>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -485,7 +500,7 @@ export const Savings = () => {
       )}
 
       {/* Savings Trend - Trade Style */}
-      <Card className="relative overflow-hidden bg-card/50 backdrop-blur-sm border-border/50 shadow-xl">
+      <Card className="relative overflow-hidden border-border/80 bg-card shadow-sm">
         {/* Background gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-savings/5 via-transparent to-transparent pointer-events-none" />
         
@@ -600,16 +615,13 @@ export const Savings = () => {
       </Card>
 
       {/* Savings Tips */}
-      <Card className="bg-gradient-card border-border shadow-card">
+      <Card className="border-border/80 bg-gradient-card shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <PiggyBank className="w-5 h-5" />
             Savings Tips
           </CardTitle>
-          <Button variant="outline" size="sm">
-            <BarChart3 className="w-4 h-4 mr-2" />
-            View Report
-          </Button>
+          <Badge variant="outline">Quick ideas</Badge>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">

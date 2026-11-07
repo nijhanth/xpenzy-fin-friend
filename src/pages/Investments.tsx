@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend, AreaChart, Area, ReferenceLine } from 'recharts';
-import { TrendingUp, Plus, DollarSign, Calendar, Target, BarChart3, Edit, Wallet, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, Plus, DollarSign, Calendar, Target, Wallet, History, ChevronDown, ChevronUp, Sparkles, WalletCards, CircleDollarSign, CalendarDays } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { InvestmentForm } from '@/components/forms/InvestmentForm';
@@ -27,6 +28,10 @@ const INVESTMENT_COLORS: Record<string, string> = {
   'NPS': 'hsl(221, 83%, 53%)',
   'Other': 'hsl(0, 0%, 45%)',
 };
+
+const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', {
+  style: 'currency', currency: 'INR', maximumFractionDigits: 0,
+}).format(amount);
 
 // Custom Tooltip for Allocation Chart
 const AllocationTooltip = ({ active, payload }: any) => {
@@ -120,6 +125,8 @@ export const Investments = () => {
   } | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [expandedInvestments, setExpandedInvestments] = useState<Set<string>>(new Set());
+  const [historyYear, setHistoryYear] = useState(String(new Date().getFullYear()));
+  const [historyMonth, setHistoryMonth] = useState(String(new Date().getMonth() + 1));
 
   // Calculate allocation data from investments
   const allocationData = useMemo(() => {
@@ -234,6 +241,40 @@ export const Investments = () => {
     return data.investments.reduce((sum, inv) => sum + (inv.current || 0), 0);
   }, [data.investments]);
 
+  const totalProfitLoss = totalCurrent - totalInvested;
+  const returnPercentage = totalInvested > 0 ? (totalProfitLoss / totalInvested) * 100 : 0;
+  const historyYears = useMemo(() => {
+    const years = new Set<number>([new Date().getFullYear()]);
+    [...data.investments.map(entry => entry.date), ...data.investmentTransactions.map(entry => entry.date)]
+      .forEach(date => {
+        const year = Number(date?.slice(0, 4));
+        if (Number.isFinite(year) && year > 1900) years.add(year);
+      });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [data.investments, data.investmentTransactions]);
+  const historyMonthKey = `${historyYear}-${historyMonth.padStart(2, '0')}`;
+  const selectedMonthLabel = new Date(Number(historyYear), Number(historyMonth) - 1, 1)
+    .toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const selectedMonthTransactions = useMemo(() => data.investmentTransactions
+    .filter(transaction => transaction.date?.startsWith(historyMonthKey))
+    .sort((a, b) => b.date.localeCompare(a.date)),
+  [data.investmentTransactions, historyMonthKey]);
+  const monthContributions = selectedMonthTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const monthProfitLoss = selectedMonthTransactions.reduce((sum, transaction) => sum + Number(transaction.profit_loss || 0), 0);
+  const selectedPeriodEnd = `${historyMonthKey}-${new Date(Number(historyYear), Number(historyMonth), 0).getDate().toString().padStart(2, '0')}`;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const selectedUpdateDate = historyMonthKey === todayKey.slice(0, 7) ? todayKey : selectedPeriodEnd;
+  const historicalTotals = useMemo(() => data.investments.reduce((totals, investment) => {
+    if (investment.date > selectedPeriodEnd) return totals;
+    const allInvestmentTransactions = data.investmentTransactions.filter(transaction => transaction.investment_id === investment.id);
+    const transactionsToDate = allInvestmentTransactions.filter(transaction => transaction.date <= selectedPeriodEnd);
+    const legacyBase = Number(investment.initial_invested || 0)
+      || (allInvestmentTransactions.length === 0 ? Number(investment.invested || 0) : 0);
+    const invested = legacyBase + transactionsToDate.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+    const profitLoss = transactionsToDate.reduce((sum, transaction) => sum + Number(transaction.profit_loss || 0), 0);
+    return { invested: totals.invested + invested, current: totals.current + invested + profitLoss };
+  }, { invested: 0, current: 0 }), [data.investments, data.investmentTransactions, selectedPeriodEnd]);
+
   const handleEdit = (entryId: string) => {
     setEditingEntry(entryId);
     setIsFormOpen(true);
@@ -249,7 +290,8 @@ export const Investments = () => {
 
   const handleAddMoney = (investmentId: string, investmentName: string) => {
     setCurrentInvestment({ id: investmentId, name: investmentName });
-    setEditingTransaction(null);
+    const existingMonthlyUpdate = getTransactions(investmentId).find(transaction => transaction.date?.startsWith(historyMonthKey));
+    setEditingTransaction(existingMonthlyUpdate?.id || null);
     setTransactionFormOpen(true);
   };
 
@@ -292,23 +334,23 @@ export const Investments = () => {
   };
 
   return (
-    <div className="p-4 space-y-6 animate-fade-in">
+    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 pb-8 animate-fade-in sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="relative isolate flex flex-col gap-5 overflow-hidden rounded-2xl border border-investment/15 bg-gradient-to-br from-card via-card to-investment/10 p-5 shadow-card sm:flex-row sm:items-center sm:justify-between sm:p-7">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 h-56 w-56 rounded-full bg-investment/10 blur-3xl" />
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Investment Portfolio</h1>
-          <p className="text-sm text-muted-foreground">
-            Current Value: ₹{totalCurrent.toLocaleString()}
-          </p>
+          <Badge variant="secondary" className="mb-3 gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Portfolio overview</Badge>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Track your investments over time</h1>
+          <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">Record each month’s contributions and profit or loss, then review the portfolio at any past month end.</p>
         </div>
-        <Button className="bg-investment text-white" onClick={() => setIsFormOpen(true)}>
+        <Button size="lg" className="relative shrink-0 bg-investment text-white shadow-sm" onClick={() => setIsFormOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Add Investment
         </Button>
       </div>
 
       {/* Performance Overview */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Card className="bg-gradient-card border-border shadow-card">
           <CardContent className="pt-6">
             <div className="text-center">
@@ -328,10 +370,102 @@ export const Investments = () => {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="border-border/80 bg-gradient-card shadow-sm">
+          <CardContent className="p-4 sm:p-5">
+            <p className="text-sm text-muted-foreground">Profit / loss</p>
+            <p className={`mt-2 text-xl font-bold tabular-nums ${totalProfitLoss >= 0 ? 'text-success' : 'text-destructive'}`}>{formatCurrency(totalProfitLoss)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Current value minus invested</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/80 bg-gradient-card shadow-sm">
+          <CardContent className="p-4 sm:p-5">
+            <p className="text-sm text-muted-foreground">Total return</p>
+            <p className={`mt-2 text-xl font-bold tabular-nums ${returnPercentage >= 0 ? 'text-success' : 'text-destructive'}`}>{returnPercentage.toFixed(2)}%</p>
+            <p className="mt-1 text-xs text-muted-foreground">Since the first investment</p>
+          </CardContent>
+        </Card>
       </div>
 
+      <Card className="border-border/80 bg-gradient-card shadow-sm">
+        <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-investment" />Monthly performance history</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">Review and edit contributions and profit/loss for any month.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:w-64">
+            <div>
+              <Label className="mb-1 block text-xs text-muted-foreground" htmlFor="investment-history-month">Month</Label>
+              <Select value={historyMonth} onValueChange={setHistoryMonth}>
+                <SelectTrigger id="investment-history-month"><SelectValue /></SelectTrigger>
+                <SelectContent>{Array.from({ length: 12 }, (_, index) => index + 1).map(month => (
+                  <SelectItem key={month} value={String(month)}>{new Date(2024, month - 1, 1).toLocaleDateString('en-IN', { month: 'long' })}</SelectItem>
+                ))}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="mb-1 block text-xs text-muted-foreground" htmlFor="investment-history-year">Year</Label>
+              <Select value={historyYear} onValueChange={setHistoryYear}>
+                <SelectTrigger id="investment-history-year"><SelectValue /></SelectTrigger>
+                <SelectContent>{historyYears.map(year => <SelectItem key={year} value={String(year)}>{year}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            {[
+              { label: `Invested by ${selectedMonthLabel}`, value: formatCurrency(historicalTotals.invested), icon: WalletCards },
+              { label: 'Portfolio value at month end', value: formatCurrency(historicalTotals.current), icon: CircleDollarSign },
+              { label: 'Contributed this month', value: formatCurrency(monthContributions), icon: Wallet },
+              { label: 'Profit / loss this month', value: formatCurrency(monthProfitLoss), icon: TrendingUp },
+            ].map(({ label, value, icon: Icon }) => (
+              <div key={label} className="rounded-xl border border-border/70 bg-background/60 p-3 sm:p-4">
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Icon className="h-3.5 w-3.5 text-investment" />{label}</p>
+                <p className="mt-2 text-base font-semibold tabular-nums text-foreground sm:text-lg">{value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">Monthly profit/loss is the change for that month. Historical portfolio values are recalculated from dated updates up to the selected month.</p>
+          {selectedMonthTransactions.length ? (
+            <div className="max-h-[420px] space-y-2 overflow-y-auto overscroll-contain pr-2" aria-label={`${selectedMonthLabel} investment updates`}>
+              {selectedMonthTransactions.map(transaction => {
+                const investment = data.investments.find(entry => entry.id === transaction.investment_id);
+                return (
+                  <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/50 p-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">{investment?.name || 'Investment'}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(transaction.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}{transaction.notes ? ` · ${transaction.notes}` : ''}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <div className="text-right text-xs">
+                        <p className="font-medium text-foreground">Contribution {formatCurrency(transaction.amount)}</p>
+                        <p className={Number(transaction.profit_loss || 0) >= 0 ? 'text-success' : 'text-destructive'}>P/L {formatCurrency(Number(transaction.profit_loss || 0))}</p>
+                      </div>
+                      {investment && <EditDeleteMenu
+                        onEdit={() => handleEditTransaction(transaction.id, investment)}
+                        onDelete={() => handleDeleteTransaction(transaction.id)}
+                        itemName="monthly investment update"
+                        deleteTitle="Delete Monthly Update"
+                        deleteDescription="Deleting this update will change this month and later portfolio totals."
+                      />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-6 text-center">
+              <CalendarDays className="mx-auto h-7 w-7 text-muted-foreground" />
+              <p className="mt-2 font-medium text-foreground">No updates for {selectedMonthLabel}</p>
+              <p className="mt-1 text-sm text-muted-foreground">Choose another month or use “Monthly update” on an investment to enter this period.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Charts Section */}
-      <div className="space-y-6">
+      <div className="grid gap-5 xl:grid-cols-2">
         {/* Investment Allocation Pie Chart - Modern Trade Style */}
         <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -499,45 +633,45 @@ export const Investments = () => {
       </div>
 
       {/* Investment Holdings */}
-      <Card className="bg-gradient-card border-border shadow-card">
+      <Card className="border-border/80 bg-gradient-card shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <DollarSign className="w-5 h-5" />
             Investment Holdings
           </CardTitle>
-          <Button variant="outline" size="sm">
-            <BarChart3 className="w-4 h-4 mr-2" />
-            View Report
-          </Button>
+          <Badge variant="secondary">{data.investments.length} holdings</Badge>
         </CardHeader>
         <CardContent>
           {data.investments.length > 0 ? (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               {data.investments.map((investment) => {
                 return (
                   <div 
                     key={investment.id} 
-                    className="p-4 rounded-xl bg-background/50 border border-border/50 hover:shadow-card transition-all duration-200 space-y-4"
+                    className="space-y-4 rounded-2xl border border-border/70 bg-background/60 p-4 shadow-sm transition-shadow hover:shadow-card"
                   >
                     {/* Main Investment Info */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <Badge variant="outline" className="text-xs">
                             {investment.type}
                           </Badge>
                         </div>
                         <p className="font-medium text-foreground mb-1">{investment.name}</p>
-                        <div className="flex items-center gap-4 text-sm">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                           <span className="text-muted-foreground">
                             Invested: ₹{investment.invested.toLocaleString()}
                           </span>
                           <span className="text-foreground">
                             Current: ₹{investment.current.toLocaleString()}
                           </span>
+                          <span className={investment.current >= investment.invested ? 'text-success' : 'text-destructive'}>
+                            P/L: {formatCurrency(investment.current - investment.invested)}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                         <Button
                           size="sm"
                           onClick={() => handleAddMoney(investment.id, investment.name)}
@@ -545,7 +679,7 @@ export const Investments = () => {
                           variant="outline"
                         >
                           <Wallet className="w-3 h-3 mr-1" />
-                          Add Money
+                          Monthly Update
                         </Button>
                         <Button
                           size="sm"
@@ -591,7 +725,7 @@ export const Investments = () => {
                               {getInvestmentTransactions(investment.id).map((transaction) => (
                                 <div key={transaction.id} className="flex items-center justify-between text-xs p-2 bg-secondary/30 rounded">
                                   <div className="flex-1">
-                                    <span className="font-medium">Money Added</span>
+                                    <span className="font-medium">Monthly update</span>
                                     <p className="text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</p>
                                     {transaction.notes && (
                                       <p className="text-muted-foreground text-xs mt-1">{transaction.notes}</p>
@@ -613,7 +747,7 @@ export const Investments = () => {
                                       onDelete={() => handleDeleteTransaction(transaction.id)}
                                       itemName="transaction"
                                       deleteTitle="Delete Transaction"
-                                      deleteDescription="Are you sure you want to delete this transaction? This will affect the total invested amount."
+                                      deleteDescription="Deleting this update will change this month and later portfolio totals."
                                     />
                                   </div>
                                 </div>
@@ -663,6 +797,7 @@ export const Investments = () => {
           }}
           investmentId={currentInvestment.id}
           investmentName={currentInvestment.name}
+          initialDate={selectedUpdateDate}
           editingId={editingTransaction}
         />
       )}

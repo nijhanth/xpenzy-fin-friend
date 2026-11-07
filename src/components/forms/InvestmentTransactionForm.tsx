@@ -12,10 +12,14 @@ import { useFinancial } from '@/contexts/FinancialContext';
 import { useToast } from '@/hooks/use-toast';
 
 const transactionSchema = z.object({
-  amount: z.number().min(1, 'Amount must be greater than 0'),
+  amount: z.number().min(0, 'Contribution cannot be negative'),
   date: z.string().min(1, 'Date is required'),
   notes: z.string().optional(),
   profit_loss: z.number().default(0)
+}).superRefine((data, context) => {
+  if (data.amount === 0 && data.profit_loss === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['amount'], message: 'Add a contribution or enter this month’s profit/loss' });
+  }
 });
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
@@ -24,6 +28,7 @@ interface InvestmentTransactionFormProps {
   open: boolean;
   onClose: () => void;
   editingId?: string | null;
+  initialDate?: string;
   investmentId: string;
   investmentName: string;
 }
@@ -32,6 +37,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
   open,
   onClose,
   editingId,
+  initialDate,
   investmentId,
   investmentName
 }) => {
@@ -41,8 +47,8 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
-      amount: 1000,
-      date: new Date().toISOString().split('T')[0],
+      amount: 0,
+      date: initialDate || new Date().toISOString().split('T')[0],
       notes: '',
       profit_loss: 0
     }
@@ -61,13 +67,13 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
       }
     } else if (open && !editingId) {
       form.reset({
-        amount: 1000,
-        date: new Date().toISOString().split('T')[0],
+        amount: 0,
+        date: initialDate || new Date().toISOString().split('T')[0],
         notes: '',
         profit_loss: 0
       });
     }
-  }, [editingId, open, form, data.investmentTransactions]);
+  }, [editingId, open, form, data.investmentTransactions, initialDate]);
 
   const onSubmit = async (data: TransactionFormData) => {
     try {
@@ -78,7 +84,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
           investment_id: investmentId,
           amount: data.amount,
           date: data.date,
-          notes: data.notes || `Added ₹${data.amount.toLocaleString()} to ${investmentName}`,
+          notes: data.notes || (data.amount > 0 ? `Monthly contribution to ${investmentName}` : `Monthly performance update for ${investmentName}`),
           profit_loss: data.profit_loss
         });
       }
@@ -93,7 +99,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>
-            {editingId ? 'Edit Transaction' : `Add Money to ${investmentName}`}
+            {editingId ? 'Edit Monthly Update' : `Monthly Update · ${investmentName}`}
           </DialogTitle>
         </DialogHeader>
         
@@ -104,18 +110,19 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Amount (₹)</FormLabel>
+                  <FormLabel>New contribution this month (₹)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
-                      placeholder="1000"
+                      placeholder="0"
                       {...field}
                       onChange={(e) => field.onChange(Number(e.target.value))}
-                      min="1"
+                      min="0"
                       step="1"
                     />
                   </FormControl>
                   <FormMessage />
+                  <p className="text-xs text-muted-foreground">Enter money added during this month. Use 0 when you only need to record performance.</p>
                 </FormItem>
               )}
             />
@@ -125,11 +132,12 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
               name="date"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Date</FormLabel>
+                  <FormLabel>Update date</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <Input type="date" max={new Date().toISOString().split('T')[0]} {...field} />
                   </FormControl>
                   <FormMessage />
+                  <p className="text-xs text-muted-foreground">Choose a date in the month you’re updating. Past dates are supported for entering history.</p>
                 </FormItem>
               )}
             />
@@ -139,7 +147,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
               name="profit_loss"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Profit/Loss (₹)</FormLabel>
+                  <FormLabel>This month’s profit or loss (₹)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -159,8 +167,8 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
                     />
                   </FormControl>
                   <FormMessage />
-                  <p className="text-sm text-muted-foreground">
-                    Enter positive value for profit (e.g., +165) or negative for loss (e.g., -200)
+                  <p className="text-xs text-muted-foreground">
+                    Enter this month’s change, not your lifetime total. Use a positive number for profit or a negative number for loss.
                   </p>
                 </FormItem>
               )}
@@ -189,7 +197,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
                 Cancel
               </Button>
               <Button type="submit" className="bg-investment text-white">
-                {editingId ? 'Update Transaction' : 'Add Money'}
+                {editingId ? 'Save update' : 'Save monthly update'}
               </Button>
             </div>
           </form>

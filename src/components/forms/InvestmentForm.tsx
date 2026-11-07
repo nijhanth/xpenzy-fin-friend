@@ -99,7 +99,8 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Investment' : 'Add Investment'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Investment' : 'Add Investment Holding'}</DialogTitle>
+          {!isEditing && <p className="text-sm text-muted-foreground">Create the holding once, then use Monthly Update to record contributions and profit/loss by date.</p>}
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

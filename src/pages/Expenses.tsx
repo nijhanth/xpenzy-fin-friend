@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, AreaChart, Area, ReferenceLine } from 'recharts';
-import { Plus, CreditCard, Calendar, TrendingDown, ShoppingBag, BarChart3, Filter, Search } from 'lucide-react';
+import { PieChart, Pie, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, AreaChart, Area, ReferenceLine } from 'recharts';
+import { Plus, CreditCard, Calendar, TrendingDown, ShoppingBag, BarChart3, Filter, Search, ReceiptText, Calculator } from 'lucide-react';
 
 // Trade-style tooltip for donut chart
 const DonutChartTooltip = ({ active, payload }: any) => {
@@ -47,18 +47,22 @@ const EXPENSE_COLORS = [
   'hsl(330 81% 60%)',   // Pink
   'hsl(174 72% 40%)',   // Teal
 ];
+const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  maximumFractionDigits: 0,
+}).format(amount);
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { ExpenseForm } from '@/components/forms/ExpenseForm';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfYear, endOfYear, isWithinInterval, parseISO } from 'date-fns';
 
 export const Expenses = () => {
   const { data } = useFinancial();
@@ -69,7 +73,7 @@ export const Expenses = () => {
   const { toast } = useToast();
 
   // Date filter states
-  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+  const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedWeek, setSelectedWeek] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>('all');
@@ -92,10 +96,11 @@ export const Expenses = () => {
   // Generate months for selected year
   const availableMonths = useMemo(() => {
     const months = [];
+    const year = selectedYear === 'all' ? new Date().getFullYear() : parseInt(selectedYear);
     for (let i = 1; i <= 12; i++) {
       months.push({
         value: i.toString(),
-        label: new Date(parseInt(selectedYear), i - 1).toLocaleDateString('en-US', { month: 'long' })
+        label: new Date(year, i - 1).toLocaleDateString('en-US', { month: 'long' })
       });
     }
     return months;
@@ -103,7 +108,7 @@ export const Expenses = () => {
 
   // Generate weeks for selected month
   const availableWeeks = useMemo(() => {
-    if (!selectedYear || selectedMonth === 'all') return [];
+    if (!selectedYear || selectedYear === 'all' || selectedMonth === 'all') return [];
     
     const year = parseInt(selectedYear);
     const month = parseInt(selectedMonth) - 1;
@@ -142,7 +147,7 @@ export const Expenses = () => {
     // Filter by specific date first
     if (selectedDate && selectedDate !== 'all') {
       filtered = filtered.filter(expense => expense.date === selectedDate);
-    } else if (selectedWeek && selectedWeek !== 'all' && selectedYear && selectedMonth && selectedMonth !== 'all') {
+    } else if (selectedWeek && selectedWeek !== 'all' && selectedYear && selectedYear !== 'all' && selectedMonth && selectedMonth !== 'all') {
       // Filter by week
       const week = availableWeeks.find(w => w.value === selectedWeek);
       if (week) {
@@ -151,18 +156,14 @@ export const Expenses = () => {
           return isWithinInterval(expenseDate, { start: week.start, end: week.end });
         });
       }
-    } else if (selectedYear && selectedMonth && selectedMonth !== 'all') {
-      // Filter by month
-      const year = parseInt(selectedYear);
+    } else if (selectedMonth && selectedMonth !== 'all') {
+      // A month can be selected across all years, or within one selected year.
       const month = parseInt(selectedMonth) - 1;
-      const monthStart = startOfMonth(new Date(year, month));
-      const monthEnd = endOfMonth(new Date(year, month));
-      
       filtered = filtered.filter(expense => {
         const expenseDate = parseISO(expense.date);
-        return isWithinInterval(expenseDate, { start: monthStart, end: monthEnd });
+        return expenseDate.getMonth() === month && (selectedYear === 'all' || expenseDate.getFullYear() === parseInt(selectedYear));
       });
-    } else if (selectedYear) {
+    } else if (selectedYear && selectedYear !== 'all') {
       // Filter by year
       const year = parseInt(selectedYear);
       const yearStart = startOfYear(new Date(year, 0));
@@ -184,6 +185,8 @@ export const Expenses = () => {
   }, [data.expenses, selectedYear, selectedMonth, selectedWeek, selectedDate, availableWeeks, searchQuery, categoryFilter]);
 
   const totalExpenses = filteredExpenses.reduce((sum, entry) => sum + entry.amount, 0);
+  const averageTransaction = filteredExpenses.length ? totalExpenses / filteredExpenses.length : 0;
+  const hasActiveFilters = selectedYear !== 'all' || selectedMonth !== 'all' || selectedWeek !== 'all' || selectedDate !== 'all' || categoryFilter !== 'all' || !!searchQuery.trim();
 
   // Generate category data from filtered expense entries with percentages
   const categoryExpenses = useMemo(() => {
@@ -204,6 +207,7 @@ export const Expenses = () => {
       }))
       .sort((a, b) => b.value - a.value);
   }, [filteredExpenses]);
+  const topCategory = categoryExpenses[0];
 
   // Generate daily spending data with running total
   const weeklySpending = useMemo(() => {
@@ -255,19 +259,39 @@ export const Expenses = () => {
   };
 
   return (
-    <div className="p-4 space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Transactions</h1>
-          <p className="text-sm text-muted-foreground">Total: ₹{totalExpenses.toLocaleString()}</p>
+    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 pb-8 sm:p-6 animate-fade-in">
+      <div className="relative isolate overflow-hidden rounded-2xl border border-expense/15 bg-gradient-to-br from-card via-card to-expense/10 p-5 shadow-card sm:p-7">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 h-56 w-56 rounded-full bg-expense/10 blur-3xl" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <Badge variant="secondary" className="mb-3 gap-1.5"><ReceiptText className="h-3.5 w-3.5" /> Spending overview</Badge>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Transactions</h1>
+            <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">Review expenses, spot spending patterns, and find any transaction quickly. Showing all years by default.</p>
+          </div>
+          <Button size="lg" className="shrink-0 bg-gradient-expense shadow-sm" onClick={() => setIsFormOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Add expense
+          </Button>
         </div>
-        <Button className="bg-gradient-expense" onClick={() => setIsFormOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Expense
-        </Button>
       </div>
-
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Expense overview">
+        {[
+          { label: "Total spend", value: formatCurrency(totalExpenses), detail: "For the selected filters", icon: CreditCard, color: "text-rose-600 dark:text-rose-400", tint: "bg-rose-500/10" },
+          { label: "Transactions", value: filteredExpenses.length.toLocaleString("en-IN"), detail: "Matching expense entries", icon: ReceiptText, color: "text-sky-600 dark:text-sky-400", tint: "bg-sky-500/10" },
+          { label: "Average entry", value: formatCurrency(averageTransaction), detail: "Per transaction", icon: Calculator, color: "text-violet-600 dark:text-violet-400", tint: "bg-violet-500/10" },
+          { label: "Top category", value: topCategory?.name || "No data yet", detail: topCategory ? `${formatCurrency(topCategory.value)} in this category` : "Add an expense to get started", icon: ShoppingBag, color: "text-amber-600 dark:text-amber-400", tint: "bg-amber-500/10" },
+        ].map(({ label, value, detail, icon: Icon, color, tint }) => (
+          <Card key={label} className="border-border/80 bg-card shadow-sm">
+            <CardContent className="flex min-h-28 items-start justify-between gap-2 p-4 sm:p-5">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground sm:text-sm">{label}</p>
+                <p className="mt-2 truncate text-lg font-bold tabular-nums text-foreground sm:text-xl">{value}</p>
+                <p className="mt-1 truncate text-[11px] text-muted-foreground sm:text-xs">{detail}</p>
+              </div>
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tint} ${color}`}><Icon className="h-4 w-4" /></span>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
@@ -319,6 +343,7 @@ export const Expenses = () => {
                   <SelectValue placeholder="Select year" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">All years</SelectItem>
                   {availableYears.map(year => (
                     <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
                   ))}
@@ -599,9 +624,7 @@ export const Expenses = () => {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <CreditCard className="w-5 h-5" />
-            {searchQuery || categoryFilter !== 'all' || selectedDate !== 'all' || selectedMonth !== 'all'
-              ? `${filteredExpenses.length} matching transactions`
-              : 'Recent transactions'}
+            {hasActiveFilters ? `${filteredExpenses.length} matching transactions` : `All transactions (${filteredExpenses.length})`}
           </CardTitle>
           <Button variant="outline" size="sm" onClick={() => handleViewReport('recent')}>
             <BarChart3 className="w-4 h-4 mr-2" />
@@ -610,30 +633,30 @@ export const Expenses = () => {
         </CardHeader>
         <CardContent>
           {filteredExpenses.length > 0 ? (
-            <div className="space-y-4">
+            <div className="max-h-[1000px] space-y-3 overflow-y-auto overscroll-contain pr-2" aria-label="Transaction list; scroll to view more">
               {filteredExpenses.map((entry) => (
                 <div 
                   key={entry.id} 
-                  className="flex items-center justify-between p-4 rounded-xl bg-background/50 border border-border/50 hover:shadow-card transition-all duration-200"
+                  className="flex min-h-[76px] items-center justify-between gap-3 rounded-xl border border-border/50 bg-background/50 p-3 transition-all duration-200 hover:shadow-card sm:p-4"
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline" className="text-xs">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1.5 flex min-w-0 items-center gap-2 overflow-hidden">
+                      <Badge variant="outline" className="max-w-[40%] truncate text-xs">
                         {entry.category}
                       </Badge>
                       {entry.subcategory && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="max-w-[35%] truncate text-xs">
                           {entry.subcategory}
                         </Badge>
                       )}
-                      <Badge variant="default" className="text-xs">
+                      <Badge variant="default" className="max-w-[30%] truncate text-xs">
                         {entry.paymentMode}
                       </Badge>
                     </div>
                     <p className="font-medium text-foreground">₹{entry.amount.toLocaleString()}</p>
-                    <p className="text-sm text-muted-foreground">{entry.notes}</p>
+                    {entry.notes && <p className="truncate text-sm text-muted-foreground">{entry.notes}</p>}
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 text-right">
                     <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                       <Calendar className="w-3 h-3" />
                       {new Date(entry.date).toLocaleDateString()}
@@ -660,7 +683,7 @@ export const Expenses = () => {
                 setSelectedDate('all');
                 setSelectedWeek('all');
                 setSelectedMonth('all');
-                setSelectedYear(new Date().getFullYear().toString());
+                setSelectedYear('all');
               }}>Clear filters</Button>
             </div>
           ) : (

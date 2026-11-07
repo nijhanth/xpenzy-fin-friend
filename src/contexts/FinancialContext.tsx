@@ -316,7 +316,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       
       toast({
         title: "Success",
-        description: "Investment created successfully. Use 'Add Money' to start investing.",
+        description: "Investment created successfully. Use Monthly Update to record contributions and performance.",
       });
     } catch (error) {
       console.error('Error adding investment:', error);
@@ -361,7 +361,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (showToast) {
         toast({
           title: "Success",
-          description: "Money added to investment successfully",
+          description: "Investment monthly update saved successfully",
         });
       }
     } catch (error) {
@@ -399,7 +399,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       
       toast({
         title: "Success",
-        description: "Investment transaction updated successfully",
+        description: "Investment monthly update updated successfully",
       });
     } catch (error) {
       console.error('Error updating investment transaction:', error);

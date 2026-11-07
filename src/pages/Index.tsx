@@ -79,7 +79,7 @@ const Index = () => {
   };
 
   return (
-    <AppLayout activeTab={currentScreen} onTabChange={setCurrentScreen} onAdd={() => setAddOpen(true)}>
+    <AppLayout activeTab={currentScreen} onTabChange={setCurrentScreen}>
       {renderScreen()}
       <QuickAddExpense open={addOpen} onOpenChange={setAddOpen} />
     </AppLayout>

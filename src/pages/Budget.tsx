@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, AlertTriangle, CheckCircle, TrendingUp, Calendar } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle, TrendingUp, Calendar, WalletCards, PiggyBank, Target, Sparkles, CircleDollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { BudgetCategory } from '@/types/financial';
@@ -245,19 +245,39 @@ export const Budget = () => {
   const totalBudget = budgetsWithRealSpent.reduce((sum, budget) => sum + budget.limit_amount, 0);
   const totalSpent = budgetsWithRealSpent.reduce((sum, budget) => sum + budget.spent, 0);
   const remainingBudget = totalBudget - totalSpent;
+  const budgetUsage = totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0;
+  const overBudgetCount = budgetsWithRealSpent.filter(budget => budget.spent > budget.limit_amount).length;
+  const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', {
+    style: 'currency', currency: 'INR', maximumFractionDigits: 0,
+  }).format(amount);
+  const selectedPeriodLabel = format(new Date(selectedYear, selectedMonth), 'MMMM yyyy');
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 pb-8 sm:p-6 animate-fade-in">
+      <section className="relative isolate overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-br from-card via-card to-primary/10 p-5 shadow-card sm:p-7">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <Badge variant="secondary" className="mb-3 gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Budget planner</Badge>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Make every rupee count</h1>
+            <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">Track category limits, see what’s left to spend, and stay ahead of your financial goals.</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-3 rounded-xl border border-border/70 bg-background/70 px-4 py-3 backdrop-blur-sm">
+            <Calendar className="h-5 w-5 text-primary" />
+            <div><p className="text-xs text-muted-foreground">Current view</p><p className="font-semibold text-foreground">{selectedPeriodLabel}</p></div>
+          </div>
+        </div>
+      </section>
       {/* Date Selection */}
-      <Card>
-        <CardHeader>
+      <Card className="border-border/80 shadow-sm">
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <Calendar className="w-5 h-5" />
-            Period Selection
+            Choose a period
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <Label htmlFor="year">Year</Label>
               <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
@@ -300,14 +320,14 @@ export const Budget = () => {
               </Select>
             </div>
           </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            Expenses are filtered based on each budget's period (yearly/monthly/weekly) and your selection above.
+          <p className="mt-3 text-xs text-muted-foreground">
+            Budget progress updates from expenses, savings, and investments for the selected period.
           </p>
         </CardContent>
       </Card>
 
       {/* Header Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -373,6 +393,25 @@ export const Budget = () => {
         </Card>
       </div>
 
+      <Card className="overflow-hidden border-border/80 shadow-sm">
+        <CardContent className="p-4 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><CircleDollarSign className="h-4 w-4" /></span>
+              <div><p className="font-semibold">Budget pace</p><p className="text-xs text-muted-foreground">{selectedPeriodLabel}</p></div>
+            </div>
+            <Badge variant={overBudgetCount > 0 ? 'destructive' : 'secondary'}>
+              {overBudgetCount > 0 ? `${overBudgetCount} over limit` : `${budgetUsage.toFixed(0)}% used`}
+            </Badge>
+          </div>
+          <Progress value={budgetUsage} className="h-2.5" />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><WalletCards className="h-3.5 w-3.5" />{budgetsWithRealSpent.length} tracked {budgetsWithRealSpent.length === 1 ? 'budget' : 'budgets'}</span>
+            <span className="inline-flex items-center gap-1.5"><PiggyBank className="h-3.5 w-3.5" />{remainingBudget >= 0 ? `${formatCurrency(remainingBudget)} available` : `${formatCurrency(Math.abs(remainingBudget))} over planned`}</span>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Unbudgeted Expenses Bottom Sheet */}
       <Sheet open={isUnbudgetedSheetOpen} onOpenChange={setIsUnbudgetedSheetOpen}>
         <SheetContent side="bottom" className="h-[80vh] flex flex-col">
@@ -429,8 +468,8 @@ export const Budget = () => {
       </Sheet>
 
       {/* Add Budget Button */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold">Category Budgets</h2>
+      <div className="flex items-center justify-between gap-3">
+        <div><h2 className="flex items-center gap-2 text-lg font-semibold"><Target className="h-5 w-5 text-primary" />Category budgets</h2><p className="text-sm text-muted-foreground">Limits and progress for {selectedPeriodLabel}</p></div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
@@ -582,7 +621,7 @@ export const Budget = () => {
       </div>
 
       {/* Budget Categories */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {budgetsWithRealSpent.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
@@ -602,7 +641,7 @@ export const Budget = () => {
             const remaining = budget.limit_amount - budget.spent;
             
             return (
-              <Card key={budget.id}>
+              <Card key={budget.id} className="border-border/80 bg-gradient-card shadow-sm transition-shadow hover:shadow-card">
                 <CardContent className="p-4">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
