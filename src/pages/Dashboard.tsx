@@ -160,7 +160,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
     const budgetCategories = Object.entries(budgetLimits)
       .map(([category, limit]) => ({ category, limit, spent: budgetCategoryTotals[category] || 0 }))
       .sort((a, b) => (b.limit > 0 ? b.spent / b.limit : 0) - (a.limit > 0 ? a.spent / a.limit : 0))
-      .slice(0, 3);
+      .slice(0, 4);
     const chartStart = new Date(`${cashFlowDateFilter.range.start}T00:00:00`);
     chartStart.setDate(chartStart.getDate() - ((chartStart.getDay() + 6) % 7));
     const rangeStartDate = new Date(`${cashFlowDateFilter.range.start}T00:00:00`);

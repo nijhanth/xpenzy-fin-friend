@@ -278,10 +278,25 @@ export const FloatingAIAssistant = () => {
       setImageDataUrl(null);
       setInputValue('');
 
+      const typeLabel = recognizedType === 'unknown'
+        ? 'Not recognized — choose the correct section below'
+        : recognizedType[0].toUpperCase() + recognizedType.slice(1);
+      const extractedDetails = [
+        `- **Section:** ${typeLabel}`,
+        `- **Amount:** ${typeof extracted.amount === 'number' && Number.isFinite(extracted.amount) && extracted.amount > 0 ? `₹${extracted.amount.toLocaleString('en-IN')}` : 'Could not read — enter it below'}`,
+        `- **Date:** ${recognizedDate ? new Date(`${recognizedDate}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not detected — select it below'}`,
+        `- **Description:** ${typeof extracted.description === 'string' && extracted.description.trim() ? extracted.description.trim().slice(0, 500) : 'Not detected'}`,
+        ...(recognizedType === 'expense' || recognizedType === 'income'
+          ? [
+            `- **Category:** ${typeof extracted.category === 'string' && extracted.category.trim() ? extracted.category.trim() : 'Not detected — enter it below'}`,
+            `- **Payment method:** ${recognizedMode}`,
+          ]
+          : []),
+      ].join('\n');
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: 'I read the screenshot. Review and edit the details below, choose the section to save it to, and confirm. Nothing is saved until you confirm.',
+        content: `I read the screenshot. Please compare these details with the image:\n\n${extractedDetails}\n\nEdit anything that is incorrect in the draft below. **Nothing is saved until you confirm.**`,
       };
       setMessages((previous) => [...previous, assistantMessage].slice(-MAX_HISTORY_MESSAGES));
       await persistWithNotice(assistantMessage, user.id);
@@ -517,6 +532,27 @@ export const FloatingAIAssistant = () => {
         await refreshInvestmentTransactions();
       }
 
+      const targetName = transactionType === 'savings'
+        ? financialData.savings.find((goal) => goal.id === selectedTargetId)?.name
+        : transactionType === 'investment'
+          ? financialData.investments.find((investment) => investment.id === selectedTargetId)?.name
+          : undefined;
+      const savedDetails = [
+        `**Saved ${transactionType} transaction**`,
+        `- **Amount:** ₹${amount.toLocaleString('en-IN')}`,
+        `- **Date:** ${new Date(`${date}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+        ...(category.trim() ? [`- **Category:** ${category.trim()}`] : []),
+        ...(transactionType === 'expense' || transactionType === 'income' ? [`- **Payment method:** ${paymentMode}`] : []),
+        ...(targetName ? [`- **${transactionType === 'savings' ? 'Savings goal' : 'Investment'}:** ${targetName}`] : []),
+        ...(description.trim() ? [`- **Description:** ${description.trim()}`] : []),
+      ].join('\n');
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: savedDetails,
+      };
+      setMessages((previous) => [...previous, assistantMessage].slice(-MAX_HISTORY_MESSAGES));
+      await persistWithNotice(assistantMessage, user.id);
       toast.success(`${transactionType[0].toUpperCase()}${transactionType.slice(1)} transaction saved.`);
       setTransactionDraft(null);
       setSelectedTargetId('');
