@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend, AreaChart, Area, ReferenceLine } from 'recharts';
-import { TrendingUp, Plus, DollarSign, Calendar, Target, Wallet, History, ChevronDown, ChevronUp, Sparkles, WalletCards, CircleDollarSign, CalendarDays } from 'lucide-react';
+import { TrendingUp, Plus, DollarSign, Calendar, Target, Wallet, History, ChevronDown, ChevronUp, Sparkles, WalletCards, CircleDollarSign, CalendarDays, FileUp, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,77 @@ import { InvestmentForm } from '@/components/forms/InvestmentForm';
 import { InvestmentTransactionForm } from '@/components/forms/InvestmentTransactionForm';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
+import { readFirstWorksheet } from '@/lib/xlsxReader';
+import type { InvestmentEntry, InvestmentTransaction } from '@/types/financial';
+
+type ImportedMutualFund = { name: string; units: number; invested: number; current: number };
+type FundSnapshot = { date: string; invested: number; current: number; units: number; transaction?: InvestmentTransaction };
+
+const statementSnapshotPrefix = 'Statement snapshot:';
+const isStatementImportedInvestment = (notes?: string) => notes?.startsWith('Imported from mutual fund statement');
+const redeemedDateFromNotes = (notes?: string) => notes?.match(/REDEEMED:\s*(\d{4}-\d{2}-\d{2})/)?.[1];
+const realizedProfitLossFromNotes = (notes?: string) => {
+  const value = notes?.match(/realized=(-?\d+(?:\.\d+)?)/)?.[1];
+  return value === undefined ? undefined : Number(value);
+};
+
+function readStatementSnapshot(transaction: { date: string; amount: number; profit_loss?: number; notes?: string }, baseInvested: number): FundSnapshot {
+  const storedValues = transaction.notes?.match(/kind=(basis|period);\s*invested=(-?\d+(?:\.\d+)?);\s*current=(-?\d+(?:\.\d+)?);\s*units=(-?\d+(?:\.\d+)?)/);
+  if (storedValues) {
+    return { date: transaction.date, invested: Number(storedValues[2]), current: Number(storedValues[3]), units: Number(storedValues[4]), transaction: transaction as InvestmentTransaction };
+  }
+  const invested = baseInvested + Number(transaction.amount || 0);
+  return {
+    date: transaction.date,
+    invested,
+    current: invested + Number(transaction.profit_loss || 0),
+    units: 0,
+    transaction: transaction as InvestmentTransaction,
+  };
+}
+
+function parseMutualFundSummary(rows: string[][]) {
+  const headerIndex = rows.findIndex(row => row.some(cell => cell?.trim().toLowerCase() === 'scheme name'));
+  if (headerIndex < 0) throw new Error('Could not find a “Scheme Name” holdings table in this workbook.');
+  const headers = rows[headerIndex].map(value => value?.trim().toLowerCase() || '');
+  const column = (name: string) => headers.indexOf(name);
+  const nameColumn = column('scheme name');
+  const unitsColumn = column('units');
+  const investedColumn = column('invested value');
+  const currentColumn = column('current value');
+  if ([nameColumn, unitsColumn, investedColumn, currentColumn].some(index => index < 0)) {
+    throw new Error('The holdings table must include Scheme Name, Units, Invested Value, and Current Value columns.');
+  }
+
+  const holdings = new Map<string, ImportedMutualFund>();
+  for (const row of rows.slice(headerIndex + 1)) {
+    const name = row[nameColumn]?.trim();
+    if (!name) continue;
+    const toAmount = (value?: string) => Number((value || '').replace(/[,₹\s]/g, ''));
+    const units = toAmount(row[unitsColumn]);
+    const invested = toAmount(row[investedColumn]);
+    const current = toAmount(row[currentColumn]);
+    if (![units, invested, current].every(Number.isFinite)) continue;
+    const currentHolding = holdings.get(name) || { name, units: 0, invested: 0, current: 0 };
+    currentHolding.units += units;
+    currentHolding.invested += invested;
+    currentHolding.current += current;
+    holdings.set(name, currentHolding);
+  }
+  if (!holdings.size) throw new Error('No mutual fund holdings were found in this workbook.');
+
+  const summaryRow = rows.find(row => row.some(cell => cell?.trim().toLowerCase() === 'total investments'));
+  const summaryInvested = summaryRow ? Number((summaryRow[1] || '').replace(/[,₹\s]/g, '')) : NaN;
+  const summaryCurrent = summaryRow ? Number((summaryRow[2] || '').replace(/[,₹\s]/g, '')) : NaN;
+  const asOfText = rows.flat().find(value => /^HOLDINGS AS ON \d{4}-\d{2}-\d{2}$/i.test(value?.trim() || ''));
+  const asOfDate = asOfText?.trim().match(/\d{4}-\d{2}-\d{2}/)?.[0] || new Date().toISOString().slice(0, 10);
+  return {
+    holdings: [...holdings.values()],
+    asOfDate,
+    summaryInvested: Number.isFinite(summaryInvested) ? summaryInvested : [...holdings.values()].reduce((sum, item) => sum + item.invested, 0),
+    summaryCurrent: Number.isFinite(summaryCurrent) ? summaryCurrent : [...holdings.values()].reduce((sum, item) => sum + item.current, 0),
+  };
+}
 
 // Investment type colors
 const INVESTMENT_COLORS: Record<string, string> = {
@@ -112,7 +183,7 @@ const GrowthTooltip = ({ active, payload, label }: any) => {
 };
 
 export const Investments = () => {
-  const { data, getInvestmentTransactions: getTransactions, deleteInvestment, deleteInvestmentTransaction } = useFinancial();
+  const { data, getInvestmentTransactions: getTransactions, deleteInvestment, deleteInvestmentTransaction, addInvestment, addInvestmentTransaction, updateInvestmentEntry, updateInvestmentTransaction } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
@@ -127,6 +198,15 @@ export const Investments = () => {
   const [expandedInvestments, setExpandedInvestments] = useState<Set<string>>(new Set());
   const [historyYear, setHistoryYear] = useState(String(new Date().getFullYear()));
   const [historyMonth, setHistoryMonth] = useState(String(new Date().getMonth() + 1));
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<ReturnType<typeof parseMutualFundSummary> | null>(null);
+  const [importError, setImportError] = useState('');
+  const [redemptionTarget, setRedemptionTarget] = useState<InvestmentEntry | null>(null);
+  const [redemptionDate, setRedemptionDate] = useState(new Date().toISOString().slice(0, 10));
+  const [redemptionProceeds, setRedemptionProceeds] = useState('');
+  const [redemptionError, setRedemptionError] = useState('');
+  const [isRedeeming, setIsRedeeming] = useState(false);
 
   // Calculate allocation data from investments
   const allocationData = useMemo(() => {
@@ -178,11 +258,11 @@ export const Investments = () => {
     });
     
     // Add transactions
-    transactions.forEach(tx => {
-      allEvents.push({
-        date: new Date(tx.date),
-        amount: tx.amount + (tx.profit_loss || 0),
-      });
+      transactions.forEach(tx => {
+        allEvents.push({
+          date: new Date(tx.date),
+          amount: tx.amount + (tx.profit_loss || 0),
+        });
     });
     
     // Sort by date
@@ -260,7 +340,11 @@ export const Investments = () => {
     .sort((a, b) => b.date.localeCompare(a.date)),
   [data.investmentTransactions, historyMonthKey]);
   const monthContributions = selectedMonthTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-  const monthProfitLoss = selectedMonthTransactions.reduce((sum, transaction) => sum + Number(transaction.profit_loss || 0), 0);
+  const monthProfitLoss = selectedMonthTransactions
+    .reduce((sum, transaction) => {
+      if (transaction.notes?.includes('kind=basis') || transaction.notes?.includes('lifetime gain/loss')) return sum;
+      return sum + (realizedProfitLossFromNotes(transaction.notes) ?? Number(transaction.profit_loss || 0));
+    }, 0);
   const selectedPeriodEnd = `${historyMonthKey}-${new Date(Number(historyYear), Number(historyMonth), 0).getDate().toString().padStart(2, '0')}`;
   const todayKey = new Date().toISOString().slice(0, 10);
   const selectedUpdateDate = historyMonthKey === todayKey.slice(0, 7) ? todayKey : selectedPeriodEnd;
@@ -333,6 +417,188 @@ export const Investments = () => {
     return getTransactions(investmentId);
   };
 
+  const handleStatementFile = async (file?: File) => {
+    if (!file) return;
+    setImportError('');
+    setImportPreview(null);
+    try {
+      if (!file.name.toLowerCase().endsWith('.xlsx')) throw new Error('Choose an Excel .xlsx statement file.');
+      const rows = await readFirstWorksheet(file);
+      setImportPreview(parseMutualFundSummary(rows));
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Could not read this statement.');
+    }
+  };
+
+  const importStatement = async () => {
+    if (!importPreview) return;
+    setIsImporting(true);
+    let importedCount = 0;
+    try {
+      const reportNames = new Set(importPreview.holdings.map(holding => holding.name.trim().toLowerCase()));
+      const omittedImportedFunds = data.investments
+        .filter(item => item.type === 'Mutual Fund' && isStatementImportedInvestment(item.notes) && !reportNames.has(item.name.trim().toLowerCase()))
+        .map(item => ({ name: item.name, units: 0, invested: 0, current: 0 }));
+      const statementHoldings = [...importPreview.holdings, ...omittedImportedFunds];
+
+      for (const holding of statementHoldings) {
+        const existing = data.investments.find(item => item.type === 'Mutual Fund' && item.name.trim().toLowerCase() === holding.name.toLowerCase());
+        const importedByStatement = isStatementImportedInvestment(existing?.notes);
+        if (existing && !importedByStatement) continue;
+
+        let investment = existing;
+        if (!investment) {
+          const created = await addInvestment({
+            type: 'Mutual Fund',
+            name: holding.name,
+            initial_invested: holding.invested,
+            invested: holding.invested,
+            current: holding.current,
+            date: importPreview.asOfDate,
+            notes: `Imported from mutual fund statement. Value as of ${importPreview.asOfDate}. Units: ${holding.units.toFixed(3)}.`,
+          }, false);
+          if (!created) throw new Error(`Could not create ${holding.name}.`);
+          investment = created;
+        }
+
+        const oldSnapshotTransactions = data.investmentTransactions
+          .filter(transaction => transaction.investment_id === investment.id && transaction.notes?.startsWith(statementSnapshotPrefix));
+        const snapshotsByDate = new Map<string, FundSnapshot>();
+        oldSnapshotTransactions.forEach(transaction => snapshotsByDate.set(
+          transaction.date,
+          readStatementSnapshot(transaction, Number(investment.initial_invested || 0)),
+        ));
+        snapshotsByDate.set(importPreview.asOfDate, {
+          date: importPreview.asOfDate,
+          invested: holding.invested,
+          current: holding.current,
+          units: holding.units,
+        });
+        const snapshots = [...snapshotsByDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+        const latestSnapshot = snapshots[snapshots.length - 1];
+        const redeemedNote = latestSnapshot.invested === 0 && latestSnapshot.current === 0 && latestSnapshot.units === 0
+          ? `\nREDEEMED: ${latestSnapshot.date}`
+          : '';
+        const manualTransactions = data.investmentTransactions.filter(transaction =>
+          transaction.investment_id === investment.id && !transaction.notes?.startsWith(statementSnapshotPrefix));
+        const manualBeforeFirst = manualTransactions.filter(transaction => transaction.date <= snapshots[0].date);
+        const initialBasis = snapshots[0].invested - manualBeforeFirst.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+
+        await updateInvestmentEntry(investment.id, {
+          date: snapshots[0].date,
+          initial_invested: initialBasis,
+          notes: `Imported from mutual fund statement snapshots.${redeemedNote}`,
+        }, false);
+
+        for (let index = 0; index < snapshots.length; index += 1) {
+          const snapshot = snapshots[index];
+          const previous = snapshots[index - 1];
+          const manualInPeriod = manualTransactions.filter(transaction => previous
+            ? transaction.date > previous.date && transaction.date <= snapshot.date
+            : transaction.date <= snapshot.date);
+          const investedChange = previous
+            ? snapshot.invested - previous.invested - manualInPeriod.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0)
+            : 0;
+          const profitLoss = previous
+            ? snapshot.current - previous.current - (snapshot.invested - previous.invested) - manualInPeriod.reduce((sum, transaction) => sum + Number(transaction.profit_loss || 0), 0)
+            : snapshot.current - snapshot.invested - manualInPeriod.reduce((sum, transaction) => sum + Number(transaction.profit_loss || 0), 0);
+          const kind = index === 0 ? 'basis' : 'period';
+          const transactionData = {
+            investment_id: investment.id,
+            amount: investedChange,
+            profit_loss: profitLoss,
+            date: snapshot.date,
+            notes: `${statementSnapshotPrefix} kind=${kind}; invested=${snapshot.invested.toFixed(2)}; current=${snapshot.current.toFixed(2)}; units=${snapshot.units.toFixed(6)}`,
+          };
+          const existingTransaction = snapshot.transaction || oldSnapshotTransactions.find(transaction => transaction.date === snapshot.date);
+          if (existingTransaction) {
+            await updateInvestmentTransaction(existingTransaction.id, transactionData, false);
+          } else {
+            await addInvestmentTransaction(transactionData, false);
+          }
+        }
+        importedCount += 1;
+      }
+      toast({
+        title: importedCount ? 'Statement history updated' : 'No matching funds to update',
+        description: importedCount
+          ? `Updated ${importedCount} fund${importedCount === 1 ? '' : 's'} with the ${new Date(`${importPreview.asOfDate}T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} snapshot. Monthly invested changes and profit/loss were recalculated; ${omittedImportedFunds.length} previously imported fund${omittedImportedFunds.length === 1 ? ' was' : 's were'} recorded as fully redeemed because they were absent from this summary.`
+          : 'Existing funds are updated when they were originally imported from a mutual fund statement.',
+      });
+      setImportDialogOpen(false);
+      setImportPreview(null);
+      setImportError('');
+    } catch (error) {
+      const message = typeof error === 'object' && error !== null && 'message' in error
+        ? String(error.message)
+        : 'Please check your connection and try again.';
+      setImportError(`Import stopped${importedCount ? ` after saving ${importedCount} fund${importedCount === 1 ? '' : 's'}` : ''}: ${message}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const saveManualRedemption = async () => {
+    if (!redemptionTarget) return;
+    const proceeds = Number(redemptionProceeds);
+    if (!redemptionDate || redemptionProceeds.trim() === '' || !Number.isFinite(proceeds) || proceeds < 0) {
+      setRedemptionError('Enter the redemption date and proceeds received (₹0 or more).');
+      return;
+    }
+    if (redemptionDate < redemptionTarget.date) {
+      setRedemptionError('Redemption date cannot be before this investment started.');
+      return;
+    }
+    const investmentTransactions = data.investmentTransactions.filter(transaction => transaction.investment_id === redemptionTarget.id);
+    if (investmentTransactions.some(transaction => transaction.notes?.startsWith('Manual redemption:'))) {
+      setRedemptionError('A redemption is already recorded for this fund. Refresh the page to see its redeemed status.');
+      return;
+    }
+    if (investmentTransactions.some(transaction => transaction.date > redemptionDate)) {
+      setRedemptionError('Choose a redemption date on or after the latest recorded update for this fund.');
+      return;
+    }
+    const transactionsToDate = investmentTransactions.filter(transaction => transaction.date <= redemptionDate);
+    const investedAtRedemption = Number(redemptionTarget.initial_invested || 0)
+      + transactionsToDate.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+    const currentAtRedemption = investedAtRedemption
+      + transactionsToDate.reduce((sum, transaction) => sum + Number(transaction.profit_loss || 0), 0);
+    if (currentAtRedemption <= 0) {
+      setRedemptionError('This holding has no remaining value to redeem.');
+      return;
+    }
+
+    setIsRedeeming(true);
+    setRedemptionError('');
+    try {
+      const realized = proceeds - investedAtRedemption;
+      await addInvestmentTransaction({
+        investment_id: redemptionTarget.id,
+        amount: -investedAtRedemption,
+        profit_loss: investedAtRedemption - currentAtRedemption,
+        date: redemptionDate,
+        notes: `Manual redemption: proceeds=${proceeds.toFixed(2)}; realized=${realized.toFixed(2)}`,
+      }, false);
+      const sourceNote = isStatementImportedInvestment(redemptionTarget.notes)
+        ? 'Imported from mutual fund statement snapshots.'
+        : 'Manual mutual fund holding.';
+      await updateInvestmentEntry(redemptionTarget.id, {
+        notes: `${sourceNote}\nREDEEMED: ${redemptionDate}`,
+      }, false);
+      toast({
+        title: 'Mutual fund marked as redeemed',
+        description: `Proceeds ${formatCurrency(proceeds)} · Realized P/L ${formatCurrency(realized)}. The holding is closed in current portfolio totals.`,
+      });
+      setRedemptionTarget(null);
+      setRedemptionProceeds('');
+    } catch (error) {
+      const message = typeof error === 'object' && error !== null && 'message' in error ? String(error.message) : 'Please try again.';
+      setRedemptionError(message);
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-4 pb-8 animate-fade-in sm:p-6">
       {/* Header */}
@@ -343,11 +609,59 @@ export const Investments = () => {
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Track your investments over time</h1>
           <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">Record each month’s contributions and profit or loss, then review the portfolio at any past month end.</p>
         </div>
-        <Button size="lg" className="relative shrink-0 bg-investment text-white shadow-sm" onClick={() => setIsFormOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Investment
-        </Button>
+        <div className="relative flex flex-wrap gap-2">
+          <Button size="lg" variant="outline" className="shrink-0" onClick={() => { setImportDialogOpen(true); setImportError(''); }}>
+            <FileUp className="mr-2 h-4 w-4" /> Import statement
+          </Button>
+          <Button size="lg" className="shrink-0 bg-investment text-white shadow-sm" onClick={() => setIsFormOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Add Investment
+          </Button>
+        </div>
       </div>
+
+      <Dialog open={importDialogOpen} onOpenChange={open => { setImportDialogOpen(open); if (!open) { setImportPreview(null); setImportError(''); } }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Import mutual fund statement</DialogTitle>
+            <p className="text-sm text-muted-foreground">Upload the Groww .xlsx summary. Folio numbers and personal details are not imported.</p>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="mutual-fund-statement">Excel statement (.xlsx)</Label>
+              <Input id="mutual-fund-statement" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="mt-1" onChange={event => handleStatementFile(event.target.files?.[0])} />
+            </div>
+            {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
+            {importPreview && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Statement date</p><p className="font-semibold">{importPreview.asOfDate}</p></div>
+                  <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Funds after combining folios</p><p className="font-semibold">{importPreview.holdings.length}</p></div>
+                  <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Invested value</p><p className="font-semibold">{formatCurrency(importPreview.summaryInvested)}</p></div>
+                  <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Current value</p><p className="font-semibold">{formatCurrency(importPreview.summaryCurrent)}</p></div>
+                </div>
+                <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border p-3">
+                  {importPreview.holdings.map(holding => {
+                    const existing = data.investments.find(item => item.type === 'Mutual Fund' && item.name.trim().toLowerCase() === holding.name.toLowerCase());
+                    const importStatus = isStatementImportedInvestment(existing?.notes)
+                      ? 'History will update for this statement date'
+                      : existing ? 'Already exists and will be skipped' : '';
+                    return <div key={holding.name} className="flex flex-col justify-between gap-1 border-b pb-2 last:border-0 last:pb-0 sm:flex-row sm:items-center">
+                      <div className="min-w-0"><p className="truncate text-sm font-medium">{holding.name}</p><p className="text-xs text-muted-foreground">{holding.units.toFixed(3)} units{importStatus ? ` · ${importStatus}` : ''}</p></div>
+                      <p className="shrink-0 text-sm">{formatCurrency(holding.current)} <span className="text-xs text-muted-foreground">current</span></p>
+                    </div>;
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">This imports the statement’s current invested and market values as a dated starting snapshot. It does not create past monthly performance history.</p>
+                <p className="text-xs text-muted-foreground">This is treated as a complete portfolio summary. Previously imported funds absent from a later statement will be recorded as redeemed.</p>
+              </>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setImportDialogOpen(false)}>Cancel</Button>
+              <Button className="bg-investment text-white" disabled={!importPreview || isImporting} onClick={importStatement}>{isImporting ? 'Importing…' : 'Import funds'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Performance Overview */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -417,7 +731,7 @@ export const Investments = () => {
             {[
               { label: `Invested by ${selectedMonthLabel}`, value: formatCurrency(historicalTotals.invested), icon: WalletCards },
               { label: 'Portfolio value at month end', value: formatCurrency(historicalTotals.current), icon: CircleDollarSign },
-              { label: 'Contributed this month', value: formatCurrency(monthContributions), icon: Wallet },
+              { label: 'Net invested change', value: formatCurrency(monthContributions), icon: Wallet },
               { label: 'Profit / loss this month', value: formatCurrency(monthProfitLoss), icon: TrendingUp },
             ].map(({ label, value, icon: Icon }) => (
               <div key={label} className="rounded-xl border border-border/70 bg-background/60 p-3 sm:p-4">
@@ -439,10 +753,10 @@ export const Investments = () => {
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <div className="text-right text-xs">
-                        <p className="font-medium text-foreground">Contribution {formatCurrency(transaction.amount)}</p>
-                        <p className={Number(transaction.profit_loss || 0) >= 0 ? 'text-success' : 'text-destructive'}>P/L {formatCurrency(Number(transaction.profit_loss || 0))}</p>
+                        <p className="font-medium text-foreground">{transaction.notes?.startsWith('Manual redemption:') ? 'Redeemed capital' : transaction.notes?.startsWith(statementSnapshotPrefix) ? 'Invested change' : 'Contribution'} {formatCurrency(transaction.amount)}</p>
+                        <p className={Number(transaction.profit_loss || 0) >= 0 ? 'text-success' : 'text-destructive'}>{realizedProfitLossFromNotes(transaction.notes) !== undefined ? 'Realized P/L' : transaction.notes?.includes('kind=basis') || transaction.notes?.includes('lifetime gain/loss') ? 'Lifetime snapshot gain/loss' : 'P/L'} {formatCurrency(realizedProfitLossFromNotes(transaction.notes) ?? Number(transaction.profit_loss || 0))}</p>
                       </div>
-                      {investment && <EditDeleteMenu
+                      {investment && !transaction.notes?.startsWith(statementSnapshotPrefix) && !transaction.notes?.startsWith('Manual redemption:') && <EditDeleteMenu
                         onEdit={() => handleEditTransaction(transaction.id, investment)}
                         onDelete={() => handleDeleteTransaction(transaction.id)}
                         itemName="monthly investment update"
@@ -657,8 +971,11 @@ export const Investments = () => {
                           <Badge variant="outline" className="text-xs">
                             {investment.type}
                           </Badge>
+                          {redeemedDateFromNotes(investment.notes) && <Badge variant="outline" className="gap-1 border-muted-foreground/30 text-muted-foreground"><CheckCircle2 className="h-3 w-3" /> Redeemed</Badge>}
                         </div>
-                        <p className="font-medium text-foreground mb-1">{investment.name}</p>
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <p className={`font-medium text-foreground ${redeemedDateFromNotes(investment.notes) ? 'text-muted-foreground line-through' : ''}`}>{investment.name}</p>
+                        </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                           <span className="text-muted-foreground">
                             Invested: ₹{investment.invested.toLocaleString()}
@@ -672,15 +989,21 @@ export const Investments = () => {
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                        <Button
+                        {!redeemedDateFromNotes(investment.notes) && <Button
                           size="sm"
                           onClick={() => handleAddMoney(investment.id, investment.name)}
                           className="bg-investment/10 border-investment/30 text-investment hover:bg-investment/20"
                           variant="outline"
                         >
-                          <Wallet className="w-3 h-3 mr-1" />
-                          Monthly Update
-                        </Button>
+                          <Wallet className="w-3 h-3 mr-1" /> Monthly Update
+                        </Button>}
+                        {investment.type === 'Mutual Fund' && !redeemedDateFromNotes(investment.notes) && <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setRedemptionTarget(investment); setRedemptionDate(new Date().toISOString().slice(0, 10)); setRedemptionProceeds(''); setRedemptionError(''); }}
+                        >
+                          <CircleDollarSign className="mr-1 h-3 w-3" /> Redeem
+                        </Button>}
                         <Button
                           size="sm"
                           variant="ghost"
@@ -725,7 +1048,7 @@ export const Investments = () => {
                               {getInvestmentTransactions(investment.id).map((transaction) => (
                                 <div key={transaction.id} className="flex items-center justify-between text-xs p-2 bg-secondary/30 rounded">
                                   <div className="flex-1">
-                                    <span className="font-medium">Monthly update</span>
+                                    <span className="font-medium">{transaction.notes?.startsWith('Manual redemption:') ? 'Redemption' : transaction.notes?.startsWith(statementSnapshotPrefix) ? 'Statement snapshot' : 'Monthly update'}</span>
                                     <p className="text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</p>
                                     {transaction.notes && (
                                       <p className="text-muted-foreground text-xs mt-1">{transaction.notes}</p>
@@ -734,21 +1057,21 @@ export const Investments = () => {
                                   <div className="flex items-center gap-2">
                                     <div className="text-right">
                                       <span className="font-semibold text-investment">
-                                        +₹{transaction.amount.toLocaleString()}
+                                        {transaction.notes?.startsWith('Manual redemption:') ? 'Redeemed capital ' : transaction.notes?.startsWith(statementSnapshotPrefix) ? 'Invested change ' : 'Contribution '}{formatCurrency(transaction.amount)}
                                       </span>
                                       {transaction.profit_loss !== undefined && transaction.profit_loss !== 0 && (
                                         <p className={`text-xs ${transaction.profit_loss >= 0 ? 'text-success' : 'text-destructive'}`}>
-                                          P/L: {transaction.profit_loss >= 0 ? '+' : ''}₹{transaction.profit_loss.toLocaleString()}
+                                          {realizedProfitLossFromNotes(transaction.notes) !== undefined ? 'Realized P/L' : transaction.notes?.includes('kind=basis') || transaction.notes?.includes('lifetime gain/loss') ? 'Snapshot P/L' : 'P/L'}: {formatCurrency(realizedProfitLossFromNotes(transaction.notes) ?? Number(transaction.profit_loss || 0))}
                                         </p>
                                       )}
                                     </div>
-                                    <EditDeleteMenu
+                                    {!transaction.notes?.startsWith(statementSnapshotPrefix) && !transaction.notes?.startsWith('Manual redemption:') && <EditDeleteMenu
                                       onEdit={() => handleEditTransaction(transaction.id, investment)}
                                       onDelete={() => handleDeleteTransaction(transaction.id)}
                                       itemName="transaction"
                                       deleteTitle="Delete Transaction"
                                       deleteDescription="Deleting this update will change this month and later portfolio totals."
-                                    />
+                                    />}
                                   </div>
                                 </div>
                               ))}
@@ -785,6 +1108,30 @@ export const Investments = () => {
         }}
         editingId={editingEntry}
       />
+
+      <Dialog open={!!redemptionTarget} onOpenChange={open => { if (!open && !isRedeeming) setRedemptionTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record mutual fund redemption</DialogTitle>
+            <p className="text-sm text-muted-foreground">{redemptionTarget?.name}. This closes the holding in current portfolio totals and keeps its history.</p>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="redemption-date">Redemption date</Label>
+              <Input id="redemption-date" type="date" max={new Date().toISOString().slice(0, 10)} value={redemptionDate} onChange={event => setRedemptionDate(event.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="redemption-proceeds">Proceeds received (₹)</Label>
+              <Input id="redemption-proceeds" type="number" min="0" step="0.01" placeholder="Enter redemption proceeds" value={redemptionProceeds} onChange={event => setRedemptionProceeds(event.target.value)} />
+            </div>
+            {redemptionError && <p role="alert" className="text-sm text-destructive">{redemptionError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" disabled={isRedeeming} onClick={() => setRedemptionTarget(null)}>Cancel</Button>
+              <Button className="bg-investment text-white" disabled={isRedeeming} onClick={saveManualRedemption}>{isRedeeming ? 'Saving…' : 'Save redemption'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       
       {/* Investment Transaction Form */}
       {currentInvestment && (

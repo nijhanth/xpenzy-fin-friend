@@ -1,21 +1,33 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Sparkles, Loader2, RefreshCw, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import ReactMarkdown from 'react-markdown';
 
 const CHAT_URL = `${SUPABASE_URL}/functions/v1/ai-assistant`;
 
-export const AIInsightsCard: React.FC = () => {
+const insightLanguages = [
+  { value: 'en', label: 'English' },
+  { value: 'hi', label: 'Hindi' },
+  { value: 'ta', label: 'Tamil' },
+  { value: 'te', label: 'Telugu' },
+] as const;
+
+export const AIInsightsCard: React.FC<{ title?: string; autoGenerate?: boolean; refreshKey?: unknown; showLanguageSelector?: boolean }> = ({
+  title = 'AI Insights', autoGenerate = false, refreshKey, showLanguageSelector = false,
+}) => {
   const [insights, setInsights] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [errorState, setErrorState] = useState<'none' | 'no_data' | 'error'>('none');
+  const [errorState, setErrorState] = useState<'none' | 'no_data' | 'error' | 'language_unavailable'>('none');
   const [period, setPeriod] = useState<'week' | 'month'>('month');
+  const [language, setLanguage] = useState<(typeof insightLanguages)[number]['value']>('en');
   const [isDismissed, setIsDismissed] = useState(false);
+  const lastAutoRequest = useRef('');
 
-  const fetchInsights = async (summaryPeriod = period) => {
+  const fetchInsights = useCallback(async (summaryPeriod: 'week' | 'month', outputLanguage: typeof language) => {
     if (isLoading) return; // prevent double clicks
     setIsLoading(true);
     setErrorState('none');
@@ -37,6 +49,7 @@ export const AIInsightsCard: React.FC = () => {
         body: JSON.stringify({
           action: 'insights',
           period: summaryPeriod,
+          language: outputLanguage,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
         signal: controller.signal,
@@ -56,6 +69,11 @@ export const AIInsightsCard: React.FC = () => {
       }
 
       const data = await resp.json();
+      if (outputLanguage !== 'en' && data.language !== outputLanguage) {
+        setInsights(null);
+        setErrorState('language_unavailable');
+        return;
+      }
       const content = (data.content || '').trim();
       console.log('AI insights response:', content.substring(0, 200));
 
@@ -77,7 +95,15 @@ export const AIInsightsCard: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isLoading]);
+
+  useEffect(() => {
+    if (!autoGenerate || isLoading) return;
+    const requestKey = `${period}:${language}:${String(refreshKey ?? '')}`;
+    if (lastAutoRequest.current === requestKey) return;
+    lastAutoRequest.current = requestKey;
+    void fetchInsights(period, language);
+  }, [autoGenerate, fetchInsights, period, language, refreshKey, isLoading]);
 
   if (isDismissed) {
     return (
@@ -96,7 +122,7 @@ export const AIInsightsCard: React.FC = () => {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-primary" />
-            AI Insights
+            {title}
             <Badge variant="secondary" className="text-xs">Smart</Badge>
           </CardTitle>
           <div className="flex w-full items-center justify-between gap-1 sm:w-auto sm:justify-end" role="group" aria-label="AI summary actions">
@@ -122,18 +148,18 @@ export const AIInsightsCard: React.FC = () => {
                 This {value}
               </Button>
             ))}
-            <Button variant="ghost" size="icon" aria-label="Refresh AI summary" onClick={() => fetchInsights(period)} disabled={isLoading}>
+            <Button variant="ghost" size="icon" aria-label="Refresh AI summary" onClick={() => fetchInsights(period, language)} disabled={isLoading}>
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        {!insights && !isLoading && errorState === 'none' && (
+        {!autoGenerate && !insights && !isLoading && errorState === 'none' && (
           <div className="text-center py-6">
             <Sparkles className="w-10 h-10 mx-auto mb-3 text-primary/50" />
             <p className="text-sm text-muted-foreground mb-3">Get AI-powered insights about your spending</p>
-            <Button onClick={() => fetchInsights(period)} className="bg-gradient-primary" disabled={isLoading}>
+            <Button onClick={() => fetchInsights(period, language)} className="bg-gradient-primary" disabled={isLoading}>
               <Sparkles className="w-4 h-4 mr-2" /> Generate {period === 'week' ? 'weekly' : 'monthly'} recap
             </Button>
           </div>
@@ -149,7 +175,16 @@ export const AIInsightsCard: React.FC = () => {
           <div className="text-center py-6">
             <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-yellow-500/60" />
             <p className="text-sm text-muted-foreground mb-3">AI is temporarily unavailable. Check the Lovable AI setup and available credits, then try again.</p>
-            <Button onClick={() => fetchInsights(period)} variant="outline" size="sm" disabled={isLoading}>
+            <Button onClick={() => fetchInsights(period, language)} variant="outline" size="sm" disabled={isLoading}>
+              <RefreshCw className="w-4 h-4 mr-2" /> Retry
+            </Button>
+          </div>
+        )}
+        {!insights && !isLoading && errorState === 'language_unavailable' && (
+          <div className="text-center py-6">
+            <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-yellow-500/60" />
+            <p className="text-sm text-muted-foreground">Tamil and other translated tips need the latest <code>ai-assistant</code> function deployed. Deploy it in Supabase, then choose the language again.</p>
+            <Button onClick={() => fetchInsights(period, language)} variant="outline" size="sm" className="mt-3" disabled={isLoading}>
               <RefreshCw className="w-4 h-4 mr-2" /> Retry
             </Button>
           </div>
@@ -165,6 +200,13 @@ export const AIInsightsCard: React.FC = () => {
             <ReactMarkdown>{insights}</ReactMarkdown>
           </div>
         )}
+        {showLanguageSelector && <div className="mt-5 flex items-center justify-end gap-3 border-t border-border/70 pt-4">
+          <label htmlFor="ai-insights-language" className="text-xs font-medium text-muted-foreground">Translate to</label>
+          <Select value={language} onValueChange={(value) => setLanguage(value as typeof language)} disabled={isLoading}>
+            <SelectTrigger id="ai-insights-language" className="h-9 w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>{insightLanguages.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>}
       </CardContent>
     </Card>
   );

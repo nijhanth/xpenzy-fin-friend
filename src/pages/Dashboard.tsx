@@ -18,16 +18,16 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { HomeFinancialOutlook } from '@/components/ai/HomeFinancialOutlook';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
-  Line,
-  LineChart,
   Pie,
   PieChart,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -111,7 +111,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
   const { user } = useAuth();
   const budgetDateFilter = useDateRangeFilter();
   const categoryDateFilter = useDateRangeFilter();
-  const cashFlowDateFilter = useDateRangeFilter();
+  const cashFlowDateFilter = useDateRangeFilter('this_year');
   const activityDateFilter = useDateRangeFilter('this_week');
   const topExpensesDateFilter = useDateRangeFilter();
   const now = new Date();
@@ -123,12 +123,15 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
     const monthExpenses = data.expenses.filter((entry) => entry.date?.startsWith(monthKey));
     const monthIncome = data.income.filter((entry) => entry.date?.startsWith(monthKey));
     const inRange = (date: string | undefined, range: DateRangeFilter['range']) => Boolean(date && date >= range.start && date <= range.end);
+    const cashFlowRange = cashFlowDateFilter.preset === 'this_year'
+      ? { start: `${year}-01-01`, end: `${year}-12-31` }
+      : cashFlowDateFilter.range;
     const budgetExpenses = data.expenses.filter((entry) => inRange(entry.date, budgetDateFilter.range));
     const categoryExpenses = data.expenses.filter((entry) => inRange(entry.date, categoryDateFilter.range));
-    const cashFlowExpenses = data.expenses.filter((entry) => inRange(entry.date, cashFlowDateFilter.range));
-    const cashFlowIncome = data.income.filter((entry) => inRange(entry.date, cashFlowDateFilter.range));
-    const cashFlowSavingsTransactions = data.savingsTransactions.filter((entry) => inRange(entry.date, cashFlowDateFilter.range));
-    const cashFlowInvestmentTransactions = data.investmentTransactions.filter((entry) => inRange(entry.date, cashFlowDateFilter.range));
+    const cashFlowExpenses = data.expenses.filter((entry) => inRange(entry.date, cashFlowRange));
+    const cashFlowIncome = data.income.filter((entry) => inRange(entry.date, cashFlowRange));
+    const cashFlowSavingsTransactions = data.savingsTransactions.filter((entry) => inRange(entry.date, cashFlowRange));
+    const cashFlowInvestmentTransactions = data.investmentTransactions.filter((entry) => inRange(entry.date, cashFlowRange));
     const activityExpenses = data.expenses.filter((entry) => inRange(entry.date, activityDateFilter.range));
     const activityIncome = data.income.filter((entry) => inRange(entry.date, activityDateFilter.range));
     const topExpenses = data.expenses
@@ -166,57 +169,49 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       .map(([category, limit]) => ({ category, limit, spent: budgetCategoryTotals[category] || 0 }))
       .sort((a, b) => (b.limit > 0 ? b.spent / b.limit : 0) - (a.limit > 0 ? a.spent / a.limit : 0))
       .slice(0, 4);
-    const chartStart = new Date(`${cashFlowDateFilter.range.start}T00:00:00`);
-    chartStart.setDate(chartStart.getDate() - ((chartStart.getDay() + 6) % 7));
-    const rangeStartDate = new Date(`${cashFlowDateFilter.range.start}T00:00:00`);
-    const rangeEndDate = new Date(`${cashFlowDateFilter.range.end}T00:00:00`);
-    const weeklyCashFlow: Array<{ week: string; weekStart: string; income: number; expenses: number; savings: number; investments: number }> = [];
-    for (const cursor = new Date(chartStart); cursor <= rangeEndDate; cursor.setDate(cursor.getDate() + 7)) {
-      const bucketStart = cursor < rangeStartDate ? rangeStartDate : new Date(cursor);
-      const bucketEnd = new Date(cursor);
-      bucketEnd.setDate(bucketEnd.getDate() + 6);
-      if (bucketEnd > rangeEndDate) bucketEnd.setTime(rangeEndDate.getTime());
-      const startLabel = bucketStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-      const endLabel = bucketEnd.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-      const weekLabel = bucketStart.getMonth() === bucketEnd.getMonth()
-        ? `${bucketStart.getDate()}${bucketStart.getDate() === bucketEnd.getDate() ? '' : `-${bucketEnd.getDate()}`} ${bucketStart.toLocaleDateString('en-IN', { month: 'short' })}`
-        : `${startLabel}-${endLabel}`;
-      weeklyCashFlow.push({
-        week: weekLabel,
-        weekStart: toDateKey(cursor),
+    const rangeStartDate = new Date(`${cashFlowRange.start}T00:00:00`);
+    const rangeEndDate = new Date(`${cashFlowRange.end}T00:00:00`);
+    const monthlyMoneyBreakdown: Array<{ month: string; monthKey: string; income: number; expenses: number; setAside: number; withdrawals: number }> = [];
+    const monthCursor = new Date(rangeStartDate.getFullYear(), rangeStartDate.getMonth(), 1);
+    const finalMonth = new Date(rangeEndDate.getFullYear(), rangeEndDate.getMonth(), 1);
+    for (const cursor = new Date(monthCursor); cursor <= finalMonth; cursor.setMonth(cursor.getMonth() + 1)) {
+      const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      monthlyMoneyBreakdown.push({
+        month: cursor.toLocaleDateString('en-IN', { month: 'short' }),
+        monthKey,
         income: 0,
         expenses: 0,
-        savings: 0,
-        investments: 0,
+        setAside: 0,
+        withdrawals: 0,
       });
     }
-    const weeksByStart = new Map(weeklyCashFlow.map((week) => [week.weekStart, week]));
-    const addToWeek = (date: string, key: 'income' | 'expenses' | 'savings' | 'investments', amount: number) => {
-      const weekDate = new Date(`${date}T00:00:00`);
-      weekDate.setDate(weekDate.getDate() - ((weekDate.getDay() + 6) % 7));
-      const week = weeksByStart.get(toDateKey(weekDate));
-      if (week) week[key] += amount;
+    const monthsByKey = new Map(monthlyMoneyBreakdown.map((item) => [item.monthKey, item]));
+    const addToMonth = (date: string, key: 'income' | 'expenses' | 'setAside' | 'withdrawals', amount: number) => {
+      const bucket = monthsByKey.get(date.slice(0, 7));
+      if (bucket) bucket[key] += amount;
     };
-    for (const entry of cashFlowIncome) addToWeek(entry.date, 'income', Number(entry.amount || 0));
-    for (const entry of cashFlowExpenses) addToWeek(entry.date, 'expenses', Number(entry.amount || 0));
-    for (const transaction of cashFlowSavingsTransactions) addToWeek(transaction.date, 'savings', Number(transaction.amount || 0));
-    for (const transaction of cashFlowInvestmentTransactions) addToWeek(transaction.date, 'investments', Number(transaction.amount || 0));
+    for (const entry of cashFlowIncome) addToMonth(entry.date, 'income', Number(entry.amount || 0));
+    for (const entry of cashFlowExpenses) addToMonth(entry.date, 'expenses', Number(entry.amount || 0));
+    for (const transaction of cashFlowSavingsTransactions) {
+      const amount = Number(transaction.amount || 0);
+      addToMonth(transaction.date, amount < 0 ? 'withdrawals' : 'setAside', Math.abs(amount));
+    }
+    for (const transaction of cashFlowInvestmentTransactions) {
+      const amount = Number(transaction.amount || 0);
+      addToMonth(transaction.date, amount < 0 ? 'withdrawals' : 'setAside', Math.abs(amount));
+    }
     for (const goal of data.savings) {
       const transactionTotal = data.savingsTransactions
         .filter((transaction) => transaction.savings_goal_id === goal.id)
         .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
       const startingBalance = Math.max(0, Number(goal.current || 0) - transactionTotal);
-      if (startingBalance > 0 && inRange(goal.date, cashFlowDateFilter.range)) addToWeek(goal.date, 'savings', startingBalance);
+      if (startingBalance > 0 && inRange(goal.date, cashFlowRange)) addToMonth(goal.date, 'setAside', startingBalance);
     }
     for (const investment of data.investments) {
       const hasTransactions = data.investmentTransactions.some((transaction) => transaction.investment_id === investment.id);
       const startingInvestment = Number(investment.initial_invested || (!hasTransactions ? investment.invested : 0) || 0);
-      if (startingInvestment > 0 && inRange(investment.date, cashFlowDateFilter.range)) addToWeek(investment.date, 'investments', startingInvestment);
+      if (startingInvestment > 0 && inRange(investment.date, cashFlowRange)) addToMonth(investment.date, 'setAside', startingInvestment);
     }
-    const weeklyCashFlowTrend = weeklyCashFlow.map((week) => {
-      const outflows = week.expenses + week.savings + week.investments;
-      return { ...week, outflows, net: week.income - outflows };
-    });
     const sortedCategories = Object.entries(categories).sort((a, b) => b[1] - a[1]);
     const categoryDistribution = sortedCategories.slice(0, 4).map(([name, value]) => ({ name, value }));
     const otherCategoryTotal = sortedCategories.slice(4).reduce((total, [, value]) => total + value, 0);
@@ -252,7 +247,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       monthExpenses,
       monthIncome,
       budgetCategories,
-      weeklyCashFlow: weeklyCashFlowTrend,
+      monthlyMoneyBreakdown,
       categoryDistribution,
       topExpenses,
       activity,
@@ -260,7 +255,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       investments,
       dailyAverage: spent / Math.max(dayOfMonth, 1),
     };
-  }, [data, monthKey, month, year, dayOfMonth, budgetDateFilter.range, categoryDateFilter.range, cashFlowDateFilter.range, activityDateFilter.range, topExpensesDateFilter.range]);
+  }, [data, monthKey, month, year, dayOfMonth, budgetDateFilter.range, categoryDateFilter.range, cashFlowDateFilter.preset, cashFlowDateFilter.range, activityDateFilter.range, topExpensesDateFilter.range]);
 
   const firstName = (user?.user_metadata?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name || '').trim().split(/\s+/)[0];
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
@@ -416,40 +411,41 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
 
         <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6 lg:col-span-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div><h2 className="font-semibold text-foreground">Weekly cash flow</h2><p className="mt-1 text-xs text-muted-foreground">Income, total outflows, and net cash flow | {cashFlowDateFilter.label}</p></div>
-            <DateRangeFilterControl filter={cashFlowDateFilter} widget="Weekly cash flow" />
+            <div><h2 className="font-semibold text-foreground">Monthly money breakdown</h2><p className="mt-1 text-xs text-muted-foreground">Compare income, expenses, savings, investments, and withdrawals | {cashFlowDateFilter.preset === 'this_year' ? year : cashFlowDateFilter.label}</p></div>
+            <DateRangeFilterControl filter={cashFlowDateFilter} widget="Monthly money breakdown" />
           </div>
-          {isLoading ? <Skeleton className="mt-5 h-48 w-full" /> : stats.weeklyCashFlow.some((week) => week.income || week.expenses || week.savings || week.investments) ? (
-            <div className="mt-5 rounded-2xl border border-border/70 bg-muted/20 px-2 pb-3 pt-4 sm:px-4">
-              <div className="mb-3 flex flex-wrap items-center justify-center gap-2 sm:justify-end">
-                <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-emerald-600" />Income</span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-rose-600" />Total outflows</span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-sky-600" />Net cash flow</span>
+          {isLoading ? <Skeleton className="mt-5 h-48 w-full" /> : stats.monthlyMoneyBreakdown.some((item) => item.income || item.expenses || item.setAside || item.withdrawals) ? (
+            <div className="mt-5 rounded-2xl border border-border/70 bg-gradient-to-b from-muted/30 to-muted/5 p-3 sm:p-5">
+              <div className="mb-4 flex flex-wrap justify-center gap-2 sm:justify-end">
+                <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-emerald-600" />Income</span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-rose-600" />Expenses</span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-violet-600" />Saved & invested</span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-amber-500" />Withdrawals</span>
               </div>
-              <div className="h-56 sm:h-64">
+              <div className="h-64 sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={stats.weeklyCashFlow} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 5" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="week" interval={Math.max(0, Math.ceil(stats.weeklyCashFlow.length / 8) - 1)} tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} dy={8} minTickGap={16} />
-                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(value: number) => `${String.fromCharCode(8377)}${Math.abs(value) >= 1000 ? `${Math.round(value / 1000)}k` : value}`} width={48} />
-                    <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.55} />
+                  <BarChart data={stats.monthlyMoneyBreakdown} margin={{ top: 12, right: 12, left: 4, bottom: 0 }} barCategoryGap="28%" barGap={4}>
+                    <CartesianGrid strokeDasharray="3 5" vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.65} />
+                    <XAxis dataKey="month" interval={0} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} dy={10} minTickGap={8} />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(value: number) => `${String.fromCharCode(8377)}${Math.abs(value) >= 1000 ? `${Math.round(value / 1000)}k` : value}`} width={52} />
                     <Tooltip
-                      cursor={{ stroke: 'hsl(var(--border))', strokeDasharray: '4 4' }}
-                      formatter={(value: number, name: string) => [inr(value), name === 'income' ? 'Income' : name === 'outflows' ? 'Total outflows' : 'Net cash flow']}
+                      cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.35 }}
+                      formatter={(value: number, name: string) => [inr(value), name === 'income' ? 'Income' : name === 'expenses' ? 'Expenses' : name === 'setAside' ? 'Saved & invested' : 'Withdrawals']}
                       contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--popover))', boxShadow: '0 12px 28px -14px rgba(15,23,42,0.4)', padding: '9px 12px' }}
                       labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 600, marginBottom: 5 }}
                       itemStyle={{ color: 'hsl(var(--muted-foreground))', fontSize: 12, padding: '2px 0' }}
                     />
-                    <Line type="monotone" dataKey="income" name="income" stroke="#059669" strokeWidth={2.5} dot={{ r: 3, fill: '#059669', strokeWidth: 0 }} activeDot={{ r: 5, stroke: 'hsl(var(--card))', strokeWidth: 2 }} />
-                    <Line type="monotone" dataKey="outflows" name="outflows" stroke="#e11d48" strokeWidth={2.5} dot={{ r: 3, fill: '#e11d48', strokeWidth: 0 }} activeDot={{ r: 5, stroke: 'hsl(var(--card))', strokeWidth: 2 }} />
-                    <Line type="monotone" dataKey="net" name="net" stroke="#0284c7" strokeWidth={3} dot={{ r: 3.5, fill: '#0284c7', strokeWidth: 0 }} activeDot={{ r: 5, stroke: 'hsl(var(--card))', strokeWidth: 2 }} />
-                  </LineChart>
+                    <Bar dataKey="income" name="income" fill="#059669" radius={[5, 5, 0, 0]} maxBarSize={24} />
+                    <Bar dataKey="expenses" name="expenses" fill="#e11d48" radius={[5, 5, 0, 0]} maxBarSize={24} />
+                    <Bar dataKey="setAside" name="setAside" fill="#7c3aed" radius={[5, 5, 0, 0]} maxBarSize={24} />
+                    <Bar dataKey="withdrawals" name="withdrawals" fill="#f59e0b" radius={[5, 5, 0, 0]} maxBarSize={24} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
-              <p className="mt-1 text-center text-[11px] text-muted-foreground">Total outflows include expenses, savings, and investment contributions.</p>
+              <p className="mt-3 text-center text-[11px] text-muted-foreground">Redemptions and savings withdrawals appear as positive withdrawal amounts, keeping the monthly comparison easy to scan.</p>
             </div>
           ) : (
-            <div className="mt-5 flex h-48 items-center justify-center rounded-xl bg-muted/40 px-4 text-center text-sm text-muted-foreground">Add income, expenses, savings contributions, or investment transactions to see your weekly trend.</div>
+            <div className="mt-5 flex h-48 items-center justify-center rounded-xl bg-muted/40 px-4 text-center text-sm text-muted-foreground">Add income, expenses, savings, or investment records to compare monthly totals.</div>
           )}
         </div>
       </section>
@@ -529,6 +525,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
         <div className="border-t border-border/70 bg-muted/20 px-5 py-3 sm:px-6"><button onClick={() => onNavigate('expenses')} className="text-xs font-semibold text-primary hover:underline">View all expenses <ArrowRight className="ml-1 inline h-3.5 w-3.5" aria-hidden /></button></div>
       </section>
       </section>
+      <HomeFinancialOutlook isFinancialLoading={isLoading} />
     </div>
   );
 };

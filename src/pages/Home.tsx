@@ -291,6 +291,7 @@ export const Home = () => {
 
           {/* Smart AI Expense Input */}
           <SmartExpenseInput />
+
         </TabsContent>
 
         <TabsContent value="monthly" className="space-y-4 mt-4">

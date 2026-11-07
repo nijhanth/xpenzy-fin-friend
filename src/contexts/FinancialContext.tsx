@@ -16,9 +16,9 @@ interface FinancialContextType {
   addIncome: (income: Omit<IncomeEntry, 'id'>) => void;
   addExpense: (expense: Omit<ExpenseEntry, 'id'>) => Promise<ExpenseEntry | undefined> | void;
   addSavingsGoal: (savings: Omit<SavingsGoal, 'id'>) => void;
-  addInvestment: (investment: Omit<InvestmentEntry, 'id'>) => void;
-  addInvestmentTransaction: (transaction: Omit<InvestmentTransaction, 'id'>) => Promise<void>;
-  updateInvestmentTransaction: (id: string, transaction: Partial<InvestmentTransaction>) => Promise<void>;
+  addInvestment: (investment: Omit<InvestmentEntry, 'id'>, showToast?: boolean) => Promise<InvestmentEntry | undefined>;
+  addInvestmentTransaction: (transaction: Omit<InvestmentTransaction, 'id'>, showToast?: boolean) => Promise<void>;
+  updateInvestmentTransaction: (id: string, transaction: Partial<InvestmentTransaction>, showToast?: boolean) => Promise<void>;
   deleteInvestmentTransaction: (id: string) => Promise<void>;
   getInvestmentTransactions: (investmentId: string) => InvestmentTransaction[];
   addSavingsTransaction: (transaction: Omit<SavingsTransaction, 'id'>) => Promise<void>;
@@ -32,7 +32,7 @@ interface FinancialContextType {
   updateIncome: (id: string, income: Partial<Omit<IncomeEntry, 'id'>>) => void;
   updateExpense: (id: string, expense: Partial<Omit<ExpenseEntry, 'id'>>) => void;
   updateSavings: (id: string, savings: Partial<Omit<SavingsGoal, 'id'>>) => void;
-  updateInvestmentEntry: (id: string, investment: Partial<Omit<InvestmentEntry, 'id'>>) => void;
+  updateInvestmentEntry: (id: string, investment: Partial<Omit<InvestmentEntry, 'id'>>, showToast?: boolean) => Promise<void>;
   updateBudget: (id: string, budget: Partial<Omit<BudgetCategory, 'id'>>) => void;
   deleteIncome: (id: string) => void;
   deleteExpense: (id: string) => void;
@@ -338,7 +338,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const addInvestment = async (investment: Omit<InvestmentEntry, 'id'>) => {
+  const addInvestment = async (investment: Omit<InvestmentEntry, 'id'>, showToast: boolean = true) => {
     try {
       const newInvestment = await investmentService.create(investment);
       
@@ -348,12 +348,14 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         investments: [newInvestment, ...prev.investments]
       }));
       
-      toast({
+      if (showToast) toast({
         title: "Success",
         description: "Investment created successfully. Use Monthly Update to record contributions and performance.",
       });
+      return newInvestment;
     } catch (error) {
       console.error('Error adding investment:', error);
+      if (!showToast) throw error;
       const newInvestment: InvestmentEntry = {
       ...investment,
       id: Date.now().toString()
@@ -363,11 +365,12 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       ...prev,
       investments: [...prev.investments, newInvestment]
     }));
-      toast({
+      if (showToast) toast({
         variant: "destructive",
         title: "Error",
         description: "Failed to save investment to database. Saved locally instead."
       });
+      return newInvestment;
     }
   };
 
@@ -400,6 +403,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
     } catch (error) {
       console.error('Error adding investment transaction:', error);
+      if (!showToast) throw error;
       toast({
         title: "Error",
         description: "Failed to add money to investment",
@@ -408,7 +412,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const updateInvestmentTransaction = async (id: string, transaction: Partial<InvestmentTransaction>) => {
+  const updateInvestmentTransaction = async (id: string, transaction: Partial<InvestmentTransaction>, showToast: boolean = true) => {
     try {
       const updatedTransaction = await investmentTransactionService.update(id, transaction);
       setData(prev => ({
@@ -431,12 +435,13 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         console.error('Error refreshing investment data:', refreshError);
       }
       
-      toast({
+      if (showToast) toast({
         title: "Success",
         description: "Investment monthly update updated successfully",
       });
     } catch (error) {
       console.error('Error updating investment transaction:', error);
+      if (!showToast) throw error;
       toast({
         title: "Error",
         description: "Failed to update investment transaction",
@@ -687,7 +692,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const updateInvestmentEntry = async (id: string, investment: Partial<Omit<InvestmentEntry, 'id'>>) => {
+  const updateInvestmentEntry = async (id: string, investment: Partial<Omit<InvestmentEntry, 'id'>>, showToast: boolean = true) => {
     try {
       const updatedInvestment = await investmentService.update(id, investment);
       setData(prev => ({
@@ -698,6 +703,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       }));
     } catch (error) {
       console.error('Error updating investment:', error);
+      if (!showToast) throw error;
       toast({
         variant: "destructive",
         title: "Error",

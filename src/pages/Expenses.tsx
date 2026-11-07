@@ -59,6 +59,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { ExpenseForm } from '@/components/forms/ExpenseForm';
+import { AIInsightsCard } from '@/components/ai/AIInsights';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -699,6 +700,8 @@ export const Expenses = () => {
           )}
         </CardContent>
       </Card>
+
+      <AIInsightsCard title="AI tips to reduce expenses" autoGenerate showLanguageSelector refreshKey={data.expenses} />
       
       <ExpenseForm 
         open={isFormOpen} 
