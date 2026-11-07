@@ -16,8 +16,8 @@ const insightLanguages = [
   { value: 'te', label: 'Telugu' },
 ] as const;
 
-export const AIInsightsCard: React.FC<{ title?: string; autoGenerate?: boolean; refreshKey?: unknown; showLanguageSelector?: boolean }> = ({
-  title = 'AI Insights', autoGenerate = false, refreshKey, showLanguageSelector = false,
+export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'budget' | 'income' | 'savings' | 'investments'; autoGenerate?: boolean; isDataLoading?: boolean; refreshKey?: unknown; showLanguageSelector?: boolean }> = ({
+  title = 'AI Insights', focus = 'expenses', autoGenerate = false, isDataLoading = false, refreshKey, showLanguageSelector = false,
 }) => {
   const [insights, setInsights] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,6 +48,7 @@ export const AIInsightsCard: React.FC<{ title?: string; autoGenerate?: boolean; 
         },
         body: JSON.stringify({
           action: 'insights',
+          focus,
           period: summaryPeriod,
           language: outputLanguage,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -95,15 +96,15 @@ export const AIInsightsCard: React.FC<{ title?: string; autoGenerate?: boolean; 
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading]);
+  }, [isLoading, focus]);
 
   useEffect(() => {
-    if (!autoGenerate || isLoading) return;
+    if (!autoGenerate || isLoading || isDataLoading) return;
     const requestKey = `${period}:${language}:${String(refreshKey ?? '')}`;
     if (lastAutoRequest.current === requestKey) return;
     lastAutoRequest.current = requestKey;
     void fetchInsights(period, language);
-  }, [autoGenerate, fetchInsights, period, language, refreshKey, isLoading]);
+  }, [autoGenerate, fetchInsights, period, language, refreshKey, isLoading, isDataLoading]);
 
   if (isDismissed) {
     return (
@@ -189,10 +190,10 @@ export const AIInsightsCard: React.FC<{ title?: string; autoGenerate?: boolean; 
             </Button>
           </div>
         )}
-        {isLoading && (
+        {(isLoading || (autoGenerate && isDataLoading)) && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
-            <span className="text-sm text-muted-foreground">Analyzing your finances...</span>
+            <span className="text-sm text-muted-foreground">{isDataLoading ? 'Preparing your records...' : 'Analyzing your finances...'}</span>
           </div>
         )}
         {insights && !isLoading && (

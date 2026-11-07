@@ -66,7 +66,7 @@ import { useNavigate } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, startOfYear, endOfYear, isWithinInterval, parseISO } from 'date-fns';
 
 export const Expenses = () => {
-  const { data } = useFinancial();
+  const { data, isLoading: isFinancialLoading } = useFinancial();
   const navigate = useNavigate();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
@@ -701,7 +701,7 @@ export const Expenses = () => {
         </CardContent>
       </Card>
 
-      <AIInsightsCard title="AI tips to reduce expenses" autoGenerate showLanguageSelector refreshKey={data.expenses} />
+      <AIInsightsCard title="AI tips to reduce expenses" focus="expenses" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={data.expenses} />
       
       <ExpenseForm 
         open={isFormOpen} 

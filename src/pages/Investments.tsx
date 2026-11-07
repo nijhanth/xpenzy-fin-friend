@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { InvestmentForm } from '@/components/forms/InvestmentForm';
 import { InvestmentTransactionForm } from '@/components/forms/InvestmentTransactionForm';
+import { AIInsightsCard } from '@/components/ai/AIInsights';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 import { readFirstWorksheet } from '@/lib/xlsxReader';
@@ -183,7 +184,7 @@ const GrowthTooltip = ({ active, payload, label }: any) => {
 };
 
 export const Investments = () => {
-  const { data, getInvestmentTransactions: getTransactions, deleteInvestment, deleteInvestmentTransaction, addInvestment, addInvestmentTransaction, updateInvestmentEntry, updateInvestmentTransaction } = useFinancial();
+  const { data, isLoading: isFinancialLoading, getInvestmentTransactions: getTransactions, deleteInvestment, deleteInvestmentTransaction, addInvestment, addInvestmentTransaction, updateInvestmentEntry, updateInvestmentTransaction } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
@@ -1100,7 +1101,8 @@ export const Investments = () => {
         </CardContent>
       </Card>
       
-      <InvestmentForm 
+      <AIInsightsCard title="AI investment tips" focus="investments" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={data.investments} />
+      <InvestmentForm
         open={isFormOpen} 
         onClose={() => {
           setIsFormOpen(false);

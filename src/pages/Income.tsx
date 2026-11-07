@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { IncomeForm } from '@/components/forms/IncomeForm';
+import { AIInsightsCard } from '@/components/ai/AIInsights';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 
@@ -55,7 +56,7 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', {
 }).format(amount);
 
 export const Income = () => {
-  const { data } = useFinancial();
+  const { data, isLoading: isFinancialLoading } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [timePeriod, setTimePeriod] = useState<'7d' | '30d' | '3m'>('30d');
   
@@ -449,6 +450,7 @@ export const Income = () => {
         </CardContent>
       </Card>
       
+      <AIInsightsCard title="AI income tips" focus="income" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={data.income} />
       <IncomeForm 
         open={isFormOpen} 
         onClose={() => {

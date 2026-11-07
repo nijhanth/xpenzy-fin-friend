@@ -63,6 +63,38 @@ const chatReply = (content: string, changes: {
   { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } },
 );
 
+const chatConfirmations: Record<string, {
+  budget: (verb: string, period: string, category: string, amount: string) => string;
+  expense: (category: string, amount: string, date: string, payment: string) => string;
+  income: (category: string, amount: string, date: string, payment: string) => string;
+  savings: (name: string, amount: string) => string;
+}> = {
+  en: {
+    budget: (verb, period, category, amount) => `${verb} your ${period} budget for ${category} to ₹${amount}. It is saved in your Xpenzy budget list.`,
+    expense: (category, amount, date, payment) => `Recorded your ${category} expense of ₹${amount} on ${date} using ${payment}. It is saved in your Xpenzy expenses.`,
+    income: (category, amount, date, payment) => `Recorded your ${category} income of ₹${amount} on ${date} using ${payment}. It is saved in your Xpenzy income.`,
+    savings: (name, amount) => `Created your “${name}” savings goal with a target of ₹${amount}. It is saved in your Xpenzy savings goals.`,
+  },
+  hi: {
+    budget: (verb, period, category, amount) => `${category} के लिए ₹${amount} का ${period} बजट ${verb === "Updated" ? "अपडेट किया" : "बनाया"} गया। यह आपके Xpenzy बजट में सेव है।`,
+    expense: (category, amount, date, payment) => `${date} को ${payment} से ${category} का ₹${amount} खर्च दर्ज किया गया। यह आपके Xpenzy खर्चों में सेव है।`,
+    income: (category, amount, date, payment) => `${date} को ${payment} से ${category} की ₹${amount} आय दर्ज की गई। यह आपकी Xpenzy आय में सेव है।`,
+    savings: (name, amount) => `“${name}” बचत लक्ष्य बनाया गया। लक्ष्य राशि ₹${amount} है और यह आपके Xpenzy बचत लक्ष्यों में सेव है।`,
+  },
+  ta: {
+    budget: (verb, period, category, amount) => `${category}க்கான ${period} பட்ஜெட் ₹${amount}க்கு ${verb === "Updated" ? "புதுப்பிக்கப்பட்டது" : "உருவாக்கப்பட்டது"}. இது உங்கள் Xpenzy பட்ஜெட்டில் சேமிக்கப்பட்டுள்ளது.`,
+    expense: (category, amount, date, payment) => `${date} அன்று ${payment} மூலம் ${category} செலவாக ₹${amount} பதிவு செய்யப்பட்டது. இது உங்கள் Xpenzy செலவுகளில் சேமிக்கப்பட்டுள்ளது.`,
+    income: (category, amount, date, payment) => `${date} அன்று ${payment} மூலம் ${category} வருமானமாக ₹${amount} பதிவு செய்யப்பட்டது. இது உங்கள் Xpenzy வருமானத்தில் சேமிக்கப்பட்டுள்ளது.`,
+    savings: (name, amount) => `“${name}” சேமிப்பு இலக்கு உருவாக்கப்பட்டது. இலக்கு தொகை ₹${amount}; இது உங்கள் Xpenzy சேமிப்பு இலக்குகளில் சேமிக்கப்பட்டுள்ளது.`,
+  },
+  te: {
+    budget: (verb, period, category, amount) => `${category} కోసం ₹${amount} ${period} బడ్జెట్ ${verb === "Updated" ? "నవీకరించబడింది" : "సృష్టించబడింది"}. ఇది మీ Xpenzy బడ్జెట్‌లో సేవ్ చేయబడింది.`,
+    expense: (category, amount, date, payment) => `${date}న ${payment} ద్వారా ${category} ఖర్చు ₹${amount}గా నమోదు చేయబడింది. ఇది మీ Xpenzy ఖర్చుల్లో సేవ్ చేయబడింది.`,
+    income: (category, amount, date, payment) => `${date}న ${payment} ద్వారా ${category} ఆదాయం ₹${amount}గా నమోదు చేయబడింది. ఇది మీ Xpenzy ఆదాయంలో సేవ్ చేయబడింది.`,
+    savings: (name, amount) => `“${name}” పొదుపు లక్ష్యం సృష్టించబడింది. లక్ష్య మొత్తం ₹${amount}; ఇది మీ Xpenzy పొదుపు లక్ష్యాల్లో సేవ్ చేయబడింది.`,
+  },
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -86,7 +118,7 @@ serve(async (req) => {
     }
     const userId = user.id;
 
-    const { action, input, messages, period, timeZone, image, language } = await req.json();
+    const { action, input, messages, period, timeZone, image, language, focus } = await req.json();
     const supportedInsightLanguages: Record<string, string> = { en: "English", hi: "Hindi", ta: "Tamil", te: "Telugu" };
     const insightLanguage = typeof language === "string" && supportedInsightLanguages[language] ? language : "en";
     if (action !== "india_economy_news_rss" && !GEMINI_API_KEY) {
@@ -133,8 +165,12 @@ serve(async (req) => {
       const totalIncome = (incomeRes.data || []).reduce((s: number, i: any) => s + Number(i.amount), 0);
       const totalExpenses = (expenseRes.data || []).reduce((s: number, e: any) => s + Number(e.amount), 0);
       const expensesByCategory: Record<string, number> = {};
+      const incomeByCategory: Record<string, number> = {};
       for (const e of expenseRes.data || []) {
         expensesByCategory[e.category] = (expensesByCategory[e.category] || 0) + Number(e.amount);
+      }
+      for (const i of incomeRes.data || []) {
+        incomeByCategory[i.category] = (incomeByCategory[i.category] || 0) + Number(i.amount);
       }
 
       return {
@@ -151,6 +187,8 @@ serve(async (req) => {
         totalExpenses,
         balance: totalIncome - totalExpenses,
         expensesByCategory,
+        incomeByCategory,
+        incomeCount: (incomeRes.data || []).length,
         expenseCount: (expenseRes.data || []).length,
         savings: (savingsRes.data || []).map((s: any) => ({ name: s.name, target: s.target, current: s.current })),
         investments: (investmentRes.data || []).map((i: any) => ({ name: i.name, type: i.type, invested: i.invested, current: i.current })),
@@ -294,6 +332,7 @@ Use stable, non-sensitive preferences and facts only when relevant.
 You may remember a stable response preference or non-sensitive fact the user shares by calling remember_user_preference. Do this when such a detail is clearly useful for future chats, even if the user did not say “remember.” Store one concise standalone fact, not a quotation. Never store financial details, health or other sensitive personal information, secrets, credentials, identifiers, temporary facts, or anything the user only asks about hypothetically. Do not claim Gemini is being trained; these are private account memories.`
         : "Personal memory is disabled for this user. Do not save or use personal memories.";
       systemPrompt = `You are Xpenzy AI, a smart financial assistant. You help users understand their spending, savings, and investments.
+Always answer in ${supportedInsightLanguages[insightLanguage]}. Keep explanations and confirmations in that language, but preserve requested names, dates, currencies, and the required tool argument format.
 Be concise, friendly, and use ₹ for currency. Use bullet points when listing items.
 Today's date in the user's local timezone is ${finData.todayLabel} (${finData.today}, timezone ${safeTimeZone}). Treat this as the authoritative current date when answering date questions or interpreting "today", "yesterday", and relative dates. You have access to this date even though you do not have access to the user's full device calendar.
 You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
@@ -315,13 +354,20 @@ Here is the user's current financial data for ${finData.month}:
 
     } else if (action === "insights") {
       const summaryPeriod = period === "week" ? "week" : "month";
+      const focusArea = ["expenses", "budget", "income", "savings", "investments"].includes(focus) ? focus : "expenses";
       const outputLanguage = supportedInsightLanguages[insightLanguage];
       const finData = await fetchFinancialData(summaryPeriod);
       const noDataMessages: Record<string, string> = {
-        en: "Add some expenses to get spending tips.",
+        en: "Add records on this page to get relevant tips.",
         hi: "खर्च के सुझाव पाने के लिए अपने खर्च दर्ज करें।",
         ta: "செலவு குறிப்புகளைப் பெற உங்கள் செலவுகளைப் பதிவு செய்யுங்கள்.",
         te: "ఖర్చు సూచనల కోసం మీ ఖర్చులను నమోదు చేయండి.",
+      };
+      const emptyPageMessages: Record<string, string> = {
+        en: "Add records on this page to get relevant tips.",
+        hi: "इस पेज के उपयोगी सुझाव पाने के लिए पहले कुछ रिकॉर्ड जोड़ें।",
+        ta: "இந்தப் பக்கத்திற்கான பயனுள்ள குறிப்புகளைப் பெற முதலில் சில பதிவுகளைச் சேர்க்கவும்.",
+        te: "ఈ పేజీకి ఉపయోగకరమైన సూచనలు పొందడానికి ముందుగా కొన్ని వివరాలను నమోదు చేయండి.",
       };
       const insufficientDataMessages: Record<string, string> = {
         en: "Add at least 2 expense entries to get useful spending tips.",
@@ -330,14 +376,21 @@ Here is the user's current financial data for ${finData.month}:
         te: "ఉపయోగకరమైన ఖర్చు సూచనల కోసం కనీసం 2 ఖర్చులను నమోదు చేయండి.",
       };
 
-      // Validate: if no expense data, return early without calling AI
-      if (finData.expenseCount === 0 && finData.totalIncome === 0) {
-        console.log("insights: no financial data for user", userId);
-        return new Response(JSON.stringify({ content: noDataMessages[insightLanguage], language: insightLanguage }), {
+      const focusHasData: Record<string, boolean> = {
+        expenses: finData.expenseCount > 0,
+        budget: finData.budgets.length > 0 || finData.expenseCount > 0,
+        income: finData.incomeCount > 0,
+        savings: finData.savings.length > 0,
+        investments: finData.investments.length > 0,
+      };
+      if (!focusHasData[focusArea]) {
+        console.log("insights: no data for focus area", focusArea, "user", userId);
+        const content = focusArea === "expenses" ? noDataMessages[insightLanguage] : emptyPageMessages[insightLanguage];
+        return new Response(JSON.stringify({ content, language: insightLanguage }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (finData.expenseCount < 2) {
+      if (focusArea === "expenses" && finData.expenseCount < 2) {
         console.log("insights: insufficient data, only", finData.expenseCount, "entries");
         return new Response(JSON.stringify({ content: insufficientDataMessages[insightLanguage], language: insightLanguage }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -346,14 +399,22 @@ Here is the user's current financial data for ${finData.month}:
 
       console.log("insights: generating for user", userId, "expenses:", finData.expenseCount, "income:", finData.totalIncome);
 
+      const focusInstructions: Record<string, string> = {
+        expenses: "Focus on avoidable spending and suggest realistic ways to reduce unwanted expenses.",
+        budget: "Compare category expenses with budget limits and suggest realistic adjustments. Do not advise cutting essential needs.",
+        income: "Review recorded income sources and consistency. Suggest practical ways to improve income tracking and cash-flow planning; avoid speculative schemes.",
+        savings: "Review savings goals and progress. Suggest practical contributions that preserve money for essential expenses and emergencies.",
+        investments: "Review recorded invested amounts and current values. Encourage statement updates and diversification checks. Do not predict returns or recommend specific funds or securities.",
+      };
+
       systemPrompt = `You are a financial assistant.
-Analyze the user's expense data and give insights.
+Analyze records for the selected financial area. ${focusInstructions[focusArea]}
 
 Instructions:
-- Find total spending for the requested period
-- Find top category
-- Identify unusual spending
-- Suggest 2 ways to save money
+- Summarize relevant recorded totals and patterns for the requested period
+- Highlight relevant income sources, expense categories, budget limits, savings goals, or investment observations
+- Identify unusual patterns only when supported by the records
+- Suggest up to 2 practical actions for the selected financial area
 - Keep response SHORT (max 5 bullet points)
 - Write all tips in ${outputLanguage}, using simple, everyday wording
 - Use ₹ for currency
@@ -367,7 +428,9 @@ Summary for ${finData.month}:
 - Total Income: ₹${finData.totalIncome.toLocaleString()}
 - Total Expenses: ₹${finData.totalExpenses.toLocaleString()} across ${finData.expenseCount} transactions
 - Category breakdown: ${JSON.stringify(finData.expensesByCategory)}
+- Income by source: ${JSON.stringify(finData.incomeByCategory)}
 - Savings goals: ${JSON.stringify(finData.savings)}
+- Investments: ${JSON.stringify(finData.investments)}
 - Budgets: ${JSON.stringify(finData.budgets)}`;
 
     } else if (action === "india_economy_news_rss") {
@@ -943,7 +1006,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
 
         const periodLabel = budgetPeriod.charAt(0).toUpperCase() + budgetPeriod.slice(1);
         const verb = existingBudget ? "Updated" : "Created";
-        const savedMessage = `${verb} your ${periodLabel.toLowerCase()} budget for ${category} to ₹${amount.toLocaleString("en-IN")}. It is saved in your Xpenzy budget list.`;
+        const savedMessage = chatConfirmations[insightLanguage].budget(verb, periodLabel.toLowerCase(), category, amount.toLocaleString("en-IN"));
         return chatReply(savedMessage, { budgetChanged: true });
       }
 
@@ -985,7 +1048,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         });
         if (expenseError) throw expenseError;
 
-        const savedMessage = `Recorded your ${category} expense of ₹${amount.toLocaleString("en-IN")} on ${date} using ${paymentMode}. It is saved in your Xpenzy expenses.`;
+        const savedMessage = chatConfirmations[insightLanguage].expense(category, amount.toLocaleString("en-IN"), date, paymentMode);
         return chatReply(savedMessage, { expenseChanged: true });
       }
 
@@ -1032,7 +1095,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         });
         if (incomeError) throw incomeError;
 
-        const savedMessage = `Recorded your ${savedCategory} income of ₹${amount.toLocaleString("en-IN")} on ${date} using ${paymentMode}. It is saved in your Xpenzy income.`;
+        const savedMessage = chatConfirmations[insightLanguage].income(savedCategory, amount.toLocaleString("en-IN"), date, paymentMode);
         return chatReply(savedMessage, { incomeChanged: true });
       }
 
@@ -1071,7 +1134,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         });
         if (savingsError) throw savingsError;
 
-        const savedMessage = `Created your "${name}" savings goal with a target of ₹${target.toLocaleString("en-IN")}. It is saved in your Xpenzy savings goals.`;
+        const savedMessage = chatConfirmations[insightLanguage].savings(name, target.toLocaleString("en-IN"));
         return chatReply(savedMessage, { savingsChanged: true });
       }
 

@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { SavingsForm } from '@/components/forms/SavingsForm';
 import { SavingsTransactionForm } from '@/components/forms/SavingsTransactionForm';
+import { AIInsightsCard } from '@/components/ai/AIInsights';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 
@@ -46,7 +47,7 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', {
 }).format(amount);
 
 export const Savings = () => {
-  const { data, getSavingsTransactions, deleteSavingsTransaction, markGoalCompleted, restoreGoal } = useFinancial();
+  const { data, isLoading: isFinancialLoading, getSavingsTransactions, deleteSavingsTransaction, markGoalCompleted, restoreGoal } = useFinancial();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
   const { deleteSavings } = useFinancial();
@@ -614,29 +615,9 @@ export const Savings = () => {
         </CardContent>
       </Card>
 
-      {/* Savings Tips */}
-      <Card className="border-border/80 bg-gradient-card shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <PiggyBank className="w-5 h-5" />
-            Savings Tips
-          </CardTitle>
-          <Badge variant="outline">Quick ideas</Badge>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {savingsTips.map((tip, index) => (
-              <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-background/50">
-                <div className="w-6 h-6 rounded-full bg-savings/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-xs font-medium text-savings">{index + 1}</span>
-                </div>
-                <p className="text-sm text-foreground">{tip}</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+
       
+      <AIInsightsCard title="AI savings tips" focus="savings" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={data.savings} />
       <SavingsForm 
         open={isFormOpen} 
         onClose={() => {

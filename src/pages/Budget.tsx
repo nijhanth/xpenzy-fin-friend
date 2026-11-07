@@ -14,11 +14,12 @@ import { useToast } from '@/hooks/use-toast';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { BudgetCategory } from '@/types/financial';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
+import { AIInsightsCard } from '@/components/ai/AIInsights';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, getWeeksInMonth, getYear, getMonth } from 'date-fns';
 
 export const Budget = () => {
   const { toast } = useToast();
-  const { data, addBudget, updateBudget, deleteBudget } = useFinancial();
+  const { data, isLoading: isFinancialLoading, addBudget, updateBudget, deleteBudget } = useFinancial();
 
   const [newBudget, setNewBudget] = useState<{
     name: string;
@@ -718,30 +719,8 @@ export const Budget = () => {
         </Card>
       )}
 
-      {/* Integration Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            🔄 Budget Integration
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              • Expense budget categories automatically appear in expense forms
-            </p>
-            <p className="text-sm text-muted-foreground">
-              • Spent amounts auto-update from expenses, savings transactions, and investments
-            </p>
-            <p className="text-sm text-muted-foreground">
-              • Expenses without matching budgets are classified as "Others"
-            </p>
-            <p className="text-sm text-muted-foreground">
-              • Budget status updates in real-time when you add transactions
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+
+      <AIInsightsCard title="AI budget tips" focus="budget" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={data.budgets} />
     </div>
   );
 };

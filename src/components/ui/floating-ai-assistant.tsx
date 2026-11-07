@@ -3,6 +3,7 @@ import { X, Send, Sparkles, Loader2, Trash2, ImagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import ReactMarkdown from 'react-markdown';
@@ -21,6 +22,37 @@ const INCOME_CATEGORIES = ['Salary', 'Freelance', 'Gift', 'Investment', 'Busines
 
 type TransactionType = 'expense' | 'income' | 'savings' | 'investment' | 'unknown';
 type PaymentMode = (typeof PAYMENT_MODES)[number] | 'Unknown';
+type ChatLanguage = 'en' | 'hi' | 'ta' | 'te';
+
+const chatLanguages: Array<{ value: ChatLanguage; label: string }> = [
+  { value: 'en', label: 'English' },
+  { value: 'hi', label: 'हिन्दी' },
+  { value: 'ta', label: 'தமிழ்' },
+  { value: 'te', label: 'తెలుగు' },
+];
+
+const chatWelcome: Record<ChatLanguage, string> = {
+  en: "Hi! I'm **Xpenzy AI** 🤖\n\nI can help you with spending analysis, money-saving tips, and financial insights. Ask me anything about your finances!",
+  hi: "नमस्ते! मैं **Xpenzy AI** हूँ 🤖\n\nमैं खर्च का विश्लेषण, पैसे बचाने के सुझाव और वित्तीय जानकारी देने में मदद कर सकता हूँ। अपने पैसों के बारे में कुछ भी पूछें!",
+  ta: "வணக்கம்! நான் **Xpenzy AI** 🤖\n\nசெலவு பகுப்பாய்வு, பணத்தைச் சேமிக்கும் வழிகள் மற்றும் நிதித் தகவல்களில் உதவுவேன். உங்கள் பணம் குறித்து எதையும் கேளுங்கள்!",
+  te: "నమస్కారం! నేను **Xpenzy AI** 🤖\n\nఖర్చుల విశ్లేషణ, డబ్బు ఆదా చేసే సూచనలు, ఆర్థిక సమాచారంలో సహాయం చేస్తాను. మీ ఆర్థిక విషయాల గురించి ఏదైనా అడగండి!",
+};
+
+const chatLanguageLabel: Record<ChatLanguage, string> = {
+  en: 'AI replies in', hi: 'जवाब की भाषा', ta: 'பதில் மொழி', te: 'సమాధానం భాష',
+};
+
+const makeWelcomeMessage = (language: ChatLanguage): Message => ({ id: '1', role: 'assistant', content: chatWelcome[language] });
+
+const getSavedChatLanguage = (): ChatLanguage => {
+  if (typeof window === 'undefined') return 'en';
+  try {
+    const saved = window.localStorage.getItem('xpenzy-ai-chat-language');
+    return chatLanguages.some((language) => language.value === saved) ? saved as ChatLanguage : 'en';
+  } catch {
+    return 'en';
+  }
+};
 
 interface TransactionDraft {
   transactionType: TransactionType;
@@ -36,12 +68,6 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
-
-const welcomeMessage: Message = {
-  id: '1',
-  role: 'assistant',
-  content: "Hi! I'm **Xpenzy AI** 🤖\n\nI can help you with:\n- 📊 Spending analysis\n- 💡 Money-saving tips\n- 📈 Financial insights\n\nAsk me anything about your finances!",
-};
 
 const estimateTokens = (content: string) =>
   Math.ceil(Array.from(content).length / CHARACTERS_PER_ESTIMATED_TOKEN);
@@ -87,8 +113,9 @@ export const FloatingAIAssistant = () => {
   } = useFinancial();
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id;
+  const [chatLanguage, setChatLanguage] = useState<ChatLanguage>(getSavedChatLanguage);
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([welcomeMessage]);
+  const [messages, setMessages] = useState<Message[]>(() => [makeWelcomeMessage(chatLanguage)]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
@@ -99,6 +126,15 @@ export const FloatingAIAssistant = () => {
   const [selectedTargetId, setSelectedTargetId] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatLanguageRef = useRef(chatLanguage);
+
+  useEffect(() => {
+    chatLanguageRef.current = chatLanguage;
+    try { window.localStorage.setItem('xpenzy-ai-chat-language', chatLanguage); } catch { /* Preference still applies for this session. */ }
+    setMessages((previous) => previous.length === 1 && previous[0].id === '1'
+      ? [makeWelcomeMessage(chatLanguage)]
+      : previous);
+  }, [chatLanguage]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -106,7 +142,7 @@ export const FloatingAIAssistant = () => {
     let cancelled = false;
     const loadHistory = async () => {
       setIsHistoryLoading(true);
-      setMessages([welcomeMessage]);
+      setMessages([makeWelcomeMessage(chatLanguageRef.current)]);
       if (!userId) {
         setIsHistoryLoading(false);
         return;
@@ -122,14 +158,14 @@ export const FloatingAIAssistant = () => {
       if (cancelled) return;
       if (error) {
         toast.error(getChatHistoryError('load', error).message);
-        setMessages([welcomeMessage]);
+        setMessages([makeWelcomeMessage(chatLanguageRef.current)]);
       } else {
         const history = (data || []).reverse().map((message) => ({
           id: message.id,
           role: message.role,
           content: message.content,
         }));
-        setMessages(history.length > 0 ? history : [welcomeMessage]);
+        setMessages(history.length > 0 ? history : [makeWelcomeMessage(chatLanguageRef.current)]);
       }
       setIsHistoryLoading(false);
     };
@@ -360,6 +396,7 @@ export const FloatingAIAssistant = () => {
         },
         body: JSON.stringify({
           action: 'chat',
+          language: chatLanguage,
           messages: limitContext(currentMessages).map(({ role, content }) => ({ role, content })),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
@@ -603,6 +640,13 @@ export const FloatingAIAssistant = () => {
                   <X className="w-4 h-4" />
                 </Button>
               </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-muted-foreground">{chatLanguageLabel[chatLanguage]}</span>
+              <Select value={chatLanguage} onValueChange={(value) => setChatLanguage(value as ChatLanguage)} disabled={isLoading}>
+                <SelectTrigger className="h-8 w-32 text-xs" aria-label={chatLanguageLabel[chatLanguage]}><SelectValue /></SelectTrigger>
+                <SelectContent>{chatLanguages.map((language) => <SelectItem key={language.value} value={language.value}>{language.label}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
           </CardHeader>
           
