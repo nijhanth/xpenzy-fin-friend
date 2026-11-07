@@ -159,29 +159,29 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       </header>
 
       <section aria-label="Monthly cash flow">
-        <div className="relative overflow-hidden rounded-2xl p-5 text-primary-foreground shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.7)] sm:p-7" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--success)))' }}>
+        <div className="relative overflow-hidden rounded-2xl p-5 text-white shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.7)] sm:p-7" style={{ background: 'linear-gradient(135deg, #18352e 0%, #214b40 54%, #2da66a 100%)' }}>
           <div className="relative flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-primary-foreground/70">Monthly cash flow</p>
-              {isLoading ? <Skeleton className="mt-3 h-11 w-44 bg-primary-foreground/15" /> : (
+              <p className="text-sm font-medium text-white/70">Monthly cash flow</p>
+              {isLoading ? <Skeleton className="mt-3 h-11 w-44 bg-white/15" /> : (
                 <p className="mt-2 text-4xl font-bold tracking-tight tabular-nums sm:text-5xl">{inr(stats.net)}</p>
               )}
-              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/15 bg-primary-foreground/10 px-3 py-1.5 text-xs font-medium text-primary-foreground/90">
+              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-white/90">
                 {stats.net >= 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
                 {stats.net >= 0 ? 'Income is ahead of spending' : 'Spending is ahead of income'}
               </div>
             </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary-foreground/15 bg-primary-foreground/10 backdrop-blur-sm sm:h-14 sm:w-14">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 backdrop-blur-sm sm:h-14 sm:w-14">
               <Wallet className="h-6 w-6 sm:h-7 sm:w-7" />
             </div>
           </div>
-          <div className="relative mt-7 grid grid-cols-2 gap-4 border-t border-primary-foreground/15 pt-4 sm:mt-8 sm:gap-8">
+          <div className="relative mt-7 grid grid-cols-2 gap-4 border-t border-white/15 pt-4 sm:mt-8 sm:gap-8">
             <div>
-              <p className="flex items-center gap-1.5 text-xs text-primary-foreground/70"><TrendingUp className="h-3.5 w-3.5" /> Income received</p>
+              <p className="flex items-center gap-1.5 text-xs text-white/65"><TrendingUp className="h-3.5 w-3.5" /> Income received</p>
               <p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{isLoading ? '—' : inr(stats.received)}</p>
             </div>
             <div>
-              <p className="flex items-center gap-1.5 text-xs text-primary-foreground/70"><TrendingDown className="h-3.5 w-3.5" /> Expenses recorded</p>
+              <p className="flex items-center gap-1.5 text-xs text-white/65"><TrendingDown className="h-3.5 w-3.5" /> Expenses recorded</p>
               <p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{isLoading ? '—' : inr(stats.spent)}</p>
             </div>
           </div>
