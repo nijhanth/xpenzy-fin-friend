@@ -64,31 +64,31 @@ const chatReply = (content: string, changes: {
 );
 
 const chatConfirmations: Record<string, {
-  budget: (verb: string, period: string, category: string, amount: string) => string;
+  budget: (verb: string, period: string, category: string, amount: string, budgetType?: string) => string;
   expense: (category: string, amount: string, date: string, payment: string) => string;
   income: (category: string, amount: string, date: string, payment: string) => string;
   savings: (name: string, amount: string) => string;
 }> = {
   en: {
-    budget: (verb, period, category, amount) => `${verb} your ${period} budget for ${category} to ₹${amount}. It is saved in your Xpenzy budget list.`,
+    budget: (verb, period, category, amount, budgetType) => `${verb} your ${period} ${budgetType === "investment" ? "investment" : "expense"} budget for ${category} to ₹${amount}. It is saved in your Xpenzy budget list.`,
     expense: (category, amount, date, payment) => `Recorded your ${category} expense of ₹${amount} on ${date} using ${payment}. It is saved in your Xpenzy expenses.`,
     income: (category, amount, date, payment) => `Recorded your ${category} income of ₹${amount} on ${date} using ${payment}. It is saved in your Xpenzy income.`,
     savings: (name, amount) => `Created your “${name}” savings goal with a target of ₹${amount}. It is saved in your Xpenzy savings goals.`,
   },
   hi: {
-    budget: (verb, period, category, amount) => `${category} के लिए ₹${amount} का ${period} बजट ${verb === "Updated" ? "अपडेट किया" : "बनाया"} गया। यह आपके Xpenzy बजट में सेव है।`,
+    budget: (verb, period, category, amount, budgetType) => `${category} के लिए ₹${amount} का ${period} ${budgetType === "investment" ? "निवेश" : "खर्च"} बजट ${verb === "Updated" ? "अपडेट किया" : "बनाया"} गया। यह आपके Xpenzy बजट में सेव है।`,
     expense: (category, amount, date, payment) => `${date} को ${payment} से ${category} का ₹${amount} खर्च दर्ज किया गया। यह आपके Xpenzy खर्चों में सेव है।`,
     income: (category, amount, date, payment) => `${date} को ${payment} से ${category} की ₹${amount} आय दर्ज की गई। यह आपकी Xpenzy आय में सेव है।`,
     savings: (name, amount) => `“${name}” बचत लक्ष्य बनाया गया। लक्ष्य राशि ₹${amount} है और यह आपके Xpenzy बचत लक्ष्यों में सेव है।`,
   },
   ta: {
-    budget: (verb, period, category, amount) => `${category}க்கான ${period} பட்ஜெட் ₹${amount}க்கு ${verb === "Updated" ? "புதுப்பிக்கப்பட்டது" : "உருவாக்கப்பட்டது"}. இது உங்கள் Xpenzy பட்ஜெட்டில் சேமிக்கப்பட்டுள்ளது.`,
+    budget: (verb, period, category, amount, budgetType) => `${category}க்கான ${period} ${budgetType === "investment" ? "முதலீட்டு" : "செலவு"} பட்ஜெட் ₹${amount}க்கு ${verb === "Updated" ? "புதுப்பிக்கப்பட்டது" : "உருவாக்கப்பட்டது"}. இது உங்கள் Xpenzy பட்ஜெட்டில் சேமிக்கப்பட்டுள்ளது.`,
     expense: (category, amount, date, payment) => `${date} அன்று ${payment} மூலம் ${category} செலவாக ₹${amount} பதிவு செய்யப்பட்டது. இது உங்கள் Xpenzy செலவுகளில் சேமிக்கப்பட்டுள்ளது.`,
     income: (category, amount, date, payment) => `${date} அன்று ${payment} மூலம் ${category} வருமானமாக ₹${amount} பதிவு செய்யப்பட்டது. இது உங்கள் Xpenzy வருமானத்தில் சேமிக்கப்பட்டுள்ளது.`,
     savings: (name, amount) => `“${name}” சேமிப்பு இலக்கு உருவாக்கப்பட்டது. இலக்கு தொகை ₹${amount}; இது உங்கள் Xpenzy சேமிப்பு இலக்குகளில் சேமிக்கப்பட்டுள்ளது.`,
   },
   te: {
-    budget: (verb, period, category, amount) => `${category} కోసం ₹${amount} ${period} బడ్జెట్ ${verb === "Updated" ? "నవీకరించబడింది" : "సృష్టించబడింది"}. ఇది మీ Xpenzy బడ్జెట్‌లో సేవ్ చేయబడింది.`,
+    budget: (verb, period, category, amount, budgetType) => `${category} కోసం ₹${amount} ${period} ${budgetType === "investment" ? "పెట్టుబడి" : "ఖర్చు"} బడ్జెట్ ${verb === "Updated" ? "నవీకరించబడింది" : "సృష్టించబడింది"}. ఇది మీ Xpenzy బడ్జెట్‌లో సేవ్ చేయబడింది.`,
     expense: (category, amount, date, payment) => `${date}న ${payment} ద్వారా ${category} ఖర్చు ₹${amount}గా నమోదు చేయబడింది. ఇది మీ Xpenzy ఖర్చుల్లో సేవ్ చేయబడింది.`,
     income: (category, amount, date, payment) => `${date}న ${payment} ద్వారా ${category} ఆదాయం ₹${amount}గా నమోదు చేయబడింది. ఇది మీ Xpenzy ఆదాయంలో సేవ్ చేయబడింది.`,
     savings: (name, amount) => `“${name}” పొదుపు లక్ష్యం సృష్టించబడింది. లక్ష్య మొత్తం ₹${amount}; ఇది మీ Xpenzy పొదుపు లక్ష్యాల్లో సేవ్ చేయబడింది.`,
@@ -342,7 +342,7 @@ Always answer in ${supportedInsightLanguages[insightLanguage]}. Keep explanation
 Be concise, friendly, and use ₹ for currency. Use bullet points when listing items.
 Today's date in the user's local timezone is ${finData.todayLabel} (${finData.today}, timezone ${safeTimeZone}). Treat this as the authoritative current date when answering date questions or interpreting "today", "yesterday", and relative dates. You have access to this date even though you do not have access to the user's full device calendar.
 You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
-You can create or update an expense budget only when the user explicitly asks you to do so. Use the create_expense_budget tool for a clear request with a category, amount, and period. Never claim a budget was created or updated unless the tool succeeds. For hypothetical questions or suggestions, do not call the tool.
+You can create or update a budget only when the user explicitly asks. Use create_expense_budget and set budgetType to expenses by default, or investment when the user names an investment holding. For investment budgets, use the unique matching investment ID from the user's data; ask which holding if the name is ambiguous or missing. Never claim a budget was created or updated unless the tool succeeds. For hypothetical questions or suggestions, do not call the tool.
 You can record an expense only when the user explicitly asks to add, log, or record one and provides a clear amount and category. Use the create_expense tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. Every new expense must be reviewed and confirmed by the user in the app before saving, even when all details were specified. Never claim an expense was recorded before confirmation. Do not record hypothetical expenses or merely discuss a past expense as a new record.
 You can record income only when the user explicitly asks to add, log, or record it and provides a clear amount and category. Use the create_income tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. If the category is Custom, require a clear custom category. Every new income entry must be reviewed and confirmed by the user in the app before saving. Never claim income was recorded before confirmation. Do not record hypothetical income or merely discuss past income as a new record.
 For every new income, expense, savings goal, savings deposit, investment holding, or investment contribution, prepare a review card with its matching tool; never write it directly. The user must press Confirm and save before any record is inserted. Preserve the exact amount the user stated; do not round, adjust, or infer it. If the request is unclear, ask instead of preparing a record.
@@ -763,13 +763,15 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         type: "function",
         function: {
           name: "create_expense_budget",
-          description: "Create or update an expense budget only when the user explicitly requests this action.",
+          description: "Create or update an expense or investment budget only when the user explicitly requests it. Investment budgets must link to the matching existing investment holding ID.",
           parameters: {
             type: "object",
             properties: {
-              category: { type: "string", description: "The expense category, such as Petrol or Groceries." },
+              category: { type: "string", description: "The expense category or investment holding name." },
               amount: { type: "number", description: "The requested positive budget limit." },
               period: { type: "string", enum: ["weekly", "monthly", "yearly"], description: "Budget period." },
+              budgetType: { type: "string", enum: ["expenses", "investment"], description: "Use investment when the user is budgeting an investment holding; otherwise expenses." },
+              investmentId: { type: "string", description: "Required for investment budgets; use the unique ID of the named existing holding." },
             },
             required: ["category", "amount", "period"],
             additionalProperties: false,
@@ -1041,9 +1043,29 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         const category = typeof args.category === "string" ? args.category.trim() : "";
         const amount = Number(args.amount);
         const budgetPeriod = args.period;
+        const budgetType = args.budgetType ?? "expenses";
+        const investmentId = typeof args.investmentId === "string" ? args.investmentId : "";
         if (!category || category.length > 100 || !Number.isFinite(amount) || amount <= 0
-          || !["weekly", "monthly", "yearly"].includes(budgetPeriod)) {
+          || !["weekly", "monthly", "yearly"].includes(budgetPeriod)
+          || !["expenses", "investment"].includes(budgetType)
+          || (budgetType === "investment" && !investmentId)) {
           throw new Error("The requested budget needs a valid category, positive amount, and weekly, monthly, or yearly period.");
+        }
+
+        let linkedInvestmentId: string | null = null;
+        if (budgetType === "investment") {
+          const { data: investments, error: investmentError } = await supabase.from("investment_entries")
+            .select("id,name").eq("user_id", userId);
+          if (investmentError) throw investmentError;
+          const matchingInvestments = (investments || []).filter((investment: any) =>
+            investment.name.trim().toLocaleLowerCase() === category.toLocaleLowerCase());
+          const investment = investmentId
+            ? (investments || []).find((item: any) => item.id === investmentId)
+            : matchingInvestments.length === 1 ? matchingInvestments[0] : null;
+          if (!investment || investment.name.trim().toLocaleLowerCase() !== category.toLocaleLowerCase()) {
+            return chatReply("I couldn't match that to one investment holding. Please use the exact name of a holding in your account so I can connect the budget correctly.");
+          }
+          linkedInvestmentId = investment.id;
         }
 
         const dateParts = new Intl.DateTimeFormat("en-US", {
@@ -1061,8 +1083,8 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           limit_amount: amount,
           period: budgetPeriod,
           icon: "💰",
-          linked_type: "expenses",
-          linked_id: null,
+          linked_type: budgetType,
+          linked_id: linkedInvestmentId,
           year,
           month: budgetPeriod === "weekly" || budgetPeriod === "monthly" ? month : null,
           week: budgetPeriod === "weekly" ? week : null,
@@ -1075,16 +1097,31 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           .eq("user_id", userId)
           .eq("category", category)
           .eq("period", budgetPeriod)
-          .eq("linked_type", "expenses")
+          .eq("linked_type", budgetType)
           .eq("year", year);
+        if (budgetType === "investment") {
+          existingBudgetQuery = existingBudgetQuery.eq("linked_id", linkedInvestmentId);
+        }
         if (budgetPeriod === "monthly" || budgetPeriod === "weekly") {
           existingBudgetQuery = existingBudgetQuery.eq("month", month);
         }
         if (budgetPeriod === "weekly") {
           existingBudgetQuery = existingBudgetQuery.eq("week", week);
         }
-        const { data: existingBudget, error: lookupError } = await existingBudgetQuery.limit(1).maybeSingle();
+        let { data: existingBudget, error: lookupError } = await existingBudgetQuery.limit(1).maybeSingle();
         if (lookupError) throw lookupError;
+
+        // Upgrade a same-name AI-created expense budget to an investment budget instead of leaving a duplicate.
+        if (!existingBudget && budgetType === "investment") {
+          let misTypedBudgetQuery = supabase.from("budget_categories").select("id")
+            .eq("user_id", userId).eq("category", category).eq("period", budgetPeriod)
+            .eq("linked_type", "expenses").eq("year", year);
+          if (budgetPeriod === "monthly" || budgetPeriod === "weekly") misTypedBudgetQuery = misTypedBudgetQuery.eq("month", month);
+          if (budgetPeriod === "weekly") misTypedBudgetQuery = misTypedBudgetQuery.eq("week", week);
+          const misTypedResult = await misTypedBudgetQuery.limit(1).maybeSingle();
+          if (misTypedResult.error) throw misTypedResult.error;
+          existingBudget = misTypedResult.data;
+        }
 
         const saveResult = existingBudget
           ? await supabase.from("budget_categories").update(budgetValues).eq("id", existingBudget.id).eq("user_id", userId).select("id").single()
@@ -1093,7 +1130,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
 
         const periodLabel = budgetPeriod.charAt(0).toUpperCase() + budgetPeriod.slice(1);
         const verb = existingBudget ? "Updated" : "Created";
-        const savedMessage = chatConfirmations[insightLanguage].budget(verb, periodLabel.toLowerCase(), category, amount.toLocaleString("en-IN"));
+        const savedMessage = chatConfirmations[insightLanguage].budget(verb, periodLabel.toLowerCase(), category, amount.toLocaleString("en-IN"), budgetType);
         return chatReply(savedMessage, { budgetChanged: true });
       }
 
