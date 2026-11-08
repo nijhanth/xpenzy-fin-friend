@@ -342,7 +342,7 @@ Always answer in ${supportedInsightLanguages[insightLanguage]}. Keep explanation
 Be concise, friendly, and use ₹ for currency. Use bullet points when listing items.
 Today's date in the user's local timezone is ${finData.todayLabel} (${finData.today}, timezone ${safeTimeZone}). Treat this as the authoritative current date when answering date questions or interpreting "today", "yesterday", and relative dates. You have access to this date even though you do not have access to the user's full device calendar.
 You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
-You can create or update a budget only when the user explicitly asks. Use create_expense_budget and set budgetType to expenses by default, or investment when the user names an investment holding. For investment budgets, use the unique matching investment ID from the user's data; ask which holding if the name is ambiguous or missing. When changing an existing budget's type, preserve its amount and period unless the user asks to change those too. Always prepare a review proposal; never write a budget directly or claim it was updated before user confirmation.
+You can create or update an expense, savings, or investment budget only when the user explicitly asks. Use propose_budget_change. Set budgetType to expenses for expense budgets, savings for a savings goal, and investment for an investment holding. For savings and investment budgets, pass the unique matching targetId from the user's financial data. When changing an existing budget's type, preserve its amount and period unless the user asks to change those too. Always prepare a review proposal; never write a budget directly or claim it was updated before user confirmation.
 You can record an expense only when the user explicitly asks to add, log, or record one and provides a clear amount and category. Use the create_expense tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. Every new expense must be reviewed and confirmed by the user in the app before saving, even when all details were specified. Never claim an expense was recorded before confirmation. Do not record hypothetical expenses or merely discuss a past expense as a new record.
 You can record income only when the user explicitly asks to add, log, or record it and provides a clear amount and category. Use the create_income tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. If the category is Custom, require a clear custom category. Every new income entry must be reviewed and confirmed by the user in the app before saving. Never claim income was recorded before confirmation. Do not record hypothetical income or merely discuss past income as a new record.
 For every new income, expense, savings goal, savings deposit, investment holding, or investment contribution, prepare a review card with its matching tool; never write it directly. The user must press Confirm and save before any record is inserted. Preserve the exact amount the user stated; do not round, adjust, or infer it. If the request is unclear, ask instead of preparing a record.
@@ -762,16 +762,16 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
       {
         type: "function",
         function: {
-          name: "create_expense_budget",
-          description: "Prepare a new budget or a change to an existing budget for user review. Investment budgets must link to the matching existing investment holding ID. The app saves only after the user confirms.",
+          name: "propose_budget_change",
+          description: "Prepare a new expense, savings, or investment budget or a change to an existing budget for user review. Savings and investment budgets must link to the matching existing goal or holding ID. The app saves only after the user confirms.",
           parameters: {
             type: "object",
             properties: {
-              category: { type: "string", description: "The expense category or investment holding name." },
+              category: { type: "string", description: "The expense category, savings goal name, or investment holding name." },
               amount: { type: "number", description: "The requested positive budget limit." },
               period: { type: "string", enum: ["weekly", "monthly", "yearly"], description: "Budget period." },
-              budgetType: { type: "string", enum: ["expenses", "investment"], description: "Use investment when the user is budgeting an investment holding; otherwise expenses." },
-              investmentId: { type: "string", description: "Required for investment budgets; use the unique ID of the named existing holding." },
+              budgetType: { type: "string", enum: ["expenses", "savings", "investment"], description: "Budget type selected by the user." },
+              targetId: { type: "string", description: "Required for savings or investment budgets; unique matching goal or holding ID from the user's financial data." },
             },
             required: ["category", "amount", "period"],
             additionalProperties: false,
@@ -937,6 +937,12 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
     if (action === "chat") {
       body.tools = chatTools;
       body.tool_choice = "auto";
+      const latestUserMessage = [...chatMessages].reverse().find((message) => message.role === "user")?.content || input || "";
+      const explicitBudgetChange = /\b(budget|budgets)\b/i.test(latestUserMessage)
+        && /\b(create|set|add|make|update|modify|change|switch|convert|allocate|want|need)\b/i.test(latestUserMessage);
+      if (explicitBudgetChange) {
+        body.tool_choice = { type: "function", function: { name: "propose_budget_change" } };
+      }
     } else if (useToolCalling) {
       body.tools = tools;
       body.tool_choice = toolChoice;
@@ -1038,33 +1044,36 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
       }
 
       const toolCall = toolCalls.find((call: any) => call?.function?.name !== "remember_user_preference");
-      if (toolCall?.function?.name === "create_expense_budget") {
+      if (toolCall?.function?.name === "propose_budget_change") {
         const args = JSON.parse(toolCall.function.arguments);
         const category = typeof args.category === "string" ? args.category.trim() : "";
         const amount = Number(args.amount);
         const budgetPeriod = args.period;
         const budgetType = args.budgetType ?? "expenses";
-        const investmentId = typeof args.investmentId === "string" ? args.investmentId : "";
+        const requestedTargetId = typeof args.targetId === "string" ? args.targetId : "";
         if (!category || category.length > 100 || !Number.isFinite(amount) || amount <= 0
           || !["weekly", "monthly", "yearly"].includes(budgetPeriod)
-          || !["expenses", "investment"].includes(budgetType)) {
+          || !["expenses", "savings", "investment"].includes(budgetType)) {
           throw new Error("The requested budget needs a valid category, positive amount, and weekly, monthly, or yearly period.");
         }
 
-        let linkedInvestmentId: string | null = null;
-        if (budgetType === "investment") {
-          const { data: investments, error: investmentError } = await supabase.from("investment_entries")
+        let linkedTargetId: string | null = null;
+        if (budgetType === "investment" || budgetType === "savings") {
+          const isInvestment = budgetType === "investment";
+          const targetTable = isInvestment ? "investment_entries" : "savings_goals";
+          const targetLabel = isInvestment ? "investment holding" : "savings goal";
+          const { data: targets, error: targetError } = await supabase.from(targetTable)
             .select("id,name").eq("user_id", userId);
-          if (investmentError) throw investmentError;
-          const matchingInvestments = (investments || []).filter((investment: any) =>
-            investment.name.trim().toLocaleLowerCase() === category.toLocaleLowerCase());
-          const investment = investmentId
-            ? (investments || []).find((item: any) => item.id === investmentId)
-            : matchingInvestments.length === 1 ? matchingInvestments[0] : null;
-          if (!investment || investment.name.trim().toLocaleLowerCase() !== category.toLocaleLowerCase()) {
-            return chatReply("I couldn't match that to one investment holding. Please use the exact name of a holding in your account so I can connect the budget correctly.");
+          if (targetError) throw targetError;
+          const matchingTargets = (targets || []).filter((target: any) =>
+            target.name.trim().toLocaleLowerCase() === category.toLocaleLowerCase());
+          const target = requestedTargetId
+            ? (targets || []).find((item: any) => item.id === requestedTargetId)
+            : matchingTargets.length === 1 ? matchingTargets[0] : null;
+          if (!target || target.name.trim().toLocaleLowerCase() !== category.toLocaleLowerCase()) {
+            return chatReply(`I couldn't match that to one ${targetLabel}. Please use the exact name from your account so I can link the budget correctly.`);
           }
-          linkedInvestmentId = investment.id;
+          linkedTargetId = target.id;
         }
 
         const dateParts = new Intl.DateTimeFormat("en-US", {
@@ -1083,7 +1092,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           period: budgetPeriod,
           icon: "💰",
           linked_type: budgetType,
-          linked_id: linkedInvestmentId,
+          linked_id: linkedTargetId,
           year,
           month: budgetPeriod === "weekly" || budgetPeriod === "monthly" ? month : null,
           week: budgetPeriod === "weekly" ? week : null,
@@ -1098,8 +1107,8 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           .eq("period", budgetPeriod)
           .eq("linked_type", budgetType)
           .eq("year", year);
-        if (budgetType === "investment") {
-          existingBudgetQuery = existingBudgetQuery.eq("linked_id", linkedInvestmentId);
+        if (budgetType !== "expenses") {
+          existingBudgetQuery = existingBudgetQuery.eq("linked_id", linkedTargetId);
         }
         if (budgetPeriod === "monthly" || budgetPeriod === "weekly") {
           existingBudgetQuery = existingBudgetQuery.eq("month", month);
@@ -1111,7 +1120,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         if (lookupError) throw lookupError;
 
         // Upgrade a same-name AI-created expense budget to an investment budget instead of leaving a duplicate.
-        if (!existingBudget && budgetType === "investment") {
+        if (!existingBudget && budgetType !== "expenses") {
           let misTypedBudgetQuery = supabase.from("budget_categories").select("*")
             .eq("user_id", userId).eq("category", category).eq("period", budgetPeriod)
             .eq("linked_type", "expenses").eq("year", year);
@@ -1121,9 +1130,13 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           if (misTypedResult.error) throw misTypedResult.error;
           existingBudget = misTypedResult.data;
         }
-        return chatReply(existingBudget
-          ? `Review the proposed budget change for ${category}. It will not be updated until you confirm.`
-          : `Review the proposed ${budgetType === "investment" ? "investment" : "expense"} budget for ${category}. It will not be saved until you confirm.`, {}, {
+        const typeLabel = budgetType === "investment" ? "Investment" : budgetType === "savings" ? "Savings" : "Expense";
+        const currentTypeLabel = existingBudget?.linked_type === "investment" ? "Investment" : existingBudget?.linked_type === "savings" ? "Savings" : "Expense";
+        const currentSummary = existingBudget
+          ? `Current: ${currentTypeLabel} budget, ${existingBudget.category}, INR ${Number(existingBudget.limit_amount).toLocaleString("en-IN")}, ${existingBudget.period}. `
+          : "";
+        const reviewSummary = `${currentSummary}Proposed: ${typeLabel} budget, ${category}, INR ${amount.toLocaleString("en-IN")}, ${budgetPeriod}. Nothing has been saved; confirm below to apply it.`;
+        return chatReply(reviewSummary, {}, {
           mode: existingBudget ? "edit_budget" : "create_budget",
           id: existingBudget?.id,
           beforeBudget: existingBudget ? {
@@ -1136,7 +1149,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           category,
           budgetType,
           budgetPeriod,
-          targetId: linkedInvestmentId || undefined,
+          targetId: linkedTargetId || undefined,
           year,
           month: budgetPeriod === "weekly" || budgetPeriod === "monthly" ? month : undefined,
           week: budgetPeriod === "weekly" ? week : undefined,

@@ -80,7 +80,7 @@ interface PendingRecordChange {
   investmentType?: string;
   customType?: string;
   beforeBudget?: { category: string; amount: number; period: string; budgetType: string };
-  budgetType?: 'expenses' | 'investment';
+  budgetType?: 'expenses' | 'savings' | 'investment';
   budgetPeriod?: 'weekly' | 'monthly' | 'yearly';
   year?: number;
   month?: number;
@@ -552,9 +552,9 @@ export const FloatingAIAssistant = () => {
     if (['create_budget', 'edit_budget'].includes(change.mode)
       && (!Number.isFinite(change.amount) || change.amount <= 0 || change.amount > 1_000_000_000
         || !change.category.trim() || change.category.length > 100
-        || !['expenses', 'investment'].includes(change.budgetType || '')
+        || !['expenses', 'savings', 'investment'].includes(change.budgetType || '')
         || !['weekly', 'monthly', 'yearly'].includes(change.budgetPeriod || '')
-        || (change.budgetType === 'investment' && !change.targetId)
+        || (change.budgetType !== 'expenses' && !change.targetId)
         || (change.mode === 'edit_budget' && !change.id))) {
       toast.error('Review the budget type, linked investment, period, category, and amount before confirming.');
       return;
@@ -565,8 +565,8 @@ export const FloatingAIAssistant = () => {
       if (change.mode === 'create_budget' || change.mode === 'edit_budget') {
         const budgetValues = {
           category: change.category.trim(), limit_amount: change.amount,
-          period: change.budgetPeriod!, icon: change.budgetType === 'investment' ? '📈' : '💰',
-          linked_type: change.budgetType!, linked_id: change.budgetType === 'investment' ? change.targetId! : null,
+          period: change.budgetPeriod!, icon: change.budgetType === 'investment' ? '📈' : change.budgetType === 'savings' ? '🎯' : '💰',
+          linked_type: change.budgetType!, linked_id: change.budgetType === 'expenses' ? null : change.targetId!,
           year: change.year, month: change.month, week: change.week, user_id: user.id,
         };
         if (change.mode === 'edit_budget') {
@@ -666,7 +666,7 @@ export const FloatingAIAssistant = () => {
         create_budget: 'budget', edit_budget: 'budget',
       };
       const finalSuccessText = change.mode === 'create_budget' || change.mode === 'edit_budget'
-        ? `${change.mode === 'edit_budget' ? 'Updated' : 'Created'} your ${change.budgetPeriod} ${change.budgetType === 'investment' ? 'investment' : 'expense'} budget for ${change.category} to INR ${change.amount.toLocaleString('en-IN')}.`
+        ? `${change.mode === 'edit_budget' ? 'Updated' : 'Created'} your ${change.budgetPeriod} ${change.budgetType === 'investment' ? 'investment' : change.budgetType === 'savings' ? 'savings' : 'expense'} budget for ${change.category} to INR ${change.amount.toLocaleString('en-IN')}.`
         : change.mode === 'create_income' || change.mode.startsWith('edit_')
         ? successText
         : change.mode === 'create_savings_goal'
@@ -867,7 +867,7 @@ export const FloatingAIAssistant = () => {
                   Allow AI chat and screenshot reading
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), current-month financial summaries, and up to 40 recent income and expense records to the configured Gemini API. If you attach a payment screenshot, it is sent to Gemini to read and is not stored by Xpenzy; extracted transaction details are only saved after you review and confirm them. Your chat history is saved to your Xpenzy account in Supabase. Xpenzy may also remember stable, non-sensitive preferences and facts you mention to personalize future answers; it does not train Gemini on your chats. Use the trash icon to clear these memories. Every AI-created income, expense, savings, and investment record, plus edits to income or expense records, requires your confirmation before it is saved.
+                  When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), current-month financial summaries, and up to 40 recent income and expense records to the configured Gemini API. If you attach a payment screenshot, it is sent to Gemini to read and is not stored by Xpenzy; extracted transaction details are only saved after you review and confirm them. Your chat history is saved to your Xpenzy account in Supabase. Xpenzy may also remember stable, non-sensitive preferences and facts you mention to personalize future answers; it does not train Gemini on your chats. Use the trash icon to clear these memories. Every AI-created income, expense, savings, investment, and budget record, plus edits to income or expense records, requires your confirmation before it is saved.
                 </p>
                 <Button type="button" size="sm" onClick={() => setHasAcceptedDataUse(true)}>Continue to AI</Button>
               </div>
@@ -903,7 +903,12 @@ export const FloatingAIAssistant = () => {
                     </div>
                     {pendingRecordChange.beforeBudget && (
                       <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
-                        Current budget: {pendingRecordChange.beforeBudget.budgetType} · {pendingRecordChange.beforeBudget.period} · {pendingRecordChange.beforeBudget.category} · ₹{pendingRecordChange.beforeBudget.amount.toLocaleString('en-IN')}
+                        Current budget: {pendingRecordChange.beforeBudget.budgetType === 'investment' ? 'Investment' : pendingRecordChange.beforeBudget.budgetType === 'savings' ? 'Savings' : 'Expense'} · {pendingRecordChange.beforeBudget.period} · {pendingRecordChange.beforeBudget.category} · ₹{pendingRecordChange.beforeBudget.amount.toLocaleString('en-IN')}
+                      </div>
+                    )}
+                    {['create_budget', 'edit_budget'].includes(pendingRecordChange.mode) && (
+                      <div className="rounded-md border border-primary/20 bg-primary/5 p-2 text-xs">
+                        Proposed: {pendingRecordChange.budgetType === 'investment' ? 'Investment' : pendingRecordChange.budgetType === 'savings' ? 'Savings' : 'Expense'} budget · {pendingRecordChange.category} · {pendingRecordChange.budgetPeriod} · ₹{pendingRecordChange.amount.toLocaleString('en-IN')}
                       </div>
                     )}
                     {pendingRecordChange.before && (
@@ -941,9 +946,9 @@ export const FloatingAIAssistant = () => {
                       <div className="grid grid-cols-2 gap-2">
                         <label className="space-y-1 text-xs text-muted-foreground">Budget type
                           <select value={pendingRecordChange.budgetType || 'expenses'}
-                            onChange={(event) => setPendingRecordChange((current) => current ? { ...current, budgetType: event.target.value as 'expenses' | 'investment' } : current)}
+                            onChange={(event) => setPendingRecordChange((current) => current ? { ...current, budgetType: event.target.value as 'expenses' | 'savings' | 'investment' } : current)}
                             className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground">
-                            <option value="expenses">Expense</option><option value="investment">Investment</option>
+                            <option value="expenses">Expense</option><option value="savings">Savings</option><option value="investment">Investment</option>
                           </select>
                         </label>
                         <label className="space-y-1 text-xs text-muted-foreground">Period
@@ -954,7 +959,24 @@ export const FloatingAIAssistant = () => {
                           </select>
                         </label>
                         {pendingRecordChange.budgetType === 'investment' && (
-                          <p className="col-span-2 rounded-md bg-muted/60 p-2 text-xs">Linked investment: {pendingRecordChange.category}</p>
+                          <label className="col-span-2 space-y-1 text-xs text-muted-foreground">Investment holding
+                            <select value={pendingRecordChange.targetId || ''} onChange={(event) => {
+                              const selected = financialData.investments.find((item) => item.id === event.target.value);
+                              setPendingRecordChange((current) => current && selected ? { ...current, targetId: selected.id, category: selected.name } : current);
+                            }} className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground">
+                              {financialData.investments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                            </select>
+                          </label>
+                        )}
+                        {pendingRecordChange.budgetType === 'savings' && (
+                          <label className="col-span-2 space-y-1 text-xs text-muted-foreground">Savings goal
+                            <select value={pendingRecordChange.targetId || ''} onChange={(event) => {
+                              const selected = financialData.savings.find((item) => item.id === event.target.value);
+                              setPendingRecordChange((current) => current && selected ? { ...current, targetId: selected.id, category: selected.name } : current);
+                            }} className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground">
+                              {financialData.savings.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                            </select>
+                          </label>
                         )}
                       </div>
                     )}
