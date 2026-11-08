@@ -192,7 +192,7 @@ serve(async (req) => {
         expenseCount: (expenseRes.data || []).length,
         savings: (savingsRes.data || []).map((s: any) => ({ id: s.id, name: s.name, target: s.target, current: s.current, status: s.status })),
         investments: (investmentRes.data || []).map((i: any) => ({ id: i.id, name: i.name, type: i.type, invested: i.invested, current: i.current })),
-        budgets: (budgetRes.data || []).map((b: any) => ({ category: b.category, limit: b.limit_amount, current: b.current, period: b.period })),
+        budgets: (budgetRes.data || []).map((b: any) => ({ id: b.id, category: b.category, limit: b.limit_amount, current: b.current, period: b.period, type: b.linked_type || "expenses", linkedId: b.linked_id, year: b.year, month: b.month, week: b.week })),
         expenses: (expenseRes.data || []).map((e: any) => ({ amount: e.amount, category: e.category, date: e.date, notes: e.notes })),
       };
     };
@@ -342,7 +342,7 @@ Always answer in ${supportedInsightLanguages[insightLanguage]}. Keep explanation
 Be concise, friendly, and use ₹ for currency. Use bullet points when listing items.
 Today's date in the user's local timezone is ${finData.todayLabel} (${finData.today}, timezone ${safeTimeZone}). Treat this as the authoritative current date when answering date questions or interpreting "today", "yesterday", and relative dates. You have access to this date even though you do not have access to the user's full device calendar.
 You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
-You can create or update a budget only when the user explicitly asks. Use create_expense_budget and set budgetType to expenses by default, or investment when the user names an investment holding. For investment budgets, use the unique matching investment ID from the user's data; ask which holding if the name is ambiguous or missing. Never claim a budget was created or updated unless the tool succeeds. For hypothetical questions or suggestions, do not call the tool.
+You can create or update a budget only when the user explicitly asks. Use create_expense_budget and set budgetType to expenses by default, or investment when the user names an investment holding. For investment budgets, use the unique matching investment ID from the user's data; ask which holding if the name is ambiguous or missing. When changing an existing budget's type, preserve its amount and period unless the user asks to change those too. Always prepare a review proposal; never write a budget directly or claim it was updated before user confirmation.
 You can record an expense only when the user explicitly asks to add, log, or record one and provides a clear amount and category. Use the create_expense tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. Every new expense must be reviewed and confirmed by the user in the app before saving, even when all details were specified. Never claim an expense was recorded before confirmation. Do not record hypothetical expenses or merely discuss a past expense as a new record.
 You can record income only when the user explicitly asks to add, log, or record it and provides a clear amount and category. Use the create_income tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. If the category is Custom, require a clear custom category. Every new income entry must be reviewed and confirmed by the user in the app before saving. Never claim income was recorded before confirmation. Do not record hypothetical income or merely discuss past income as a new record.
 For every new income, expense, savings goal, savings deposit, investment holding, or investment contribution, prepare a review card with its matching tool; never write it directly. The user must press Confirm and save before any record is inserted. Preserve the exact amount the user stated; do not round, adjust, or infer it. If the request is unclear, ask instead of preparing a record.
@@ -763,7 +763,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         type: "function",
         function: {
           name: "create_expense_budget",
-          description: "Create or update an expense or investment budget only when the user explicitly requests it. Investment budgets must link to the matching existing investment holding ID.",
+          description: "Prepare a new budget or a change to an existing budget for user review. Investment budgets must link to the matching existing investment holding ID. The app saves only after the user confirms.",
           parameters: {
             type: "object",
             properties: {
@@ -1047,8 +1047,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         const investmentId = typeof args.investmentId === "string" ? args.investmentId : "";
         if (!category || category.length > 100 || !Number.isFinite(amount) || amount <= 0
           || !["weekly", "monthly", "yearly"].includes(budgetPeriod)
-          || !["expenses", "investment"].includes(budgetType)
-          || (budgetType === "investment" && !investmentId)) {
+          || !["expenses", "investment"].includes(budgetType)) {
           throw new Error("The requested budget needs a valid category, positive amount, and weekly, monthly, or yearly period.");
         }
 
@@ -1093,7 +1092,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
 
         let existingBudgetQuery = supabase
           .from("budget_categories")
-          .select("id")
+          .select("*")
           .eq("user_id", userId)
           .eq("category", category)
           .eq("period", budgetPeriod)
@@ -1113,7 +1112,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
 
         // Upgrade a same-name AI-created expense budget to an investment budget instead of leaving a duplicate.
         if (!existingBudget && budgetType === "investment") {
-          let misTypedBudgetQuery = supabase.from("budget_categories").select("id")
+          let misTypedBudgetQuery = supabase.from("budget_categories").select("*")
             .eq("user_id", userId).eq("category", category).eq("period", budgetPeriod)
             .eq("linked_type", "expenses").eq("year", year);
           if (budgetPeriod === "monthly" || budgetPeriod === "weekly") misTypedBudgetQuery = misTypedBudgetQuery.eq("month", month);
@@ -1122,16 +1121,29 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           if (misTypedResult.error) throw misTypedResult.error;
           existingBudget = misTypedResult.data;
         }
-
-        const saveResult = existingBudget
-          ? await supabase.from("budget_categories").update(budgetValues).eq("id", existingBudget.id).eq("user_id", userId).select("id").single()
-          : await supabase.from("budget_categories").insert(budgetValues).select("id").single();
-        if (saveResult.error) throw saveResult.error;
-
-        const periodLabel = budgetPeriod.charAt(0).toUpperCase() + budgetPeriod.slice(1);
-        const verb = existingBudget ? "Updated" : "Created";
-        const savedMessage = chatConfirmations[insightLanguage].budget(verb, periodLabel.toLowerCase(), category, amount.toLocaleString("en-IN"), budgetType);
-        return chatReply(savedMessage, { budgetChanged: true });
+        return chatReply(existingBudget
+          ? `Review the proposed budget change for ${category}. It will not be updated until you confirm.`
+          : `Review the proposed ${budgetType === "investment" ? "investment" : "expense"} budget for ${category}. It will not be saved until you confirm.`, {}, {
+          mode: existingBudget ? "edit_budget" : "create_budget",
+          id: existingBudget?.id,
+          beforeBudget: existingBudget ? {
+            category: existingBudget.category,
+            amount: Number(existingBudget.limit_amount),
+            period: existingBudget.period,
+            budgetType: existingBudget.linked_type || "expenses",
+          } : undefined,
+          amount,
+          category,
+          budgetType,
+          budgetPeriod,
+          targetId: linkedInvestmentId || undefined,
+          year,
+          month: budgetPeriod === "weekly" || budgetPeriod === "monthly" ? month : undefined,
+          week: budgetPeriod === "weekly" ? week : undefined,
+          paymentMode: "UPI",
+          date: finData.today,
+          notes: "",
+        });
       }
 
       if (toolCall?.function?.name === "create_expense") {

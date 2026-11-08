@@ -64,7 +64,7 @@ interface TransactionDraft {
 }
 
 interface PendingRecordChange {
-  mode: 'create_income' | 'create_expense' | 'edit_income' | 'edit_expense' | 'create_savings_goal' | 'create_savings_contribution' | 'create_investment_holding' | 'create_investment_contribution';
+  mode: 'create_income' | 'create_expense' | 'edit_income' | 'edit_expense' | 'create_savings_goal' | 'create_savings_contribution' | 'create_investment_holding' | 'create_investment_contribution' | 'create_budget' | 'edit_budget';
   id?: string;
   before?: { amount: number; category: string; date: string; paymentMode: string; notes: string };
   amount: number;
@@ -79,6 +79,12 @@ interface PendingRecordChange {
   targetName?: string;
   investmentType?: string;
   customType?: string;
+  beforeBudget?: { category: string; amount: number; period: string; budgetType: string };
+  budgetType?: 'expenses' | 'investment';
+  budgetPeriod?: 'weekly' | 'monthly' | 'yearly';
+  year?: number;
+  month?: number;
+  week?: number;
 }
 
 interface Message {
@@ -510,7 +516,7 @@ export const FloatingAIAssistant = () => {
   const confirmPendingRecordChange = async () => {
     if (!pendingRecordChange || !user || isLoading) return;
     const change = pendingRecordChange;
-    const supportedModes: PendingRecordChange['mode'][] = ['create_income', 'create_expense', 'edit_income', 'edit_expense', 'create_savings_goal', 'create_savings_contribution', 'create_investment_holding', 'create_investment_contribution'];
+    const supportedModes: PendingRecordChange['mode'][] = ['create_income', 'create_expense', 'edit_income', 'edit_expense', 'create_savings_goal', 'create_savings_contribution', 'create_investment_holding', 'create_investment_contribution', 'create_budget', 'edit_budget'];
     if (!supportedModes.includes(change.mode)) {
       toast.error('This change request is invalid. No record was changed.');
       setPendingRecordChange(null);
@@ -543,10 +549,37 @@ export const FloatingAIAssistant = () => {
       toast.error('Review the investment name, type, date, and notes before confirming.');
       return;
     }
+    if (['create_budget', 'edit_budget'].includes(change.mode)
+      && (!Number.isFinite(change.amount) || change.amount <= 0 || change.amount > 1_000_000_000
+        || !change.category.trim() || change.category.length > 100
+        || !['expenses', 'investment'].includes(change.budgetType || '')
+        || !['weekly', 'monthly', 'yearly'].includes(change.budgetPeriod || '')
+        || (change.budgetType === 'investment' && !change.targetId)
+        || (change.mode === 'edit_budget' && !change.id))) {
+      toast.error('Review the budget type, linked investment, period, category, and amount before confirming.');
+      return;
+    }
 
     setIsLoading(true);
     try {
-      if (change.mode === 'create_income') {
+      if (change.mode === 'create_budget' || change.mode === 'edit_budget') {
+        const budgetValues = {
+          category: change.category.trim(), limit_amount: change.amount,
+          period: change.budgetPeriod!, icon: change.budgetType === 'investment' ? '📈' : '💰',
+          linked_type: change.budgetType!, linked_id: change.budgetType === 'investment' ? change.targetId! : null,
+          year: change.year, month: change.month, week: change.week, user_id: user.id,
+        };
+        if (change.mode === 'edit_budget') {
+          const { data, error } = await supabase.from('budget_categories').update(budgetValues)
+            .eq('id', change.id!).eq('user_id', user.id).select('id').maybeSingle();
+          if (error) throw error;
+          if (!data) throw new Error('That budget is no longer available. No changes were saved.');
+        } else {
+          const { error } = await supabase.from('budget_categories').insert(budgetValues);
+          if (error) throw error;
+        }
+        await refreshBudgets();
+      } else if (change.mode === 'create_income') {
         const category = change.category.trim();
         const { error } = await supabase.from('income_entries').insert({
           amount: change.amount,
@@ -630,8 +663,11 @@ export const FloatingAIAssistant = () => {
         create_income: 'income', create_expense: 'expense', edit_income: 'income', edit_expense: 'expense',
         create_savings_goal: 'savings goal', create_savings_contribution: 'savings deposit',
         create_investment_holding: 'investment holding', create_investment_contribution: 'investment contribution',
+        create_budget: 'budget', edit_budget: 'budget',
       };
-      const finalSuccessText = change.mode === 'create_income' || change.mode.startsWith('edit_')
+      const finalSuccessText = change.mode === 'create_budget' || change.mode === 'edit_budget'
+        ? `${change.mode === 'edit_budget' ? 'Updated' : 'Created'} your ${change.budgetPeriod} ${change.budgetType === 'investment' ? 'investment' : 'expense'} budget for ${change.category} to INR ${change.amount.toLocaleString('en-IN')}.`
+        : change.mode === 'create_income' || change.mode.startsWith('edit_')
         ? successText
         : change.mode === 'create_savings_goal'
           ? `Created the ${change.name} savings goal with a target of INR ${Number(change.target).toLocaleString('en-IN')}.`
@@ -858,11 +894,18 @@ export const FloatingAIAssistant = () => {
                     <div>
                       <h3 className="text-sm font-semibold">Review before saving</h3>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {pendingRecordChange.mode.startsWith('edit_')
+                        {pendingRecordChange.mode === 'edit_budget'
+                          ? 'Proposed budget update. Nothing will change until you confirm.'
+                          : pendingRecordChange.mode.startsWith('edit_')
                           ? `Proposed ${pendingRecordChange.mode === 'edit_income' ? 'income' : 'expense'} edit. Nothing will change until you confirm.`
                           : `Review this ${pendingRecordChange.mode.replaceAll('_', ' ')}. Nothing will be saved until you confirm.`}
                       </p>
                     </div>
+                    {pendingRecordChange.beforeBudget && (
+                      <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
+                        Current budget: {pendingRecordChange.beforeBudget.budgetType} · {pendingRecordChange.beforeBudget.period} · {pendingRecordChange.beforeBudget.category} · ₹{pendingRecordChange.beforeBudget.amount.toLocaleString('en-IN')}
+                      </div>
+                    )}
                     {pendingRecordChange.before && (
                       <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
                         Current: ₹{pendingRecordChange.before.amount.toLocaleString('en-IN')} · {pendingRecordChange.before.category} · {pendingRecordChange.before.date}
@@ -871,26 +914,50 @@ export const FloatingAIAssistant = () => {
                     <div className="grid grid-cols-2 gap-2">
                       {pendingRecordChange.mode !== 'create_investment_holding' && (
                       <label className="space-y-1 text-xs text-muted-foreground">
-                        Amount (₹)
+                        {['create_budget', 'edit_budget'].includes(pendingRecordChange.mode) ? 'Budget limit (₹)' : 'Amount (₹)'}
                         <Input type="number" min="0.01" max="1000000000" step="0.01" value={pendingRecordChange.amount}
                           onChange={(event) => setPendingRecordChange((current) => current ? { ...current, amount: Number(event.target.value), ...(current.mode === 'create_savings_goal' ? { target: Number(event.target.value) } : {}) } : current)} className="h-9" />
                       </label>
                       )}
+                      {!['create_budget', 'edit_budget'].includes(pendingRecordChange.mode) && (
                       <label className="space-y-1 text-xs text-muted-foreground">
                         Date
                         <Input type="date" value={pendingRecordChange.date}
                           onChange={(event) => setPendingRecordChange((current) => current ? { ...current, date: event.target.value } : current)} className="h-9" />
                       </label>
+                      )}
                     </div>
                     <label className="block space-y-1 text-xs text-muted-foreground">
                       {pendingRecordChange.mode === 'create_savings_goal' ? 'Goal name' : pendingRecordChange.mode === 'create_investment_holding' ? 'Investment name' : 'Category'}
                       <Input value={pendingRecordChange.category} maxLength={100}
+                        disabled={['create_budget', 'edit_budget'].includes(pendingRecordChange.mode)}
                         onChange={(event) => setPendingRecordChange((current) => current ? {
                           ...current,
                           category: event.target.value,
                           ...(current.mode === 'create_savings_goal' || current.mode === 'create_investment_holding' ? { name: event.target.value } : {}),
                         } : current)} className="h-9" />
                     </label>
+                    {['create_budget', 'edit_budget'].includes(pendingRecordChange.mode) && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="space-y-1 text-xs text-muted-foreground">Budget type
+                          <select value={pendingRecordChange.budgetType || 'expenses'}
+                            onChange={(event) => setPendingRecordChange((current) => current ? { ...current, budgetType: event.target.value as 'expenses' | 'investment' } : current)}
+                            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground">
+                            <option value="expenses">Expense</option><option value="investment">Investment</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1 text-xs text-muted-foreground">Period
+                          <select value={pendingRecordChange.budgetPeriod || 'monthly'}
+                            onChange={(event) => setPendingRecordChange((current) => current ? { ...current, budgetPeriod: event.target.value as 'weekly' | 'monthly' | 'yearly' } : current)}
+                            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground">
+                            <option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+                          </select>
+                        </label>
+                        {pendingRecordChange.budgetType === 'investment' && (
+                          <p className="col-span-2 rounded-md bg-muted/60 p-2 text-xs">Linked investment: {pendingRecordChange.category}</p>
+                        )}
+                      </div>
+                    )}
                     {['create_savings_contribution', 'create_investment_contribution'].includes(pendingRecordChange.mode) && (
                       <p className="rounded-md bg-muted/60 p-2 text-xs">To: {pendingRecordChange.targetName}</p>
                     )}
@@ -926,11 +993,13 @@ export const FloatingAIAssistant = () => {
                         </select>
                       </label>
                       )}
+                      {!['create_budget', 'edit_budget'].includes(pendingRecordChange.mode) && (
                       <label className="space-y-1 text-xs text-muted-foreground">
                         Notes
                         <Input value={pendingRecordChange.notes} maxLength={500}
                           onChange={(event) => setPendingRecordChange((current) => current ? { ...current, notes: event.target.value } : current)} className="h-9" />
                       </label>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Button type="button" variant="outline" className="flex-1" onClick={() => { void cancelPendingRecordChange(); }} disabled={isLoading}>Cancel</Button>
