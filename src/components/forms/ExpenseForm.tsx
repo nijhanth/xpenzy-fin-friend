@@ -176,6 +176,17 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
   }, [activeGoals, watchedCategory, watchedCustomCategory, watchedNotes, watchedGoalId]);
 
   const onSubmit = async (formData: ExpenseFormData) => {
+    if (formData.goalId) {
+      const linkedGoal = data.savings.find(goal => goal.id === formData.goalId);
+      const previousExpense = editingId ? data.expenses.find(expense => expense.id === editingId) : undefined;
+      const availableFromGoal = linkedGoal
+        ? Math.max(0, Number(linkedGoal.current || 0) - Number(linkedGoal.used_amount || 0) + (previousExpense?.goalId === formData.goalId ? Number(previousExpense.amount || 0) : 0))
+        : 0;
+      if (formData.amount > availableFromGoal) {
+        form.setError('amount', { message: `This goal has only ₹${availableFromGoal.toLocaleString()} available.` });
+        return;
+      }
+    }
     const expenseData = {
       amount: formData.amount,
       date: formData.date,

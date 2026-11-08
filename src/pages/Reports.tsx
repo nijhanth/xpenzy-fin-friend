@@ -10,6 +10,7 @@ import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, Resp
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, subDays } from 'date-fns';
+import { formatDisplayDate } from '@/lib/dateFormat';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -256,7 +257,7 @@ export const Reports = () => {
 
   // Export function
   const exportData = (exportFormat: 'csv' | 'json' | 'pdf') => {
-    const periodString = `${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`;
+    const periodString = `${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
     const reportData = {
       period: periodString,
       summary: totals,
@@ -276,7 +277,7 @@ export const Reports = () => {
       a.download = `xpenzy-report-${format(startDate, 'yyyy-MM-dd')}.json`;
       a.click();
     } else if (exportFormat === 'csv') {
-      const periodRow = `Period: ${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`;
+      const periodRow = `Period: ${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
       const csvRows = [
         ['Xpenzy Financial Report'],
         [periodRow],
@@ -368,7 +369,7 @@ export const Reports = () => {
           startY: finalY + 20,
           head: [['Date', 'Category', 'Payment Mode', 'Amount (₹)']],
           body: topExpenses.map(expense => [
-            format(new Date(expense.date), 'MMM dd, yyyy'),
+            formatDisplayDate(expense.date),
             expense.category,
             expense.paymentMode,
             expense.amount.toLocaleString(),
@@ -395,7 +396,7 @@ export const Reports = () => {
           </h1>
           <p className="text-muted-foreground mt-2 flex items-center gap-2">
             <CalendarIcon className="w-4 h-4" />
-            {format(startDate, 'MMM dd, yyyy')} - {format(endDate, 'MMM dd, yyyy')}
+            {formatDisplayDate(startDate)} - {formatDisplayDate(endDate)}
           </p>
         </div>
       </div>
@@ -843,7 +844,7 @@ export const Reports = () => {
                               <div className="w-6 h-6 rounded-full bg-expense/10 flex items-center justify-center text-xs font-bold text-expense">
                                 {index + 1}
                               </div>
-                              {format(new Date(expense.date), 'MMM dd, yyyy')}
+                              {formatDisplayDate(expense.date)}
                             </div>
                           </TableCell>
                           <TableCell>

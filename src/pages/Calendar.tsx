@@ -5,6 +5,7 @@ import { Calendar as CalendarIcon, TrendingDown, TrendingUp, IndianRupee, Chevro
 import { useState, useMemo } from 'react';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay, startOfWeek, endOfWeek } from 'date-fns';
+import { formatDisplayDate } from '@/lib/dateFormat';
 
 export const Calendar = () => {
   const { data } = useFinancial();
@@ -259,7 +260,7 @@ export const Calendar = () => {
       <Card>
         <CardHeader>
           <CardTitle>
-            {format(selectedDate, 'EEEE, MMMM d, yyyy')} Transactions
+            {formatDisplayDate(selectedDate)} Transactions
           </CardTitle>
         </CardHeader>
         <CardContent>

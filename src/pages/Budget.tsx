@@ -16,6 +16,7 @@ import { BudgetCategory } from '@/types/financial';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { AIInsightsCard } from '@/components/ai/AIInsights';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, getWeeksInMonth, getYear, getMonth } from 'date-fns';
+import { formatDisplayDate } from '@/lib/dateFormat';
 
 export const Budget = () => {
   const { toast } = useToast();
@@ -465,7 +466,7 @@ export const Budget = () => {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{expense.category}</p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                        <span>{format(new Date(expense.date), 'dd MMM yyyy')}</span>
+                        <span>{formatDisplayDate(expense.date)}</span>
                         {expense.subcategory && (
                           <>
                             <span>•</span>

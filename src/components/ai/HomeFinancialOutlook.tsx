@@ -108,7 +108,7 @@ export const HomeFinancialOutlook = ({ isFinancialLoading = false }: { isFinanci
     const monthTotals = months.map(month => ({
       income: sumMonth(data.income, month),
       expenses: sumMonth(data.expenses, month),
-      savings: sumMonth(data.savingsTransactions, month),
+      savings: sumMonth(data.savingsTransactions.filter(entry => !entry.notes?.startsWith('Existing balance adjustment:') && !entry.notes?.startsWith('Existing balance allocation:')), month),
       investments: data.investmentTransactions.filter(entry => entry.date?.startsWith(month) && Number(entry.amount || 0) > 0 && !entry.notes?.startsWith('Statement snapshot:'))
         .reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
     }));

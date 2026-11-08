@@ -64,6 +64,7 @@ import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, startOfYear, endOfYear, isWithinInterval, parseISO } from 'date-fns';
+import { formatCompactDisplayDate, formatDisplayDate } from '@/lib/dateFormat';
 
 export const Expenses = () => {
   const { data, isLoading: isFinancialLoading } = useFinancial();
@@ -399,11 +400,7 @@ export const Expenses = () => {
                   <SelectItem value="all">All dates</SelectItem>
                   {availableDates.map(date => (
                     <SelectItem key={date} value={date}>
-                      {new Date(date).toLocaleDateString('en-US', { 
-                        year: 'numeric', 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
+                      {formatDisplayDate(date)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -660,7 +657,7 @@ export const Expenses = () => {
                   <div className="shrink-0 text-right">
                     <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                       <Calendar className="w-3 h-3" />
-                      {new Date(entry.date).toLocaleDateString()}
+                      {formatDisplayDate(entry.date)}
                     </div>
                     <EditDeleteMenu
                       onEdit={() => handleEdit(entry.id)}

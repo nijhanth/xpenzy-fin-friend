@@ -17,13 +17,36 @@ import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
 import { readFirstWorksheet } from '@/lib/xlsxReader';
 import type { InvestmentEntry, InvestmentTransaction } from '@/types/financial';
+import { formatDisplayDate } from '@/lib/dateFormat';
 
-type ImportedMutualFund = { name: string; units: number; invested: number; current: number; type: 'Mutual Fund' | 'Stocks' };
+type ImportedMutualFund = { name: string; units: number; invested: number; current: number; monthlyContribution: number; type: 'Mutual Fund' | 'Stocks' };
 type ImportedSummary = { holdings: ImportedMutualFund[]; asOfDate: string; summaryInvested: number; summaryCurrent: number; source: 'Groww' | 'Angel One' };
 type FundSnapshot = { date: string; invested: number; current: number; units: number; transaction?: InvestmentTransaction };
 
 const statementSnapshotPrefix = 'Statement snapshot:';
+const statementContributionNotes = (date: string) => `Statement contribution: actual contribution for ${date}`;
 const isStatementImportedInvestment = (notes?: string) => notes?.startsWith('Imported from mutual fund statement') || notes?.startsWith('Imported from Angel One statement');
+const estimateUnrecordedContribution = (
+  investmentId: string | undefined,
+  statementDate: string,
+  invested: number,
+  transactions: InvestmentTransaction[],
+  baseInvested: number,
+) => {
+  if (!investmentId) return 0;
+  const investmentTransactions = transactions.filter(transaction => transaction.investment_id === investmentId);
+  const previousSnapshot = investmentTransactions
+    .filter(transaction => transaction.notes?.startsWith(statementSnapshotPrefix) && transaction.date < statementDate)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  if (!previousSnapshot) return 0;
+
+  const previousInvested = readStatementSnapshot(previousSnapshot, baseInvested).invested;
+  const alreadyRecorded = investmentTransactions
+    .filter(transaction => transaction.date > previousSnapshot.date && transaction.date <= statementDate
+      && !transaction.notes?.startsWith(statementSnapshotPrefix))
+    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  return Math.max(0, invested - previousInvested - alreadyRecorded);
+};
 const redeemedDateFromNotes = (notes?: string) => notes?.match(/REDEEMED:\s*(\d{4}-\d{2}-\d{2})/)?.[1];
 const realizedProfitLossFromNotes = (notes?: string) => {
   const value = notes?.match(/realized=(-?\d+(?:\.\d+)?)/)?.[1];
@@ -67,7 +90,7 @@ function parseMutualFundSummary(rows: string[][]) {
     const invested = toAmount(row[investedColumn]);
     const current = toAmount(row[currentColumn]);
     if (![units, invested, current].every(Number.isFinite)) continue;
-    const currentHolding = holdings.get(name) || { name, units: 0, invested: 0, current: 0, type: 'Mutual Fund' as const };
+    const currentHolding = holdings.get(name) || { name, units: 0, invested: 0, current: 0, monthlyContribution: 0, type: 'Mutual Fund' as const };
     currentHolding.units += units;
     currentHolding.invested += invested;
     currentHolding.current += current;
@@ -118,7 +141,7 @@ function parseAngelOneSummary(rows: string[][]) {
     const invested = headers[investedColumn] === 'averageprice' || headers[investedColumn] === 'avgprice' || headers[investedColumn] === 'buyprice' ? units * rawInvested : rawInvested;
     const current = headers[currentColumn] === 'ltp' ? units * rawCurrent : rawCurrent;
     if (![units, invested, current].every(Number.isFinite) || units <= 0) continue;
-    const holding = holdings.get(name) || { name, units: 0, invested: 0, current: 0, type: isMutualFundReport ? 'Mutual Fund' as const : 'Stocks' as const };
+    const holding = holdings.get(name) || { name, units: 0, invested: 0, current: 0, monthlyContribution: 0, type: isMutualFundReport ? 'Mutual Fund' as const : 'Stocks' as const };
     holding.units += units;
     holding.invested += invested;
     holding.current += current;
@@ -477,7 +500,23 @@ export const Investments = () => {
     try {
       if (!file.name.toLowerCase().endsWith('.xlsx')) throw new Error('Choose an Excel .xlsx statement file.');
       const rows = await readFirstWorksheet(file);
-      setImportPreview(statementSource === 'Groww' ? parseMutualFundSummary(rows) : parseAngelOneSummary(rows));
+      const parsed = statementSource === 'Groww' ? parseMutualFundSummary(rows) : parseAngelOneSummary(rows);
+      setImportPreview({
+        ...parsed,
+        holdings: parsed.holdings.map(holding => {
+          const investment = data.investments.find(item => item.type === holding.type && item.name.trim().toLowerCase() === holding.name.toLowerCase());
+          const existingContribution = data.investmentTransactions.find(transaction =>
+            transaction.investment_id === investment?.id && transaction.notes === statementContributionNotes(parsed.asOfDate));
+          const estimatedContribution = estimateUnrecordedContribution(
+            investment?.id,
+            parsed.asOfDate,
+            holding.invested,
+            data.investmentTransactions,
+            Number(investment?.initial_invested || 0),
+          );
+          return { ...holding, monthlyContribution: Number(existingContribution?.amount ?? estimatedContribution) };
+        }),
+      });
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Could not read this statement.');
     }
@@ -487,18 +526,45 @@ export const Investments = () => {
     if (!importPreview) return;
     setIsImporting(true);
     let importedCount = 0;
+    let contributionCount = 0;
     try {
+      if (importPreview.holdings.some(holding => !Number.isFinite(holding.monthlyContribution)
+        || holding.monthlyContribution < 0 || holding.monthlyContribution > 1_000_000_000)) {
+        throw new Error('Each actual monthly contribution must be between ₹0 and ₹1,000,000,000.');
+      }
       const reportNames = new Set(importPreview.holdings.map(holding => holding.name.trim().toLowerCase()));
       const importedTypes = new Set(importPreview.holdings.map(holding => holding.type));
       const omittedImportedFunds = data.investments
         .filter(item => importedTypes.has(item.type as 'Mutual Fund' | 'Stocks') && isStatementImportedInvestment(item.notes) && !reportNames.has(item.name.trim().toLowerCase()))
-        .map(item => ({ name: item.name, units: 0, invested: 0, current: 0, type: item.type as 'Mutual Fund' | 'Stocks' }));
+        .map(item => ({ name: item.name, units: 0, invested: 0, current: 0, monthlyContribution: 0, type: item.type as 'Mutual Fund' | 'Stocks' }));
       const statementHoldings = [...importPreview.holdings, ...omittedImportedFunds];
 
       for (const holding of statementHoldings) {
         const existing = data.investments.find(item => item.type === holding.type && item.name.trim().toLowerCase() === holding.name.toLowerCase());
         const importedByStatement = isStatementImportedInvestment(existing?.notes);
-        if (existing && !importedByStatement) continue;
+        if (existing && !importedByStatement) {
+          const contributionNotes = statementContributionNotes(importPreview.asOfDate);
+          const existingContribution = data.investmentTransactions.find(transaction =>
+            transaction.investment_id === existing.id && transaction.notes === contributionNotes);
+          if (existingContribution) {
+            await updateInvestmentTransaction(existingContribution.id, {
+              amount: holding.monthlyContribution,
+              date: importPreview.asOfDate,
+              profit_loss: 0,
+              notes: contributionNotes,
+            }, false);
+          } else if (holding.monthlyContribution > 0) {
+            await addInvestmentTransaction({
+              investment_id: existing.id,
+              amount: holding.monthlyContribution,
+              date: importPreview.asOfDate,
+              profit_loss: 0,
+              notes: contributionNotes,
+            }, false);
+          }
+          if (holding.monthlyContribution > 0) contributionCount += 1;
+          continue;
+        }
 
         let investment = existing;
         if (!investment) {
@@ -517,6 +583,9 @@ export const Investments = () => {
 
         const oldSnapshotTransactions = data.investmentTransactions
           .filter(transaction => transaction.investment_id === investment.id && transaction.notes?.startsWith(statementSnapshotPrefix));
+        const contributionNotes = statementContributionNotes(importPreview.asOfDate);
+        const existingContribution = data.investmentTransactions.find(transaction =>
+          transaction.investment_id === investment.id && transaction.notes === contributionNotes);
         const snapshotsByDate = new Map<string, FundSnapshot>();
         oldSnapshotTransactions.forEach(transaction => snapshotsByDate.set(
           transaction.date,
@@ -534,7 +603,20 @@ export const Investments = () => {
           ? `\nREDEEMED: ${latestSnapshot.date}`
           : '';
         const manualTransactions = data.investmentTransactions.filter(transaction =>
-          transaction.investment_id === investment.id && !transaction.notes?.startsWith(statementSnapshotPrefix));
+          transaction.investment_id === investment.id
+          && !transaction.notes?.startsWith(statementSnapshotPrefix)
+          && transaction.id !== existingContribution?.id);
+        if (holding.monthlyContribution > 0 || existingContribution) {
+          manualTransactions.push({
+            ...(existingContribution || {}),
+            id: existingContribution?.id || `pending-${investment.id}-${importPreview.asOfDate}`,
+            investment_id: investment.id,
+            amount: holding.monthlyContribution,
+            date: importPreview.asOfDate,
+            profit_loss: 0,
+            notes: contributionNotes,
+          });
+        }
         const manualBeforeFirst = manualTransactions.filter(transaction => transaction.date <= snapshots[0].date);
         const initialBasis = snapshots[0].invested - manualBeforeFirst.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
 
@@ -571,13 +653,35 @@ export const Investments = () => {
             await addInvestmentTransaction(transactionData, false);
           }
         }
+        if (existingContribution) {
+          await updateInvestmentTransaction(existingContribution.id, {
+            amount: holding.monthlyContribution,
+            date: importPreview.asOfDate,
+            profit_loss: 0,
+            notes: contributionNotes,
+          }, false);
+        } else if (holding.monthlyContribution > 0) {
+          await addInvestmentTransaction({
+            investment_id: investment.id,
+            amount: holding.monthlyContribution,
+            date: importPreview.asOfDate,
+            profit_loss: 0,
+            notes: contributionNotes,
+          }, false);
+        }
+        if (holding.monthlyContribution > 0) contributionCount += 1;
         importedCount += 1;
       }
+      const monthLabel = new Date(`${importPreview.asOfDate}T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      const contributionLabel = `${contributionCount} actual monthly contribution${contributionCount === 1 ? '' : 's'}`;
+      const toastDescription = importedCount
+        ? `Updated ${importedCount} fund${importedCount === 1 ? '' : 's'} with the ${monthLabel} snapshot and recorded ${contributionLabel}. ${omittedImportedFunds.length} previously imported fund${omittedImportedFunds.length === 1 ? ' was' : 's were'} recorded as fully redeemed because they were absent from this summary.`
+        : contributionCount
+          ? `Recorded ${contributionLabel}; existing non-imported holdings were not changed.`
+          : 'Existing funds are updated when they were originally imported from a mutual fund statement.';
       toast({
-        title: importedCount ? 'Statement history updated' : 'No matching funds to update',
-        description: importedCount
-          ? `Updated ${importedCount} fund${importedCount === 1 ? '' : 's'} with the ${new Date(`${importPreview.asOfDate}T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} snapshot. Monthly invested changes and profit/loss were recalculated; ${omittedImportedFunds.length} previously imported fund${omittedImportedFunds.length === 1 ? ' was' : 's were'} recorded as fully redeemed because they were absent from this summary.`
-          : 'Existing funds are updated when they were originally imported from a mutual fund statement.',
+        title: importedCount || contributionCount ? 'Statement history updated' : 'No matching funds to update',
+        description: toastDescription,
       });
       setImportDialogOpen(false);
       setImportPreview(null);
@@ -708,14 +812,30 @@ export const Investments = () => {
                     const existing = data.investments.find(item => item.type === holding.type && item.name.trim().toLowerCase() === holding.name.toLowerCase());
                     const importStatus = isStatementImportedInvestment(existing?.notes)
                       ? 'History will update for this statement date'
-                      : existing ? 'Already exists and will be skipped' : '';
-                    return <div key={holding.name} className="flex flex-col justify-between gap-1 border-b pb-2 last:border-0 last:pb-0 sm:flex-row sm:items-center">
-                      <div className="min-w-0"><p className="truncate text-sm font-medium">{holding.name}</p><p className="text-xs text-muted-foreground">{holding.units.toFixed(3)} units{importStatus ? ` · ${importStatus}` : ''}</p></div>
-                      <p className="shrink-0 text-sm">{formatCurrency(holding.current)} <span className="text-xs text-muted-foreground">current</span></p>
+                      : existing ? 'Portfolio history will be skipped' : '';
+                    return <div key={holding.name} className="grid gap-2 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{holding.name}</p>
+                        <p className="text-xs text-muted-foreground">{holding.units.toFixed(3)} units · {formatCurrency(holding.current)} current{importStatus ? ` · ${importStatus}` : ''}</p>
+                      </div>
+                      <label className="space-y-1 text-xs text-muted-foreground">
+                        Actual contribution on {importPreview.asOfDate} (₹)
+                        <Input type="number" min="0" max="1000000000" step="0.01" value={holding.monthlyContribution}
+                          onChange={event => {
+                            const monthlyContribution = event.target.value === '' ? 0 : Number(event.target.value);
+                            setImportPreview(current => current ? {
+                              ...current,
+                              holdings: current.holdings.map(item => item.name === holding.name && item.type === holding.type
+                                ? { ...item, monthlyContribution }
+                                : item),
+                            } : current);
+                          }}
+                          className="h-8 w-full sm:w-44" />
+                      </label>
                     </div>;
                   })}
                 </div>
-                <p className="text-xs text-muted-foreground">This imports the statement’s current invested and market values as a dated starting snapshot. It does not create past monthly performance history.</p>
+                <p className="text-xs text-muted-foreground">The amount is suggested from the increase in invested value since the previous statement, excluding contributions already recorded. Check it against your SIP/payment and edit if needed. Use ₹0 if the SIP is pending; do not enter an amount already recorded with Monthly Update.</p>
                 <p className="text-xs text-muted-foreground">This is treated as a complete portfolio summary. Previously imported funds absent from a later statement will be recorded as redeemed.</p>
               </>
             )}
@@ -813,7 +933,7 @@ export const Investments = () => {
                   <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/50 p-3">
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{investment?.name || 'Investment'}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(transaction.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}{transaction.notes ? ` · ${transaction.notes}` : ''}</p>
+                      <p className="text-xs text-muted-foreground">{formatDisplayDate(transaction.date)}{transaction.notes ? ` · ${transaction.notes}` : ''}</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <div className="text-right text-xs">
@@ -1094,7 +1214,7 @@ export const Investments = () => {
                     <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <Calendar className="w-3 h-3" />
-                        Started: {new Date(investment.date).toLocaleDateString()}
+                        Started: {formatDisplayDate(investment.date)}
                       </div>
                     </div>
 
@@ -1113,7 +1233,7 @@ export const Investments = () => {
                                 <div key={transaction.id} className="flex items-center justify-between text-xs p-2 bg-secondary/30 rounded">
                                   <div className="flex-1">
                                     <span className="font-medium">{transaction.notes?.startsWith('Manual redemption:') ? 'Redemption' : transaction.notes?.startsWith(statementSnapshotPrefix) ? 'Statement snapshot' : 'Monthly update'}</span>
-                                    <p className="text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</p>
+                                    <p className="text-muted-foreground">{formatDisplayDate(transaction.date)}</p>
                                     {transaction.notes && (
                                       <p className="text-muted-foreground text-xs mt-1">{transaction.notes}</p>
                                     )}

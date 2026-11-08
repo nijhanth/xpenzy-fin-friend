@@ -22,6 +22,8 @@ interface FinancialContextType {
   deleteInvestmentTransaction: (id: string) => Promise<void>;
   getInvestmentTransactions: (investmentId: string) => InvestmentTransaction[];
   addSavingsTransaction: (transaction: Omit<SavingsTransaction, 'id'>) => Promise<void>;
+  allocateExistingSavingsBalance: (goalId: string, amount: number, date: string) => Promise<boolean>;
+  withdrawFromSavingsGoal: (goalId: string, amount: number, date: string, notes?: string) => Promise<boolean>;
   updateSavingsTransaction: (id: string, transaction: Partial<SavingsTransaction>) => Promise<void>;
   deleteSavingsTransaction: (id: string) => Promise<void>;
   getSavingsTransactions: (savingsGoalId: string) => SavingsTransaction[];
@@ -240,19 +242,41 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   const refreshGoalAfterLinkedExpense = async (goalId: string | null | undefined) => {
     if (!goalId) return;
     try {
+      const expenses = await expenseService.getAll();
+      const usedAmount = expenses
+        .filter(expense => expense.goalId === goalId)
+        .reduce((total, expense) => total + Number(expense.amount || 0), 0);
+      await savingsService.update(goalId, { used_amount: usedAmount });
       const refreshed = await savingsService.getAll();
-      setData(prev => ({ ...prev, savings: refreshed }));
+      setData(prev => ({
+        ...prev,
+        expenses,
+        savings: refreshed.map(goal => goal.id === goalId ? { ...goal, used_amount: usedAmount } : goal),
+      }));
     } catch (e) {
       console.error('Failed to refresh goal after linked expense', e);
     }
   };
 
   const restoreGoal = async (id: string) => {
+    const goalToRestore = data.savings.find(goal => goal.id === id);
+    if (goalToRestore && data.savings.some(goal => {
+      if (goal.id === id || goal.name.trim().toLocaleLowerCase() !== goalToRestore.name.trim().toLocaleLowerCase()) return false;
+      const usedAmount = data.expenses.filter(expense => expense.goalId === goal.id).reduce((total, expense) => total + Number(expense.amount || 0), 0);
+      const remaining = Math.max(0, Number(goal.current || 0) - usedAmount);
+      return (goal.status ?? 'active') === 'active' || remaining > 0;
+    })) {
+      toast({ variant: 'destructive', title: 'This goal name is still in use', description: 'Close the active goal or release its remaining saved amount before restoring this one.' });
+      return;
+    }
     try {
-      const updated = await savingsService.update(id, {
-        status: 'active',
-        completed_date: null,
-      } as any);
+      let updated = await savingsService.update(id, { status: 'active' } as any);
+      try {
+        updated = await savingsService.update(id, { completed_date: null } as any);
+      } catch (dateError) {
+        console.warn('Could not clear completed date; apply the savings goal schema migration.', dateError);
+        updated = { ...updated, completed_date: null };
+      }
       setData(prev => ({
         ...prev,
         savings: prev.savings.map(g => (g.id === id ? updated : g)),
@@ -265,30 +289,31 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const markGoalCompleted = async (id: string) => {
+    const goalToComplete = data.savings.find(goal => goal.id === id);
+    if (!goalToComplete) return;
     try {
-      const updated = await savingsService.update(id, {
-        status: 'completed',
-        completed_date: new Date().toISOString(),
-      } as any);
+      let updated = await savingsService.update(id, { status: 'completed' } as any);
+      const completedAt = new Date().toISOString();
+      try {
+        updated = await savingsService.update(id, { completed_date: completedAt } as any);
+      } catch (dateError) {
+        console.warn('Could not save completed date; apply the savings goal schema migration.', dateError);
+        updated = { ...updated, completed_date: completedAt };
+      }
       setData(prev => ({
         ...prev,
         savings: prev.savings.map(g => (g.id === id ? updated : g)),
       }));
-      const { toast: sonnerToast } = await import('sonner');
-      sonnerToast.success(`Goal '${updated.name}' marked as completed`, {
-        description: 'Moved to your completed goals history.',
-        duration: 8000,
-        action: {
-          label: 'UNDO',
-          onClick: () => { restoreGoal(id); },
-        },
+      toast({
+        title: 'Goal closed',
+        description: `${updated.name} moved to completed goals. You can restore it from the completed goals section.`,
       });
     } catch (error) {
       console.error('Error marking goal completed:', error);
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to mark goal as completed.',
+        title: 'Could not close goal',
+        description: getErrorMessage(error),
       });
     }
   };
@@ -314,6 +339,16 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const addSavingsGoal = async (savings: Omit<SavingsGoal, 'id'>) => {
+    const nameStillInUse = data.savings.some(goal => {
+      if (goal.name.trim().toLocaleLowerCase() !== savings.name.trim().toLocaleLowerCase()) return false;
+      const usedAmount = data.expenses.filter(expense => expense.goalId === goal.id).reduce((total, expense) => total + Number(expense.amount || 0), 0);
+      const remaining = Math.max(0, Number(goal.current || 0) - usedAmount);
+      return (goal.status ?? 'active') === 'active' || remaining > 0;
+    });
+    if (nameStillInUse) {
+      toast({ variant: 'destructive', title: 'Goal name still has an active balance', description: 'Close the active goal and withdraw or spend its remaining saved amount before reusing the name.' });
+      return;
+    }
     try {
       const newSavings = await savingsService.create(savings);
       setData(prev => ({
@@ -521,6 +556,119 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         description: "Failed to add money to savings goal",
         variant: "destructive",
       });
+    }
+  };
+
+  const allocateExistingSavingsBalance = async (goalId: string, amount: number, date: string): Promise<boolean> => {
+    const goal = data.savings.find(item => item.id === goalId);
+    if (!goal || !Number.isFinite(amount) || amount < 0 || !date) return false;
+
+    const recordedAmount = data.savingsTransactions
+      .filter(transaction => transaction.savings_goal_id === goalId)
+      .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+    const currentAllocation = data.savingsTransactions
+      .filter(transaction => transaction.savings_goal_id === goalId && transaction.notes?.startsWith('Existing balance allocation:'))
+      .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+    const reconciliation = Number(goal.current || 0) - recordedAmount;
+    const allocationDelta = amount - currentAllocation;
+    if (Math.abs(reconciliation) < 0.01 && Math.abs(allocationDelta) < 0.01) return true;
+
+    try {
+      const createdTransactions: SavingsTransaction[] = [];
+      if (Math.abs(reconciliation) >= 0.01) {
+        createdTransactions.push(await savingsTransactionService.create({
+          savings_goal_id: goalId,
+          amount: reconciliation,
+          date,
+          notes: `Existing balance adjustment: reconcile recorded transactions for ${goal.name}`,
+        }));
+      }
+      if (Math.abs(allocationDelta) >= 0.01) {
+        createdTransactions.push(await savingsTransactionService.create({
+          savings_goal_id: goalId,
+          amount: allocationDelta,
+          date,
+          notes: `Existing balance allocation: set ${goal.name} to ${amount}`,
+        }));
+      }
+      setData(prev => ({
+        ...prev,
+        savingsTransactions: [...createdTransactions, ...prev.savingsTransactions],
+        savings: prev.savings.map(item => item.id === goalId ? { ...item, current: Number(item.current || 0) + allocationDelta } : item),
+      }));
+
+      try {
+        const [savings, savingsTransactions, budgets] = await Promise.all([
+          savingsService.getAll(), savingsTransactionService.getAll(), budgetService.getAll(),
+        ]);
+        setData(prev => ({ ...prev, savings, savingsTransactions, budgets }));
+      } catch (refreshError) {
+        console.error('Allocation saved but refresh failed:', refreshError);
+      }
+      toast({ title: 'Existing balance allocated', description: `${amount.toLocaleString('en-IN')} allocated to ${goal.name}.` });
+      return true;
+    } catch (error) {
+      console.error('Error allocating existing balance:', error);
+      toast({ variant: 'destructive', title: 'Could not save allocation', description: getErrorMessage(error) });
+      return false;
+    }
+  };
+
+  const withdrawFromSavingsGoal = async (goalId: string, amount: number, date: string, notes?: string): Promise<boolean> => {
+    const goal = data.savings.find(item => item.id === goalId);
+    const usedAmount = data.expenses
+      .filter(expense => expense.goalId === goalId)
+      .reduce((total, expense) => total + Number(expense.amount || 0), 0);
+    const available = goal ? Math.max(0, Number(goal.current || 0) - usedAmount) : 0;
+    if (!goal || !Number.isFinite(amount) || amount <= 0 || amount > available || !date) {
+      toast({ variant: 'destructive', title: 'Invalid withdrawal', description: `Enter an amount up to ${available.toLocaleString('en-IN')}.` });
+      return false;
+    }
+
+    try {
+      const recordedAmount = data.savingsTransactions
+        .filter(transaction => transaction.savings_goal_id === goalId)
+        .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+      const balanceAdjustment = Number(goal.current || 0) - recordedAmount;
+      const createdTransactions: SavingsTransaction[] = [];
+      if (Math.abs(balanceAdjustment) > 0.009) {
+        createdTransactions.push(await savingsTransactionService.create({
+          savings_goal_id: goalId,
+          amount: balanceAdjustment,
+          date,
+          notes: `Existing balance adjustment: reconcile recorded transactions for ${goal.name}`,
+        }));
+      }
+
+      createdTransactions.push(await savingsTransactionService.create({
+        savings_goal_id: goalId,
+        amount: -amount,
+        date,
+        notes: notes?.trim() || `Withdrawal to bank from ${goal.name}`,
+      }));
+
+      setData(prev => ({
+        ...prev,
+        savings: prev.savings.map(item => item.id === goalId ? { ...item, current: Number(item.current || 0) - amount } : item),
+        savingsTransactions: [...createdTransactions, ...prev.savingsTransactions],
+      }));
+
+      try {
+        const [savings, savingsTransactions, budgets] = await Promise.all([
+          savingsService.getAll(),
+          savingsTransactionService.getAll(),
+          budgetService.getAll(),
+        ]);
+        setData(prev => ({ ...prev, savings, savingsTransactions, budgets }));
+      } catch (refreshError) {
+        console.error('Withdrawal saved but refresh failed:', refreshError);
+      }
+      toast({ title: 'Withdrawal recorded', description: `${amount.toLocaleString('en-IN')} withdrawn from ${goal.name} to your bank balance.` });
+      return true;
+    } catch (error) {
+      console.error('Error withdrawing from savings goal:', error);
+      toast({ variant: 'destructive', title: 'Could not record withdrawal', description: getErrorMessage(error) });
+      return false;
     }
   };
 
@@ -750,11 +898,13 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const deleteExpense = async (id: string) => {
     try {
+      const previousExpense = data.expenses.find(item => item.id === id);
       await expenseService.delete(id);
       setData(prev => ({
         ...prev,
         expenses: prev.expenses.filter(item => item.id !== id)
       }));
+      await refreshGoalAfterLinkedExpense(previousExpense?.goalId);
     } catch (error) {
       console.error('Error deleting expense:', error);
       toast({
@@ -770,7 +920,9 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       await savingsService.delete(id);
       setData(prev => ({
         ...prev,
-        savings: prev.savings.filter(item => item.id !== id)
+        savings: prev.savings.filter(item => item.id !== id),
+        savingsTransactions: prev.savingsTransactions.filter(transaction => transaction.savings_goal_id !== id),
+        expenses: prev.expenses.map(expense => expense.goalId === id ? { ...expense, goalId: null } : expense),
       }));
     } catch (error) {
       console.error('Error deleting savings goal:', error);
@@ -861,6 +1013,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       deleteInvestmentTransaction,
       getInvestmentTransactions,
       addSavingsTransaction,
+      allocateExistingSavingsBalance,
+      withdrawFromSavingsGoal,
       updateSavingsTransaction,
       deleteSavingsTransaction,
       getSavingsTransactions,

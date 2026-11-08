@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDisplayDate } from '@/lib/dateFormat';
 import { useNotifications } from '@/hooks/useNotifications';
 import { 
   User, 
@@ -633,7 +634,7 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
           <DialogHeader>
             <DialogTitle>Privacy Policy</DialogTitle>
             <DialogDescription>
-              Last updated: {new Date().toLocaleDateString()}
+              Last updated: {formatDisplayDate(new Date())}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 text-sm">

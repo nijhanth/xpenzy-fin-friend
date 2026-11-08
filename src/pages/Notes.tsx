@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { NoteForm } from '@/components/forms/NoteForm';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { format } from 'date-fns';
+import { formatDisplayDate } from '@/lib/dateFormat';
 
 export const Notes = () => {
   const [notes, setNotes] = useState<any[]>([]);
@@ -196,7 +197,7 @@ export const Notes = () => {
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <Calendar className="w-4 h-4" />
-                        <span>Due: {format(new Date(note.due_date), 'MMM dd, yyyy')}</span>
+                        <span>Due: {formatDisplayDate(note.due_date)}</span>
                       </div>
                       {note.reminder && (
                         <div className="flex items-center gap-1 text-muted-foreground">

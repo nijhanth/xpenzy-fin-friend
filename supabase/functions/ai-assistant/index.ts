@@ -1085,7 +1085,9 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         const part = (type: string) => Number(dateParts.find((item) => item.type === type)?.value);
         const year = part("year");
         const month = part("month") - 1;
-        const week = Math.ceil(part("day") / 7);
+        const day = part("day");
+        const week = Math.ceil(day / 7);
+        const today = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         const budgetValues = {
           category,
           limit_amount: amount,
@@ -1154,7 +1156,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           month: budgetPeriod === "weekly" || budgetPeriod === "monthly" ? month : undefined,
           week: budgetPeriod === "weekly" ? week : undefined,
           paymentMode: "UPI",
-          date: finData.today,
+          date: today,
           notes: "",
         });
       }

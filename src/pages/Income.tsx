@@ -9,6 +9,7 @@ import { IncomeForm } from '@/components/forms/IncomeForm';
 import { AIInsightsCard } from '@/components/ai/AIInsights';
 import { EditDeleteMenu } from '@/components/ui/edit-delete-menu';
 import { useToast } from '@/hooks/use-toast';
+import { formatCompactDisplayDate, formatDisplayDate } from '@/lib/dateFormat';
 
 // Trade-style tooltip for bar chart
 const BarChartTooltip = ({ active, payload, label }: any) => {
@@ -126,10 +127,7 @@ export const Income = () => {
       cumulative += dailyIncome[date];
       return {
         date,
-        displayDate: new Date(date).toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric' 
-        }),
+        displayDate: formatCompactDisplayDate(date),
         amount: cumulative,
         daily: dailyIncome[date]
       };
@@ -423,7 +421,7 @@ export const Income = () => {
                   <div className="text-right">
                     <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                       <Calendar className="w-3 h-3" />
-                      {new Date(entry.date).toLocaleDateString()}
+                      {formatDisplayDate(entry.date)}
                     </div>
                     <EditDeleteMenu
                       onEdit={() => handleEdit(entry.id)}

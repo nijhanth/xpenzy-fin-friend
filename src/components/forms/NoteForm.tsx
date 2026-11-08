@@ -13,6 +13,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
+import { formatDisplayDate } from '@/lib/dateFormat';
 import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -84,7 +85,7 @@ export const NoteForm = ({ onSubmit, onCancel, initialData }: NoteFormProps) => 
               )}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
-              {formData.due_date ? format(formData.due_date, 'PPP') : 'Pick a date'}
+              {formData.due_date ? formatDisplayDate(formData.due_date) : 'Pick a date'}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0">

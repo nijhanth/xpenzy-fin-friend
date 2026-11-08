@@ -61,6 +61,18 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
   }, [editingId, open, data.savings, form]);
 
   const onSubmit = async (formData: SavingsFormData) => {
+    const normalizedName = formData.name.trim().toLocaleLowerCase();
+    const duplicateActiveGoal = data.savings.some(entry =>
+      entry.id !== editingId &&
+      entry.name.trim().toLocaleLowerCase() === normalizedName &&
+      ((entry.status ?? 'active') === 'active' || Number(entry.current || 0) > data.expenses
+        .filter(expense => expense.goalId === entry.id)
+        .reduce((total, expense) => total + Number(expense.amount || 0), 0))
+    );
+    if (duplicateActiveGoal) {
+      form.setError('name', { message: 'This name belongs to an active goal or one with money remaining. Close it and withdraw or spend the remaining amount before reusing the name.' });
+      return;
+    }
     const savingsData = {
       name: formData.name,
       target: formData.target,
@@ -133,7 +145,7 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
               name="current"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Current Amount (₹)</FormLabel>
+                  <FormLabel>{isEditing ? 'Already saved for this goal (₹)' : 'Amount already saved (₹)'}</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -142,6 +154,7 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
                       onChange={e => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>
+                  <p className="text-xs text-muted-foreground">Use this for money you already have set aside. It updates the goal amount without adding a new contribution transaction.</p>
                   <FormMessage />
                 </FormItem>
               )}

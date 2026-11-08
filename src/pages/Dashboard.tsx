@@ -15,11 +15,11 @@ import {
   Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { HomeFinancialOutlook } from '@/components/ai/HomeFinancialOutlook';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Bar,
@@ -130,7 +130,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
     const categoryExpenses = data.expenses.filter((entry) => inRange(entry.date, categoryDateFilter.range));
     const cashFlowExpenses = data.expenses.filter((entry) => inRange(entry.date, cashFlowRange));
     const cashFlowIncome = data.income.filter((entry) => inRange(entry.date, cashFlowRange));
-    const cashFlowSavingsTransactions = data.savingsTransactions.filter((entry) => inRange(entry.date, cashFlowRange));
+    const cashFlowSavingsTransactions = data.savingsTransactions.filter((entry) => inRange(entry.date, cashFlowRange) && !entry.notes?.startsWith('Existing balance adjustment:') && !entry.notes?.startsWith('Existing balance allocation:'));
     const cashFlowInvestmentTransactions = data.investmentTransactions.filter((entry) =>
       inRange(entry.date, cashFlowRange) && !entry.notes?.startsWith('Statement snapshot:'));
     const activityExpenses = data.expenses.filter((entry) => inRange(entry.date, activityDateFilter.range));
