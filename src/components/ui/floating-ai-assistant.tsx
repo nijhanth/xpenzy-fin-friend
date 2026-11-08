@@ -64,7 +64,7 @@ interface TransactionDraft {
 }
 
 interface PendingRecordChange {
-  mode: 'create_income' | 'edit_income' | 'edit_expense';
+  mode: 'create_income' | 'create_expense' | 'edit_income' | 'edit_expense' | 'create_savings_goal' | 'create_savings_contribution' | 'create_investment_holding' | 'create_investment_contribution';
   id?: string;
   before?: { amount: number; category: string; date: string; paymentMode: string; notes: string };
   amount: number;
@@ -72,6 +72,13 @@ interface PendingRecordChange {
   date: string;
   paymentMode: string;
   notes: string;
+  name?: string;
+  target?: number;
+  current?: number;
+  targetId?: string;
+  targetName?: string;
+  investmentType?: string;
+  customType?: string;
 }
 
 interface Message {
@@ -503,19 +510,37 @@ export const FloatingAIAssistant = () => {
   const confirmPendingRecordChange = async () => {
     if (!pendingRecordChange || !user || isLoading) return;
     const change = pendingRecordChange;
-    if (!['create_income', 'edit_income', 'edit_expense'].includes(change.mode)) {
+    const supportedModes: PendingRecordChange['mode'][] = ['create_income', 'create_expense', 'edit_income', 'edit_expense', 'create_savings_goal', 'create_savings_contribution', 'create_investment_holding', 'create_investment_contribution'];
+    if (!supportedModes.includes(change.mode)) {
       toast.error('This change request is invalid. No record was changed.');
       setPendingRecordChange(null);
       return;
     }
-    if (!Number.isFinite(change.amount) || change.amount <= 0 || change.amount > 1_000_000_000
-      || !change.category.trim() || change.category.length > 100
-      || !/^\d{4}-\d{2}-\d{2}$/.test(change.date)
-      || Number.isNaN(Date.parse(`${change.date}T00:00:00Z`))
-      || new Date(`${change.date}T00:00:00Z`).toISOString().slice(0, 10) !== change.date
-      || !PAYMENT_MODES.includes(change.paymentMode as (typeof PAYMENT_MODES)[number])
-      || change.notes.length > 500) {
+    const transactionModes = ['create_income', 'create_expense', 'edit_income', 'edit_expense'];
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(change.date)
+      && !Number.isNaN(Date.parse(`${change.date}T00:00:00Z`))
+      && new Date(`${change.date}T00:00:00Z`).toISOString().slice(0, 10) === change.date;
+    if (transactionModes.includes(change.mode) && (!Number.isFinite(change.amount) || change.amount <= 0 || change.amount > 1_000_000_000
+      || !change.category.trim() || change.category.length > 100 || !validDate
+      || !PAYMENT_MODES.includes(change.paymentMode as (typeof PAYMENT_MODES)[number]) || change.notes.length > 500)) {
       toast.error('Review the amount, category, date, payment method, and notes before confirming.');
+      return;
+    }
+    if (change.mode === 'create_savings_goal' && (!change.name?.trim() || change.name.length > 100
+      || !Number.isFinite(change.target) || Number(change.target) <= 0
+      || !Number.isFinite(change.current) || Number(change.current) < 0 || !validDate || change.notes.length > 500)) {
+      toast.error('Review the goal name, target, starting amount, date, and notes before confirming.');
+      return;
+    }
+    if (['create_savings_contribution', 'create_investment_contribution'].includes(change.mode)
+      && (!change.targetId || !Number.isFinite(change.amount) || change.amount <= 0 || change.amount > 1_000_000_000 || !validDate || change.notes.length > 500)) {
+      toast.error('Review the selected goal or investment, amount, date, and notes before confirming.');
+      return;
+    }
+    if (change.mode === 'create_investment_holding' && (!change.name?.trim() || change.name.length > 100
+      || !['Mutual Fund', 'Stocks', 'FD', 'Crypto', 'Gold', 'Real Estate', 'Custom'].includes(change.investmentType || '')
+      || (change.investmentType === 'Custom' && !change.customType?.trim()) || !validDate || change.notes.length > 500)) {
+      toast.error('Review the investment name, type, date, and notes before confirming.');
       return;
     }
 
@@ -534,6 +559,42 @@ export const FloatingAIAssistant = () => {
         });
         if (error) throw error;
         await refreshIncome();
+      } else if (change.mode === 'create_expense') {
+        const { error } = await supabase.from('expense_entries').insert({
+          amount: change.amount, category: change.category.trim(), subcategory: 'General', date: change.date,
+          payment_mode: change.paymentMode, notes: change.notes.trim(), user_id: user.id,
+        });
+        if (error) throw error;
+        await refreshExpenses();
+      } else if (change.mode === 'create_savings_goal') {
+        const { error } = await supabase.from('savings_goals').insert({
+          name: change.name!.trim(), target: change.target!, current: change.current!, date: change.date,
+          notes: change.notes.trim(), user_id: user.id,
+        });
+        if (error) throw error;
+        await refreshSavings();
+      } else if (change.mode === 'create_savings_contribution') {
+        const { error } = await supabase.from('savings_transactions').insert({
+          savings_goal_id: change.targetId!, amount: change.amount, date: change.date,
+          notes: change.notes.trim(), user_id: user.id,
+        });
+        if (error) throw error;
+        await refreshSavingsTransactions();
+      } else if (change.mode === 'create_investment_holding') {
+        const customType = change.investmentType === 'Custom' ? change.customType!.trim() : null;
+        const { error } = await supabase.from('investment_entries').insert({
+          type: customType || change.investmentType!, name: change.name!.trim(), initial_invested: 0,
+          invested: 0, current: 0, date: change.date, notes: change.notes.trim(), custom_type: customType, user_id: user.id,
+        });
+        if (error) throw error;
+        await refreshInvestmentTransactions();
+      } else if (change.mode === 'create_investment_contribution') {
+        const { error } = await supabase.from('investment_transactions').insert({
+          investment_id: change.targetId!, amount: change.amount, date: change.date,
+          notes: change.notes.trim(), profit_loss: 0, user_id: user.id,
+        });
+        if (error) throw error;
+        await refreshInvestmentTransactions();
       } else if (!change.id) {
         throw new Error('The record to edit could not be identified. No changes were saved.');
       } else if (change.mode === 'edit_income') {
@@ -565,11 +626,23 @@ export const FloatingAIAssistant = () => {
       const successText = change.mode === 'create_income'
         ? `Recorded ${change.category} income of ₹${change.amount.toLocaleString('en-IN')} on ${change.date}.`
         : `Updated the ${change.mode === 'edit_income' ? 'income' : 'expense'} record to ₹${change.amount.toLocaleString('en-IN')} on ${change.date}.`;
-      const confirmation: Message = { id: crypto.randomUUID(), role: 'assistant', content: successText };
+      const changeLabels: Record<PendingRecordChange['mode'], string> = {
+        create_income: 'income', create_expense: 'expense', edit_income: 'income', edit_expense: 'expense',
+        create_savings_goal: 'savings goal', create_savings_contribution: 'savings deposit',
+        create_investment_holding: 'investment holding', create_investment_contribution: 'investment contribution',
+      };
+      const finalSuccessText = change.mode === 'create_income' || change.mode.startsWith('edit_')
+        ? successText
+        : change.mode === 'create_savings_goal'
+          ? `Created the ${change.name} savings goal with a target of INR ${Number(change.target).toLocaleString('en-IN')}.`
+          : change.mode === 'create_investment_holding'
+            ? `Created the ${change.investmentType === 'Custom' ? change.customType : change.investmentType} investment holding ${change.name}.`
+            : `Saved ${changeLabels[change.mode]}${change.category ? ` (${change.category})` : change.targetName ? ` for ${change.targetName}` : ''} of INR ${change.amount.toLocaleString('en-IN')} on ${change.date}.`;
+      const confirmation: Message = { id: crypto.randomUUID(), role: 'assistant', content: finalSuccessText };
       setPendingRecordChange(null);
       setMessages((previous) => [...previous, confirmation].slice(-MAX_HISTORY_MESSAGES));
       await persistWithNotice(confirmation, user.id);
-      toast.success(change.mode === 'create_income' ? 'Income saved' : 'Record updated');
+      toast.success(change.mode.startsWith('edit_') ? 'Record updated' : `${changeLabels[change.mode]} saved`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not save the change.');
     } finally {
@@ -758,7 +831,7 @@ export const FloatingAIAssistant = () => {
                   Allow AI chat and screenshot reading
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), current-month financial summaries, and up to 40 recent income and expense records to the configured Gemini API. If you attach a payment screenshot, it is sent to Gemini to read and is not stored by Xpenzy; extracted transaction details are only saved after you review and confirm them. Your chat history is saved to your Xpenzy account in Supabase. Xpenzy may also remember stable, non-sensitive preferences and facts you mention to personalize future answers; it does not train Gemini on your chats. Use the trash icon to clear these memories. AI-prepared income entries and edits to income or expense records require your confirmation before they are saved.
+                  When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), current-month financial summaries, and up to 40 recent income and expense records to the configured Gemini API. If you attach a payment screenshot, it is sent to Gemini to read and is not stored by Xpenzy; extracted transaction details are only saved after you review and confirm them. Your chat history is saved to your Xpenzy account in Supabase. Xpenzy may also remember stable, non-sensitive preferences and facts you mention to personalize future answers; it does not train Gemini on your chats. Use the trash icon to clear these memories. Every AI-created income, expense, savings, and investment record, plus edits to income or expense records, requires your confirmation before it is saved.
                 </p>
                 <Button type="button" size="sm" onClick={() => setHasAcceptedDataUse(true)}>Continue to AI</Button>
               </div>
@@ -785,9 +858,9 @@ export const FloatingAIAssistant = () => {
                     <div>
                       <h3 className="text-sm font-semibold">Review before saving</h3>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {pendingRecordChange.mode === 'create_income'
-                          ? 'Confirm this income entry. Nothing will be saved until you choose Confirm.'
-                          : `Proposed ${pendingRecordChange.mode === 'edit_income' ? 'income' : 'expense'} edit. Nothing will change until you confirm.`}
+                        {pendingRecordChange.mode.startsWith('edit_')
+                          ? `Proposed ${pendingRecordChange.mode === 'edit_income' ? 'income' : 'expense'} edit. Nothing will change until you confirm.`
+                          : `Review this ${pendingRecordChange.mode.replaceAll('_', ' ')}. Nothing will be saved until you confirm.`}
                       </p>
                     </div>
                     {pendingRecordChange.before && (
@@ -796,11 +869,13 @@ export const FloatingAIAssistant = () => {
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-2">
+                      {pendingRecordChange.mode !== 'create_investment_holding' && (
                       <label className="space-y-1 text-xs text-muted-foreground">
                         Amount (₹)
                         <Input type="number" min="0.01" max="1000000000" step="0.01" value={pendingRecordChange.amount}
-                          onChange={(event) => setPendingRecordChange((current) => current ? { ...current, amount: Number(event.target.value) } : current)} className="h-9" />
+                          onChange={(event) => setPendingRecordChange((current) => current ? { ...current, amount: Number(event.target.value), ...(current.mode === 'create_savings_goal' ? { target: Number(event.target.value) } : {}) } : current)} className="h-9" />
                       </label>
+                      )}
                       <label className="space-y-1 text-xs text-muted-foreground">
                         Date
                         <Input type="date" value={pendingRecordChange.date}
@@ -808,11 +883,40 @@ export const FloatingAIAssistant = () => {
                       </label>
                     </div>
                     <label className="block space-y-1 text-xs text-muted-foreground">
-                      Category
+                      {pendingRecordChange.mode === 'create_savings_goal' ? 'Goal name' : pendingRecordChange.mode === 'create_investment_holding' ? 'Investment name' : 'Category'}
                       <Input value={pendingRecordChange.category} maxLength={100}
-                        onChange={(event) => setPendingRecordChange((current) => current ? { ...current, category: event.target.value } : current)} className="h-9" />
+                        onChange={(event) => setPendingRecordChange((current) => current ? {
+                          ...current,
+                          category: event.target.value,
+                          ...(current.mode === 'create_savings_goal' || current.mode === 'create_investment_holding' ? { name: event.target.value } : {}),
+                        } : current)} className="h-9" />
                     </label>
+                    {['create_savings_contribution', 'create_investment_contribution'].includes(pendingRecordChange.mode) && (
+                      <p className="rounded-md bg-muted/60 p-2 text-xs">To: {pendingRecordChange.targetName}</p>
+                    )}
+                    {pendingRecordChange.mode === 'create_savings_goal' && (
+                      <label className="block space-y-1 text-xs text-muted-foreground">Already saved (INR)
+                        <Input type="number" min="0" max="1000000000" step="0.01" value={pendingRecordChange.current ?? 0}
+                          onChange={(event) => setPendingRecordChange((current) => current ? { ...current, current: Number(event.target.value) } : current)} className="h-9" />
+                      </label>
+                    )}
+                    {pendingRecordChange.mode === 'create_investment_holding' && (
+                      <label className="block space-y-1 text-xs text-muted-foreground">Investment type
+                        <select value={pendingRecordChange.investmentType || 'Mutual Fund'}
+                          onChange={(event) => setPendingRecordChange((current) => current ? { ...current, investmentType: event.target.value } : current)}
+                          className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground">
+                          {['Mutual Fund', 'Stocks', 'FD', 'Crypto', 'Gold', 'Real Estate', 'Custom'].map((type) => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                      </label>
+                    )}
+                    {pendingRecordChange.mode === 'create_investment_holding' && pendingRecordChange.investmentType === 'Custom' && (
+                      <label className="block space-y-1 text-xs text-muted-foreground">Custom type
+                        <Input value={pendingRecordChange.customType || ''} maxLength={100}
+                          onChange={(event) => setPendingRecordChange((current) => current ? { ...current, customType: event.target.value } : current)} className="h-9" />
+                      </label>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
+                      {['create_income', 'create_expense', 'edit_income', 'edit_expense'].includes(pendingRecordChange.mode) && (
                       <label className="space-y-1 text-xs text-muted-foreground">
                         Payment method
                         <select value={pendingRecordChange.paymentMode}
@@ -821,6 +925,7 @@ export const FloatingAIAssistant = () => {
                           {PAYMENT_MODES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
                         </select>
                       </label>
+                      )}
                       <label className="space-y-1 text-xs text-muted-foreground">
                         Notes
                         <Input value={pendingRecordChange.notes} maxLength={500}
@@ -1014,7 +1119,7 @@ export const FloatingAIAssistant = () => {
                     accept="image/jpeg,image/png,image/webp"
                     className="hidden"
                     aria-label="Upload payment screenshot"
-                    disabled={!hasAcceptedDataUse || isLoading || isHistoryLoading}
+                    disabled={!hasAcceptedDataUse || isLoading || isHistoryLoading || Boolean(pendingRecordChange)}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (file) void selectImage(file);
@@ -1028,7 +1133,7 @@ export const FloatingAIAssistant = () => {
                     aria-label="Upload payment screenshot"
                     title="Upload or paste a payment screenshot"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={!hasAcceptedDataUse || isLoading || isHistoryLoading}
+                    disabled={!hasAcceptedDataUse || isLoading || isHistoryLoading || Boolean(pendingRecordChange)}
                   >
                     <ImagePlus className="h-4 w-4" />
                   </Button>

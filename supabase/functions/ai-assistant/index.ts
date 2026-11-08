@@ -190,8 +190,8 @@ serve(async (req) => {
         incomeByCategory,
         incomeCount: (incomeRes.data || []).length,
         expenseCount: (expenseRes.data || []).length,
-        savings: (savingsRes.data || []).map((s: any) => ({ name: s.name, target: s.target, current: s.current })),
-        investments: (investmentRes.data || []).map((i: any) => ({ name: i.name, type: i.type, invested: i.invested, current: i.current })),
+        savings: (savingsRes.data || []).map((s: any) => ({ id: s.id, name: s.name, target: s.target, current: s.current, status: s.status })),
+        investments: (investmentRes.data || []).map((i: any) => ({ id: i.id, name: i.name, type: i.type, invested: i.invested, current: i.current })),
         budgets: (budgetRes.data || []).map((b: any) => ({ category: b.category, limit: b.limit_amount, current: b.current, period: b.period })),
         expenses: (expenseRes.data || []).map((e: any) => ({ amount: e.amount, category: e.category, date: e.date, notes: e.notes })),
       };
@@ -343,11 +343,12 @@ Be concise, friendly, and use ₹ for currency. Use bullet points when listing i
 Today's date in the user's local timezone is ${finData.todayLabel} (${finData.today}, timezone ${safeTimeZone}). Treat this as the authoritative current date when answering date questions or interpreting "today", "yesterday", and relative dates. You have access to this date even though you do not have access to the user's full device calendar.
 You may suggest simple, non-judgmental budgets based only on the user's recorded history and existing budget limits. State the period and figures used; never invent numbers.
 You can create or update an expense budget only when the user explicitly asks you to do so. Use the create_expense_budget tool for a clear request with a category, amount, and period. Never claim a budget was created or updated unless the tool succeeds. For hypothetical questions or suggestions, do not call the tool.
-You can record an expense only when the user explicitly asks to add, log, or record one and provides a clear amount and category. Use the create_expense tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. Never claim an expense was recorded unless the tool succeeds. Do not record hypothetical expenses or merely discuss a past expense as a new record.
-You can record income only when the user explicitly asks to add, log, or record it and provides a clear amount and category. Use the create_income tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. If the category is Custom, require a clear custom category. Never claim income was recorded unless the tool succeeds. Do not record hypothetical income or merely discuss past income as a new record.
-For every new income entry, prepare a review card with create_income; never write it directly. The user must press Confirm and save before any new income is inserted. Preserve the exact amount the user stated; do not round, adjust, or infer it. If the request is unclear, ask instead of preparing a record.
+You can record an expense only when the user explicitly asks to add, log, or record one and provides a clear amount and category. Use the create_expense tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. Every new expense must be reviewed and confirmed by the user in the app before saving, even when all details were specified. Never claim an expense was recorded before confirmation. Do not record hypothetical expenses or merely discuss a past expense as a new record.
+You can record income only when the user explicitly asks to add, log, or record it and provides a clear amount and category. Use the create_income tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. If the category is Custom, require a clear custom category. Every new income entry must be reviewed and confirmed by the user in the app before saving. Never claim income was recorded before confirmation. Do not record hypothetical income or merely discuss past income as a new record.
+For every new income, expense, savings goal, savings deposit, investment holding, or investment contribution, prepare a review card with its matching tool; never write it directly. The user must press Confirm and save before any record is inserted. Preserve the exact amount the user stated; do not round, adjust, or infer it. If the request is unclear, ask instead of preparing a record.
 You may help edit existing income or expense records only when explicitly asked. Use propose_record_edit to prepare a change; never write an edit directly or say it has already been saved. The user must review the current record and proposed values, then press Confirm and save. Use only a uniquely matching record from the records listed below. If multiple records could match or no record matches, ask the user which one. Preserve exact amounts and only change fields requested by the user.
-You can create a savings goal only when the user explicitly asks you to create one and provides a clear goal name and target amount. Use the create_savings_goal tool for such a request. If the starting amount is omitted, use zero; if the date is omitted, use today. Never claim a goal was created unless the tool succeeds. Do not create goals for hypothetical questions or suggestions.
+You can create a savings goal only when the user explicitly asks you to create one and provides a clear goal name and target amount. Use the create_savings_goal tool for such a request. If the starting amount is omitted, use zero; if the date is omitted, use today. Every savings goal or deposit must be reviewed and confirmed by the user in the app before saving. Never claim it was saved before confirmation. Do not create goals or deposits for hypothetical questions or suggestions.
+For investment records, only prepare a new holding or contribution when the user explicitly asks. Use create_investment_holding for a new holding and create_investment_contribution for a contribution to a uniquely identified existing holding. Every investment change must be reviewed and confirmed by the user in the app before saving. Never claim it was saved before confirmation. Ask which holding if the contribution target is unclear.
 ${memoryInstructions}
 Here is the user's current financial data for ${finData.month}:
 - Total Income: ₹${finData.totalIncome.toLocaleString()}
@@ -779,7 +780,7 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         type: "function",
         function: {
           name: "create_expense",
-          description: "Record a new expense only when the user explicitly asks to add, log, or record one.",
+          description: "Prepare a new expense for user review only when explicitly requested. The app must receive user confirmation before saving.",
           parameters: {
             type: "object",
             properties: {
@@ -838,8 +839,63 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
       {
         type: "function",
         function: {
+          name: "create_savings_contribution",
+          description: "Prepare a savings deposit into one existing savings goal for user review; the app saves only after confirmation.",
+          parameters: {
+            type: "object",
+            properties: {
+              savingsGoalId: { type: "string", description: "ID of the uniquely matching goal from the user's current financial data." },
+              amount: { type: "number", description: "Positive deposit amount." },
+              date: { type: "string", description: "Date in YYYY-MM-DD format; omit to use today." },
+              notes: { type: "string", description: "Optional short note." },
+            },
+            required: ["savingsGoalId", "amount"],
+            additionalProperties: false,
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "create_investment_holding",
+          description: "Prepare a new investment holding for review; the app saves it only after the user confirms.",
+          parameters: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Investment holding name." },
+              type: { type: "string", enum: ["Mutual Fund", "Stocks", "FD", "Crypto", "Gold", "Real Estate", "Custom"] },
+              customType: { type: "string", description: "Required when type is Custom." },
+              date: { type: "string", description: "Start date in YYYY-MM-DD format; omit to use today." },
+              notes: { type: "string", description: "Optional short note." },
+            },
+            required: ["name", "type"],
+            additionalProperties: false,
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "create_investment_contribution",
+          description: "Prepare a contribution to one existing investment holding for user review; the app saves only after confirmation.",
+          parameters: {
+            type: "object",
+            properties: {
+              investmentId: { type: "string", description: "ID of the uniquely matching holding from the user's current financial data." },
+              amount: { type: "number", description: "Positive contribution amount." },
+              date: { type: "string", description: "Date in YYYY-MM-DD format; omit to use today." },
+              notes: { type: "string", description: "Optional short note." },
+            },
+            required: ["investmentId", "amount"],
+            additionalProperties: false,
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
           name: "create_savings_goal",
-          description: "Create a savings goal only when the user explicitly asks to create one.",
+          description: "Prepare a savings goal for user review only when explicitly requested. The app must receive user confirmation before saving.",
           parameters: {
             type: "object",
             properties: {
@@ -1068,19 +1124,14 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           throw new Error("The requested expense needs a valid positive amount, category, date, and payment method.");
         }
 
-        const { error: expenseError } = await supabase.from("expense_entries").insert({
+        return chatReply("Review this expense entry below. Nothing has been saved yet; confirm to add it.", {}, {
+          mode: "create_expense",
           amount,
           category,
-          subcategory: "General",
           date,
-          payment_mode: paymentMode,
+          paymentMode,
           notes,
-          user_id: userId,
         });
-        if (expenseError) throw expenseError;
-
-        const savedMessage = chatConfirmations[insightLanguage].expense(category, amount.toLocaleString("en-IN"), date, paymentMode);
-        return chatReply(savedMessage, { expenseChanged: true });
       }
 
       if (toolCall?.function?.name === "propose_record_edit") {
@@ -1203,18 +1254,85 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
           throw new Error("The savings goal needs a valid name, positive target, non-negative starting amount, and date.");
         }
 
-        const { error: savingsError } = await supabase.from("savings_goals").insert({
+        return chatReply("Review this savings goal below. Nothing has been saved yet; confirm to create it.", {}, {
+          mode: "create_savings_goal",
+          amount: target,
+          category: name,
+          paymentMode: "UPI",
           name,
           target,
           current,
           date,
           notes,
-          user_id: userId,
         });
-        if (savingsError) throw savingsError;
+      }
 
-        const savedMessage = chatConfirmations[insightLanguage].savings(name, target.toLocaleString("en-IN"));
-        return chatReply(savedMessage, { savingsChanged: true });
+      if (toolCall?.function?.name === "create_savings_contribution") {
+        const args = JSON.parse(toolCall.function.arguments);
+        const savingsGoalId = typeof args.savingsGoalId === "string" ? args.savingsGoalId : "";
+        const amount = Number(args.amount);
+        const notes = typeof args.notes === "string" ? args.notes.trim() : "";
+        const todayParts = new Intl.DateTimeFormat("en-CA", { timeZone: safeTimeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+        const today = `${todayParts.find((part) => part.type === "year")?.value}-${todayParts.find((part) => part.type === "month")?.value}-${todayParts.find((part) => part.type === "day")?.value}`;
+        const date = args.date ?? today;
+        const validDate = typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)
+          && !Number.isNaN(Date.parse(`${date}T00:00:00Z`))
+          && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+        if (!savingsGoalId || !Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000 || notes.length > 500 || !validDate) {
+          throw new Error("The savings deposit needs a valid goal, positive amount, date, and notes.");
+        }
+        const { data: goal, error: goalError } = await supabase.from("savings_goals").select("id,name,status")
+          .eq("id", savingsGoalId).eq("user_id", userId).maybeSingle();
+        if (goalError) throw goalError;
+        if (!goal || goal.status === "completed") throw new Error("I could not find an active savings goal for that deposit.");
+        return chatReply("Review this savings deposit below. Nothing has been saved yet; confirm to add it.", {}, {
+          mode: "create_savings_contribution", targetId: goal.id, targetName: goal.name, amount, category: goal.name, paymentMode: "UPI", date, notes,
+        });
+      }
+
+      if (toolCall?.function?.name === "create_investment_holding") {
+        const args = JSON.parse(toolCall.function.arguments);
+        const name = typeof args.name === "string" ? args.name.trim() : "";
+        const type = typeof args.type === "string" ? args.type : "";
+        const customType = typeof args.customType === "string" ? args.customType.trim() : "";
+        const notes = typeof args.notes === "string" ? args.notes.trim() : "";
+        const allowedTypes = ["Mutual Fund", "Stocks", "FD", "Crypto", "Gold", "Real Estate", "Custom"];
+        const todayParts = new Intl.DateTimeFormat("en-CA", { timeZone: safeTimeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+        const today = `${todayParts.find((part) => part.type === "year")?.value}-${todayParts.find((part) => part.type === "month")?.value}-${todayParts.find((part) => part.type === "day")?.value}`;
+        const date = args.date ?? today;
+        const validDate = typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)
+          && !Number.isNaN(Date.parse(`${date}T00:00:00Z`))
+          && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+        if (!name || name.length > 100 || !allowedTypes.includes(type) || (type === "Custom" && !customType)
+          || customType.length > 100 || notes.length > 500 || !validDate) {
+          throw new Error("The investment holding needs a name, valid type, date, and notes.");
+        }
+        return chatReply("Review this investment holding below. Nothing has been saved yet; confirm to create it.", {}, {
+          mode: "create_investment_holding", amount: 0, category: name, paymentMode: "UPI", name, investmentType: type, customType, date, notes,
+        });
+      }
+
+      if (toolCall?.function?.name === "create_investment_contribution") {
+        const args = JSON.parse(toolCall.function.arguments);
+        const investmentId = typeof args.investmentId === "string" ? args.investmentId : "";
+        const amount = Number(args.amount);
+        const notes = typeof args.notes === "string" ? args.notes.trim() : "";
+        const todayParts = new Intl.DateTimeFormat("en-CA", { timeZone: safeTimeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+        const today = `${todayParts.find((part) => part.type === "year")?.value}-${todayParts.find((part) => part.type === "month")?.value}-${todayParts.find((part) => part.type === "day")?.value}`;
+        const date = args.date ?? today;
+        const validDate = typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)
+          && !Number.isNaN(Date.parse(`${date}T00:00:00Z`))
+          && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+        if (!investmentId || !Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000 || notes.length > 500 || !validDate) {
+          throw new Error("The investment contribution needs a valid holding, positive amount, date, and notes.");
+        }
+        const { data: investment, error: investmentError } = await supabase.from("investment_entries").select("id,name")
+          .eq("id", investmentId).eq("user_id", userId).maybeSingle();
+        if (investmentError) throw investmentError;
+        if (!investment) throw new Error("I could not find that investment holding in your account.");
+        return chatReply("Review this investment contribution below. Nothing has been saved yet; confirm to add it.", {}, {
+          mode: "create_investment_contribution", targetId: investment.id, targetName: investment.name, amount, category: investment.name, paymentMode: "UPI", date, notes,
+        });
       }
 
       const content = choice?.message?.content || "";
