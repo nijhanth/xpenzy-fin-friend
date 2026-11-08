@@ -2,6 +2,11 @@
 ALTER TABLE public.budget_categories ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies to allow users to manage their own budget categories
+DROP POLICY IF EXISTS "Users can view their own budget categories" ON public.budget_categories;
+DROP POLICY IF EXISTS "Users can create their own budget categories" ON public.budget_categories;
+DROP POLICY IF EXISTS "Users can update their own budget categories" ON public.budget_categories;
+DROP POLICY IF EXISTS "Users can delete their own budget categories" ON public.budget_categories;
+
 CREATE POLICY "Users can view their own budget categories" 
 ON public.budget_categories 
 FOR SELECT 

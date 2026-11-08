@@ -2,9 +2,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Index from "./pages/Index";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
@@ -37,21 +37,7 @@ const AppLockWrapper = ({ children }: { children: React.ReactNode }) => {
 
 const AppRoutes = () => {
   const { user, loading } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!loading) {
-      const currentPath = window.location.pathname;
-      
-      if (user && currentPath === '/') {
-        // If authenticated and on landing, go to app
-        navigate('/app');
-      } else if (!user && currentPath === '/app') {
-        // If not authenticated and trying to access app, go to auth
-        navigate('/auth');
-      }
-    }
-  }, [user, loading, navigate]);
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -59,6 +45,18 @@ const AppRoutes = () => {
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
       </div>
     );
+  }
+
+  const currentPath = location.pathname;
+  const authMode = new URLSearchParams(location.search).get('mode');
+  if (user && (currentPath === '/' || currentPath === '/auth')) {
+    return <Navigate to="/app" replace />;
+  }
+  if (!user && currentPath === '/app') {
+    return <Navigate to="/" replace />;
+  }
+  if (!user && currentPath === '/auth' && !authMode) {
+    return <Navigate to="/" replace />;
   }
 
   return (

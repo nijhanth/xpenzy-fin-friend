@@ -46,6 +46,11 @@ type View =
 const EMAIL_OTP_LENGTH = 6;
 const PENDING_SIGNUP_EMAIL_KEY = 'xpenzy:pending-signup-email';
 
+const getConfirmationEmailErrorMessage = (message: string) =>
+  message.toLowerCase().includes('error sending confirmation email')
+    ? 'Supabase could not send the confirmation email. Check SMTP settings in the Supabase project used by this environment, then try again. If the account was created, retry signup to request another code.'
+    : message;
+
 const getPendingSignupEmail = () => {
   try { return window.sessionStorage.getItem(PENDING_SIGNUP_EMAIL_KEY) || ''; } catch { return ''; }
 };
@@ -117,7 +122,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   const requireSupabaseConfig = (field: string) => {
     if (hasSupabaseConfig) return true;
     const message = import.meta.env.DEV
-      ? 'Supabase is not connected yet. Add your project URL and publishable key to .env.local, then restart the dev server.'
+      ? 'Local development is isolated from live data. Start a local Supabase instance or set VITE_DEV_SUPABASE_URL and VITE_DEV_SUPABASE_PUBLISHABLE_KEY to a separate development project, then restart the dev server.'
       : 'Supabase is not configured for this Lovable deployment. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in the project environment, then rebuild and publish.';
     setErrors({ [field]: message });
     return false;
@@ -224,7 +229,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
             ? 'Supabase email limit reached. Wait before requesting another code, or configure custom SMTP.'
             : error.message.includes('User already registered')
               ? 'An account with this email already exists'
-              : error.message;
+              : getConfirmationEmailErrorMessage(error.message);
         setErrors({ form: friendly });
         toast({ variant: 'destructive', title: 'Sign Up Failed', description: friendly });
         return;
@@ -249,7 +254,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
             ? 'This email is already confirmed. Sign in or reset your password.'
             : code === 'over_email_send_rate_limit'
               ? 'A code was requested recently. Wait a while before trying again.'
-              : resendError.message;
+              : getConfirmationEmailErrorMessage(resendError.message);
           setErrors({ form: friendly });
         toast({ variant: 'destructive', title: 'Could not resend code', description: friendly });
           return;
@@ -320,8 +325,9 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
         options: { emailRedirectTo: window.location.origin + '/?confirmed=1' },
       });
       if (error) {
-        setErrors({ signupOtp: error.message });
-        toast({ variant: 'destructive', title: 'Could not resend code', description: error.message });
+        const message = getConfirmationEmailErrorMessage(error.message);
+        setErrors({ signupOtp: message });
+        toast({ variant: 'destructive', title: 'Could not resend code', description: message });
         return;
       }
       startCooldown(120);

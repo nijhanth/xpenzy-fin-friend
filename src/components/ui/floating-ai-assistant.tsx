@@ -63,6 +63,17 @@ interface TransactionDraft {
   paymentMode: PaymentMode;
 }
 
+interface PendingRecordChange {
+  mode: 'create_income' | 'edit_income' | 'edit_expense';
+  id?: string;
+  before?: { amount: number; category: string; date: string; paymentMode: string; notes: string };
+  amount: number;
+  category: string;
+  date: string;
+  paymentMode: string;
+  notes: string;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -123,6 +134,7 @@ export const FloatingAIAssistant = () => {
   const [hasAcceptedDataUse, setHasAcceptedDataUse] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [transactionDraft, setTransactionDraft] = useState<TransactionDraft | null>(null);
+  const [pendingRecordChange, setPendingRecordChange] = useState<PendingRecordChange | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -370,7 +382,7 @@ export const FloatingAIAssistant = () => {
       await extractImageTransaction();
       return;
     }
-    if (!inputValue.trim() || isLoading || isHistoryLoading || !user) return;
+    if (!inputValue.trim() || isLoading || isHistoryLoading || !user || pendingRecordChange) return;
 
     const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: inputValue };
     const currentMessages = [...messages.filter((message) => message.id !== '1'), userMsg]
@@ -449,6 +461,9 @@ export const FloatingAIAssistant = () => {
             if (delta?.savingsChanged) {
               await refreshSavings();
             }
+            if (delta?.pendingRecordChange && typeof delta.pendingRecordChange === 'object') {
+              setPendingRecordChange(delta.pendingRecordChange as PendingRecordChange);
+            }
             if (content) {
               assistantContent += content;
               setMessages(prev => {
@@ -483,6 +498,91 @@ export const FloatingAIAssistant = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const confirmPendingRecordChange = async () => {
+    if (!pendingRecordChange || !user || isLoading) return;
+    const change = pendingRecordChange;
+    if (!['create_income', 'edit_income', 'edit_expense'].includes(change.mode)) {
+      toast.error('This change request is invalid. No record was changed.');
+      setPendingRecordChange(null);
+      return;
+    }
+    if (!Number.isFinite(change.amount) || change.amount <= 0 || change.amount > 1_000_000_000
+      || !change.category.trim() || change.category.length > 100
+      || !/^\d{4}-\d{2}-\d{2}$/.test(change.date)
+      || Number.isNaN(Date.parse(`${change.date}T00:00:00Z`))
+      || new Date(`${change.date}T00:00:00Z`).toISOString().slice(0, 10) !== change.date
+      || !PAYMENT_MODES.includes(change.paymentMode as (typeof PAYMENT_MODES)[number])
+      || change.notes.length > 500) {
+      toast.error('Review the amount, category, date, payment method, and notes before confirming.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      if (change.mode === 'create_income') {
+        const category = change.category.trim();
+        const { error } = await supabase.from('income_entries').insert({
+          amount: change.amount,
+          category,
+          custom_category: INCOME_CATEGORIES.includes(category as (typeof INCOME_CATEGORIES)[number]) ? null : category,
+          date: change.date,
+          payment_mode: change.paymentMode,
+          notes: change.notes.trim(),
+          user_id: user.id,
+        });
+        if (error) throw error;
+        await refreshIncome();
+      } else if (!change.id) {
+        throw new Error('The record to edit could not be identified. No changes were saved.');
+      } else if (change.mode === 'edit_income') {
+        const category = change.category.trim();
+        const { data, error } = await supabase.from('income_entries').update({
+          amount: change.amount,
+          category,
+          custom_category: INCOME_CATEGORIES.includes(category as (typeof INCOME_CATEGORIES)[number]) ? null : category,
+          date: change.date,
+          payment_mode: change.paymentMode,
+          notes: change.notes.trim(),
+        }).eq('id', change.id).eq('user_id', user.id).select('id').maybeSingle();
+        if (error) throw error;
+        if (!data) throw new Error('That income record is no longer available. No changes were saved.');
+        await refreshIncome();
+      } else {
+        const { data, error } = await supabase.from('expense_entries').update({
+          amount: change.amount,
+          category: change.category.trim(),
+          date: change.date,
+          payment_mode: change.paymentMode,
+          notes: change.notes.trim(),
+        }).eq('id', change.id).eq('user_id', user.id).select('id').maybeSingle();
+        if (error) throw error;
+        if (!data) throw new Error('That expense record is no longer available. No changes were saved.');
+        await refreshExpenses();
+      }
+
+      const successText = change.mode === 'create_income'
+        ? `Recorded ${change.category} income of ₹${change.amount.toLocaleString('en-IN')} on ${change.date}.`
+        : `Updated the ${change.mode === 'edit_income' ? 'income' : 'expense'} record to ₹${change.amount.toLocaleString('en-IN')} on ${change.date}.`;
+      const confirmation: Message = { id: crypto.randomUUID(), role: 'assistant', content: successText };
+      setPendingRecordChange(null);
+      setMessages((previous) => [...previous, confirmation].slice(-MAX_HISTORY_MESSAGES));
+      await persistWithNotice(confirmation, user.id);
+      toast.success(change.mode === 'create_income' ? 'Income saved' : 'Record updated');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save the change.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const cancelPendingRecordChange = async () => {
+    if (!pendingRecordChange || !user || isLoading) return;
+    setPendingRecordChange(null);
+    const message: Message = { id: crypto.randomUUID(), role: 'assistant', content: 'Canceled. No record changes were made.' };
+    setMessages((previous) => [...previous, message].slice(-MAX_HISTORY_MESSAGES));
+    await persistWithNotice(message, user.id);
   };
 
   const saveTransactionDraft = async () => {
@@ -658,7 +758,7 @@ export const FloatingAIAssistant = () => {
                   Allow AI chat and screenshot reading
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), and your current-month financial summaries to the configured Gemini API. If you attach a payment screenshot, it is sent to Gemini to read and is not stored by Xpenzy; extracted transaction details are only saved after you review and confirm them. Your chat history is saved to your Xpenzy account in Supabase. Xpenzy may also remember stable, non-sensitive preferences and facts you mention to personalize future answers; it does not train Gemini on your chats. Use the trash icon to clear these memories. Explicit requests to record a transaction or change a budget are saved to your account.
+                  When you ask a question, Xpenzy sends your question, up to 20 recent chat messages (capped at an estimated 6,000 tokens), current-month financial summaries, and up to 40 recent income and expense records to the configured Gemini API. If you attach a payment screenshot, it is sent to Gemini to read and is not stored by Xpenzy; extracted transaction details are only saved after you review and confirm them. Your chat history is saved to your Xpenzy account in Supabase. Xpenzy may also remember stable, non-sensitive preferences and facts you mention to personalize future answers; it does not train Gemini on your chats. Use the trash icon to clear these memories. AI-prepared income entries and edits to income or expense records require your confirmation before they are saved.
                 </p>
                 <Button type="button" size="sm" onClick={() => setHasAcceptedDataUse(true)}>Continue to AI</Button>
               </div>
@@ -680,6 +780,61 @@ export const FloatingAIAssistant = () => {
                     </div>
                   </div>
                 ))}
+                {pendingRecordChange && (
+                  <section className="space-y-3 rounded-xl border border-amber-500/40 bg-background p-3" aria-label="Confirm financial record change">
+                    <div>
+                      <h3 className="text-sm font-semibold">Review before saving</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {pendingRecordChange.mode === 'create_income'
+                          ? 'Confirm this income entry. Nothing will be saved until you choose Confirm.'
+                          : `Proposed ${pendingRecordChange.mode === 'edit_income' ? 'income' : 'expense'} edit. Nothing will change until you confirm.`}
+                      </p>
+                    </div>
+                    {pendingRecordChange.before && (
+                      <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
+                        Current: ₹{pendingRecordChange.before.amount.toLocaleString('en-IN')} · {pendingRecordChange.before.category} · {pendingRecordChange.before.date}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="space-y-1 text-xs text-muted-foreground">
+                        Amount (₹)
+                        <Input type="number" min="0.01" max="1000000000" step="0.01" value={pendingRecordChange.amount}
+                          onChange={(event) => setPendingRecordChange((current) => current ? { ...current, amount: Number(event.target.value) } : current)} className="h-9" />
+                      </label>
+                      <label className="space-y-1 text-xs text-muted-foreground">
+                        Date
+                        <Input type="date" value={pendingRecordChange.date}
+                          onChange={(event) => setPendingRecordChange((current) => current ? { ...current, date: event.target.value } : current)} className="h-9" />
+                      </label>
+                    </div>
+                    <label className="block space-y-1 text-xs text-muted-foreground">
+                      Category
+                      <Input value={pendingRecordChange.category} maxLength={100}
+                        onChange={(event) => setPendingRecordChange((current) => current ? { ...current, category: event.target.value } : current)} className="h-9" />
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="space-y-1 text-xs text-muted-foreground">
+                        Payment method
+                        <select value={pendingRecordChange.paymentMode}
+                          onChange={(event) => setPendingRecordChange((current) => current ? { ...current, paymentMode: event.target.value } : current)}
+                          className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground">
+                          {PAYMENT_MODES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+                        </select>
+                      </label>
+                      <label className="space-y-1 text-xs text-muted-foreground">
+                        Notes
+                        <Input value={pendingRecordChange.notes} maxLength={500}
+                          onChange={(event) => setPendingRecordChange((current) => current ? { ...current, notes: event.target.value } : current)} className="h-9" />
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" className="flex-1" onClick={() => { void cancelPendingRecordChange(); }} disabled={isLoading}>Cancel</Button>
+                      <Button type="button" className="flex-1" onClick={() => { void confirmPendingRecordChange(); }} disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Confirm and save
+                      </Button>
+                    </div>
+                  </section>
+                )}
                 {transactionDraft && (
                   <section className="rounded-xl border border-primary/25 bg-background p-3" aria-label="Review transaction draft">
                     <div className="mb-3 flex items-center justify-between gap-2">
@@ -851,7 +1006,7 @@ export const FloatingAIAssistant = () => {
                       }
                     }}
                     className="min-w-0 flex-1"
-                    disabled={!hasAcceptedDataUse || isLoading || isHistoryLoading}
+                    disabled={!hasAcceptedDataUse || isLoading || isHistoryLoading || Boolean(pendingRecordChange)}
                   />
                   <input
                     ref={fileInputRef}

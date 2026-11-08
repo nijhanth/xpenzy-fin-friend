@@ -18,11 +18,12 @@ import { useToast } from '@/hooks/use-toast';
 import { readFirstWorksheet } from '@/lib/xlsxReader';
 import type { InvestmentEntry, InvestmentTransaction } from '@/types/financial';
 
-type ImportedMutualFund = { name: string; units: number; invested: number; current: number };
+type ImportedMutualFund = { name: string; units: number; invested: number; current: number; type: 'Mutual Fund' | 'Stocks' };
+type ImportedSummary = { holdings: ImportedMutualFund[]; asOfDate: string; summaryInvested: number; summaryCurrent: number; source: 'Groww' | 'Angel One' };
 type FundSnapshot = { date: string; invested: number; current: number; units: number; transaction?: InvestmentTransaction };
 
 const statementSnapshotPrefix = 'Statement snapshot:';
-const isStatementImportedInvestment = (notes?: string) => notes?.startsWith('Imported from mutual fund statement');
+const isStatementImportedInvestment = (notes?: string) => notes?.startsWith('Imported from mutual fund statement') || notes?.startsWith('Imported from Angel One statement');
 const redeemedDateFromNotes = (notes?: string) => notes?.match(/REDEEMED:\s*(\d{4}-\d{2}-\d{2})/)?.[1];
 const realizedProfitLossFromNotes = (notes?: string) => {
   const value = notes?.match(/realized=(-?\d+(?:\.\d+)?)/)?.[1];
@@ -66,7 +67,7 @@ function parseMutualFundSummary(rows: string[][]) {
     const invested = toAmount(row[investedColumn]);
     const current = toAmount(row[currentColumn]);
     if (![units, invested, current].every(Number.isFinite)) continue;
-    const currentHolding = holdings.get(name) || { name, units: 0, invested: 0, current: 0 };
+    const currentHolding = holdings.get(name) || { name, units: 0, invested: 0, current: 0, type: 'Mutual Fund' as const };
     currentHolding.units += units;
     currentHolding.invested += invested;
     currentHolding.current += current;
@@ -84,7 +85,57 @@ function parseMutualFundSummary(rows: string[][]) {
     asOfDate,
     summaryInvested: Number.isFinite(summaryInvested) ? summaryInvested : [...holdings.values()].reduce((sum, item) => sum + item.invested, 0),
     summaryCurrent: Number.isFinite(summaryCurrent) ? summaryCurrent : [...holdings.values()].reduce((sum, item) => sum + item.current, 0),
+    source: 'Groww' as const,
   };
+}
+
+function parseAngelOneSummary(rows: string[][]) {
+  const normalized = (value?: string) => (value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const headerIndex = rows.findIndex(row => {
+    const headers = row.map(normalized);
+    return headers.some(value => ['tradingsymbol', 'symbol', 'scripname', 'stockname', 'instrument', 'fundname'].includes(value)) &&
+      headers.some(value => ['quantity', 'qty', 'holdingqty', 'units'].includes(value));
+  });
+  if (headerIndex < 0) throw new Error('Could not find an Angel One holdings table. Include columns for Fund Name or Scrip, Units/Quantity, Invested Value, and Current Value.');
+  const headers = rows[headerIndex].map(normalized);
+  const findColumn = (...names: string[]) => headers.findIndex(value => names.includes(value));
+  const nameColumn = findColumn('tradingsymbol', 'symbol', 'scripname', 'stockname', 'instrument', 'fundname');
+  const isMutualFundReport = headers[nameColumn] === 'fundname';
+  const unitsColumn = findColumn('quantity', 'qty', 'holdingqty', 'units');
+  const investedColumn = findColumn('investedvalue', 'investmentvalue', 'costvalue', 'buyvalue', 'averageprice', 'avgprice', 'buyprice');
+  const currentColumn = headers.findIndex(value => ['currentvalue', 'marketvalue', 'holdingvalue', 'ltpvalue', 'presentvalue', 'ltp'].includes(value) || value.startsWith('valueason'));
+  if ([nameColumn, unitsColumn, investedColumn, currentColumn].some(index => index < 0)) {
+    throw new Error('The Angel One holdings table must include Scrip/Trading Symbol, Quantity, Invested/Buy Value, and Current/Market Value columns.');
+  }
+  const toAmount = (value?: string) => Number((value || '').replace(/[₹,\s]/g, ''));
+  const holdings = new Map<string, ImportedMutualFund>();
+  for (const row of rows.slice(headerIndex + 1)) {
+    const name = row[nameColumn]?.trim();
+    if (!name) continue;
+    const units = toAmount(row[unitsColumn]);
+    const rawInvested = toAmount(row[investedColumn]);
+    const rawCurrent = toAmount(row[currentColumn]);
+    const invested = headers[investedColumn] === 'averageprice' || headers[investedColumn] === 'avgprice' || headers[investedColumn] === 'buyprice' ? units * rawInvested : rawInvested;
+    const current = headers[currentColumn] === 'ltp' ? units * rawCurrent : rawCurrent;
+    if (![units, invested, current].every(Number.isFinite) || units <= 0) continue;
+    const holding = holdings.get(name) || { name, units: 0, invested: 0, current: 0, type: isMutualFundReport ? 'Mutual Fund' as const : 'Stocks' as const };
+    holding.units += units;
+    holding.invested += invested;
+    holding.current += current;
+    holdings.set(name, holding);
+  }
+  if (!holdings.size) throw new Error('No Angel One stock holdings were found in this workbook.');
+  const asOfText = rows.flat().find(value => /(?:as\s*on|statement\s*date)\s*:?\s*\d{1,2}[-/ ]\w+[-/ ]\d{2,4}/i.test(value?.trim() || ''));
+  const dateMatch = asOfText?.match(/(\d{1,2})[-/ ]([A-Za-z]{3,9}|\d{1,2})[-/ ](\d{2,4})/);
+  let asOfDate = new Date().toISOString().slice(0, 10);
+  if (dateMatch) {
+    const month = /^\d+$/.test(dateMatch[2]) ? Number(dateMatch[2]) - 1 : new Date(`${dateMatch[2]} 1, 2000`).getMonth();
+    const year = Number(dateMatch[3]) < 100 ? 2000 + Number(dateMatch[3]) : Number(dateMatch[3]);
+    const parsed = new Date(year, month, Number(dateMatch[1]));
+    if (Number.isFinite(parsed.getTime())) asOfDate = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  }
+  const items = [...holdings.values()];
+  return { holdings: items, asOfDate, summaryInvested: items.reduce((sum, item) => sum + item.invested, 0), summaryCurrent: items.reduce((sum, item) => sum + item.current, 0), source: 'Angel One' as const };
 }
 
 // Investment type colors
@@ -201,7 +252,8 @@ export const Investments = () => {
   const [historyMonth, setHistoryMonth] = useState(String(new Date().getMonth() + 1));
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [importPreview, setImportPreview] = useState<ReturnType<typeof parseMutualFundSummary> | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportedSummary | null>(null);
+  const [statementSource, setStatementSource] = useState<'Groww' | 'Angel One'>('Groww');
   const [importError, setImportError] = useState('');
   const [redemptionTarget, setRedemptionTarget] = useState<InvestmentEntry | null>(null);
   const [redemptionDate, setRedemptionDate] = useState(new Date().toISOString().slice(0, 10));
@@ -425,7 +477,7 @@ export const Investments = () => {
     try {
       if (!file.name.toLowerCase().endsWith('.xlsx')) throw new Error('Choose an Excel .xlsx statement file.');
       const rows = await readFirstWorksheet(file);
-      setImportPreview(parseMutualFundSummary(rows));
+      setImportPreview(statementSource === 'Groww' ? parseMutualFundSummary(rows) : parseAngelOneSummary(rows));
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Could not read this statement.');
     }
@@ -437,26 +489,27 @@ export const Investments = () => {
     let importedCount = 0;
     try {
       const reportNames = new Set(importPreview.holdings.map(holding => holding.name.trim().toLowerCase()));
+      const importedTypes = new Set(importPreview.holdings.map(holding => holding.type));
       const omittedImportedFunds = data.investments
-        .filter(item => item.type === 'Mutual Fund' && isStatementImportedInvestment(item.notes) && !reportNames.has(item.name.trim().toLowerCase()))
-        .map(item => ({ name: item.name, units: 0, invested: 0, current: 0 }));
+        .filter(item => importedTypes.has(item.type as 'Mutual Fund' | 'Stocks') && isStatementImportedInvestment(item.notes) && !reportNames.has(item.name.trim().toLowerCase()))
+        .map(item => ({ name: item.name, units: 0, invested: 0, current: 0, type: item.type as 'Mutual Fund' | 'Stocks' }));
       const statementHoldings = [...importPreview.holdings, ...omittedImportedFunds];
 
       for (const holding of statementHoldings) {
-        const existing = data.investments.find(item => item.type === 'Mutual Fund' && item.name.trim().toLowerCase() === holding.name.toLowerCase());
+        const existing = data.investments.find(item => item.type === holding.type && item.name.trim().toLowerCase() === holding.name.toLowerCase());
         const importedByStatement = isStatementImportedInvestment(existing?.notes);
         if (existing && !importedByStatement) continue;
 
         let investment = existing;
         if (!investment) {
           const created = await addInvestment({
-            type: 'Mutual Fund',
+            type: holding.type,
             name: holding.name,
             initial_invested: holding.invested,
             invested: holding.invested,
             current: holding.current,
             date: importPreview.asOfDate,
-            notes: `Imported from mutual fund statement. Value as of ${importPreview.asOfDate}. Units: ${holding.units.toFixed(3)}.`,
+            notes: `Imported from ${importPreview.source === 'Angel One' ? 'Angel One' : 'mutual fund'} statement. Value as of ${importPreview.asOfDate}. Units: ${holding.units.toFixed(3)}.`,
           }, false);
           if (!created) throw new Error(`Could not create ${holding.name}.`);
           investment = created;
@@ -488,7 +541,7 @@ export const Investments = () => {
         await updateInvestmentEntry(investment.id, {
           date: snapshots[0].date,
           initial_invested: initialBasis,
-          notes: `Imported from mutual fund statement snapshots.${redeemedNote}`,
+          notes: `Imported from ${importPreview.source === 'Angel One' ? 'Angel One' : 'mutual fund'} statement snapshots.${redeemedNote}`,
         }, false);
 
         for (let index = 0; index < snapshots.length; index += 1) {
@@ -623,10 +676,20 @@ export const Investments = () => {
       <Dialog open={importDialogOpen} onOpenChange={open => { setImportDialogOpen(open); if (!open) { setImportPreview(null); setImportError(''); } }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Import mutual fund statement</DialogTitle>
-            <p className="text-sm text-muted-foreground">Upload the Groww .xlsx summary. Folio numbers and personal details are not imported.</p>
+            <DialogTitle>Import investment statement</DialogTitle>
+            <p className="text-sm text-muted-foreground">Upload a Groww mutual fund or Angel One holdings .xlsx summary. Personal details are not imported.</p>
           </DialogHeader>
           <div className="space-y-4">
+            <div>
+              <Label htmlFor="statement-source">Investment app</Label>
+              <Select value={statementSource} onValueChange={value => { setStatementSource(value as 'Groww' | 'Angel One'); setImportPreview(null); setImportError(''); }}>
+                <SelectTrigger id="statement-source" className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Groww">Groww</SelectItem>
+                  <SelectItem value="Angel One">Angel One</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label htmlFor="mutual-fund-statement">Excel statement (.xlsx)</Label>
               <Input id="mutual-fund-statement" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="mt-1" onChange={event => handleStatementFile(event.target.files?.[0])} />
@@ -636,13 +699,13 @@ export const Investments = () => {
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Statement date</p><p className="font-semibold">{importPreview.asOfDate}</p></div>
-                  <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Funds after combining folios</p><p className="font-semibold">{importPreview.holdings.length}</p></div>
+                  <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Holdings imported</p><p className="font-semibold">{importPreview.holdings.length}</p></div>
                   <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Invested value</p><p className="font-semibold">{formatCurrency(importPreview.summaryInvested)}</p></div>
                   <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Current value</p><p className="font-semibold">{formatCurrency(importPreview.summaryCurrent)}</p></div>
                 </div>
                 <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border p-3">
                   {importPreview.holdings.map(holding => {
-                    const existing = data.investments.find(item => item.type === 'Mutual Fund' && item.name.trim().toLowerCase() === holding.name.toLowerCase());
+                    const existing = data.investments.find(item => item.type === holding.type && item.name.trim().toLowerCase() === holding.name.toLowerCase());
                     const importStatus = isStatementImportedInvestment(existing?.notes)
                       ? 'History will update for this statement date'
                       : existing ? 'Already exists and will be skipped' : '';

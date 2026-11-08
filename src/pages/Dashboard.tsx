@@ -131,7 +131,8 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
     const cashFlowExpenses = data.expenses.filter((entry) => inRange(entry.date, cashFlowRange));
     const cashFlowIncome = data.income.filter((entry) => inRange(entry.date, cashFlowRange));
     const cashFlowSavingsTransactions = data.savingsTransactions.filter((entry) => inRange(entry.date, cashFlowRange));
-    const cashFlowInvestmentTransactions = data.investmentTransactions.filter((entry) => inRange(entry.date, cashFlowRange));
+    const cashFlowInvestmentTransactions = data.investmentTransactions.filter((entry) =>
+      inRange(entry.date, cashFlowRange) && !entry.notes?.startsWith('Statement snapshot:'));
     const activityExpenses = data.expenses.filter((entry) => inRange(entry.date, activityDateFilter.range));
     const activityIncome = data.income.filter((entry) => inRange(entry.date, activityDateFilter.range));
     const topExpenses = data.expenses
@@ -139,6 +140,9 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0) || b.date.localeCompare(a.date))
       .slice(0, 5);
     const spent = monthExpenses.reduce((total, entry) => total + Number(entry.amount || 0), 0);
+    const monthInvestmentContributions = data.investmentTransactions
+      .filter((entry) => entry.date?.startsWith(monthKey) && Number(entry.amount || 0) > 0 && !entry.notes?.startsWith('Statement snapshot:'))
+      .reduce((total, entry) => total + Number(entry.amount || 0), 0);
     const received = monthIncome.reduce((total, entry) => total + Number(entry.amount || 0), 0);
     const rangeStartMonth = new Date(`${budgetDateFilter.range.start.slice(0, 7)}-01T00:00:00`);
     const rangeEndMonth = new Date(`${budgetDateFilter.range.end.slice(0, 7)}-01T00:00:00`);
@@ -208,6 +212,8 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       if (startingBalance > 0 && inRange(goal.date, cashFlowRange)) addToMonth(goal.date, 'setAside', startingBalance);
     }
     for (const investment of data.investments) {
+      if (investment.notes?.startsWith('Imported from mutual fund statement snapshots.') ||
+        investment.notes?.startsWith('Imported from Angel One statement snapshots.')) continue;
       const hasTransactions = data.investmentTransactions.some((transaction) => transaction.investment_id === investment.id);
       const startingInvestment = Number(investment.initial_invested || (!hasTransactions ? investment.invested : 0) || 0);
       if (startingInvestment > 0 && inRange(investment.date, cashFlowRange)) addToMonth(investment.date, 'setAside', startingInvestment);
@@ -239,11 +245,12 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
 
     return {
       spent,
+      monthInvestmentContributions,
       received,
       budget,
       rangeSpent,
       remaining: budget - rangeSpent,
-      net: received - spent,
+      net: received - spent - monthInvestmentContributions,
       monthExpenses,
       monthIncome,
       budgetCategories,
@@ -253,7 +260,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       activity,
       savings,
       investments,
-      dailyAverage: spent / Math.max(dayOfMonth, 1),
+      dailyAverage: (spent + monthInvestmentContributions) / Math.max(dayOfMonth, 1),
     };
   }, [data, monthKey, month, year, dayOfMonth, budgetDateFilter.range, categoryDateFilter.range, cashFlowDateFilter.preset, cashFlowDateFilter.range, activityDateFilter.range, topExpensesDateFilter.range]);
 
@@ -307,7 +314,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
               { label: 'Income received', value: stats.received, detail: `${stats.monthIncome.length} entries`, icon: TrendingUp },
               { label: 'Expenses recorded', value: stats.spent, detail: `${stats.monthExpenses.length} entries`, icon: TrendingDown },
               { label: 'Savings balance', value: stats.savings, detail: `${data.savings.length} goals`, icon: PiggyBank },
-              { label: 'Investment value', value: stats.investments, detail: `${data.investments.length} assets`, icon: CircleDollarSign },
+              { label: 'Investment value', value: stats.investments, detail: `${inr(stats.monthInvestmentContributions)} added this month`, icon: CircleDollarSign },
             ].map(({ label, value, detail, icon: Icon }) => (
               <div key={label} className="min-w-0">
                 <p className="flex items-start gap-1.5 text-xs leading-5 text-white/70"><Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" /> <span>{label}</span></p>

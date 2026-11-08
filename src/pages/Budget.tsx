@@ -81,6 +81,20 @@ export const Budget = () => {
     });
   };
 
+  const isInSelectedPeriod = (date: string, period: 'yearly' | 'monthly' | 'weekly') => {
+    const entryDate = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(entryDate.getTime())) return false;
+    if (period === 'yearly') {
+      return isWithinInterval(entryDate, { start: startOfYear(new Date(selectedYear, 0)), end: endOfYear(new Date(selectedYear, 0)) });
+    }
+    if (period === 'monthly') {
+      return isWithinInterval(entryDate, { start: startOfMonth(new Date(selectedYear, selectedMonth)), end: endOfMonth(new Date(selectedYear, selectedMonth)) });
+    }
+    const firstDayOfMonth = startOfMonth(new Date(selectedYear, selectedMonth));
+    const targetWeekStart = startOfWeek(new Date(firstDayOfMonth.getTime() + (selectedWeek - 1) * 7 * 24 * 60 * 60 * 1000));
+    return isWithinInterval(entryDate, { start: targetWeekStart, end: endOfWeek(targetWeekStart) });
+  };
+
   // Filter budgets to show only those relevant to the selected period
   const filteredBudgets = useMemo(() => {
     return data.budgets.filter(budget => {
@@ -109,8 +123,14 @@ export const Budget = () => {
     return filteredBudgets.map(budget => {
       let spent = 0;
       
-      // For savings and investment budgets, use the 'current' field which is auto-updated by triggers
-      if (budget.linked_type === 'savings' || budget.linked_type === 'investment') {
+      if (budget.linked_type === 'investment' && budget.linked_id) {
+        spent = data.investmentTransactions
+          .filter(transaction => transaction.investment_id === budget.linked_id &&
+            transaction.amount > 0 &&
+            !transaction.notes?.startsWith('Statement snapshot:') &&
+            isInSelectedPeriod(transaction.date, budget.period))
+          .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+      } else if (budget.linked_type === 'savings') {
         spent = budget.current || 0;
       } else {
         // For expense budgets, calculate from actual expenses matching this budget category
@@ -125,7 +145,7 @@ export const Budget = () => {
         spent
       };
     });
-  }, [filteredBudgets, data.expenses, selectedYear, selectedMonth, selectedWeek]);
+  }, [filteredBudgets, data.expenses, data.investmentTransactions, selectedYear, selectedMonth, selectedWeek]);
 
   // Calculate expenses that don't have budgets (Others/Unbudgeted)
   const unbudgetedExpensesList = useMemo(() => {
@@ -578,6 +598,9 @@ export const Budget = () => {
                   onChange={(e) => setNewBudget({...newBudget, limit: e.target.value})}
                   placeholder="5000"
                 />
+                {newBudget.type === 'investment' && (
+                  <p className="mt-1 text-xs text-muted-foreground">Only contributions added during this period count. Imported statement snapshots do not use this budget.</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="period">Period</Label>

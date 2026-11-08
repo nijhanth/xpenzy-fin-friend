@@ -110,11 +110,14 @@ export const Home = () => {
   const totals = useMemo(() => {
     const totalIncome = data.income.reduce((sum, item) => sum + item.amount, 0);
     const totalExpenses = data.expenses.reduce((sum, item) => sum + item.amount, 0);
+    const investmentContributions = data.investmentTransactions
+      .filter(item => Number(item.amount || 0) > 0 && !item.notes?.startsWith('Statement snapshot:'))
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const lifetimeGoalSavings = data.savings.reduce((sum, item) => sum + (item.current || 0), 0);
     const totalUsedFromGoals = data.savings.reduce((sum, item) => sum + (item.used_amount || 0), 0);
     const totalSavings = Math.max(0, lifetimeGoalSavings - totalUsedFromGoals);
     const totalInvestments = data.investments.reduce((sum, item) => sum + item.invested, 0);
-    const remainingBalance = totalIncome - totalExpenses;
+    const remainingBalance = totalIncome - totalExpenses - investmentContributions;
     return { totalIncome, totalExpenses, totalSavings, totalInvestments, remainingBalance };
   }, [data]);
 
@@ -140,7 +143,10 @@ export const Home = () => {
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
       const dayIncome = data.income.filter(item => item.date === dateStr).reduce((sum, item) => sum + item.amount, 0);
-      const dayExpense = data.expenses.filter(item => item.date === dateStr).reduce((sum, item) => sum + item.amount, 0);
+      const dayExpense = data.expenses.filter(item => item.date === dateStr).reduce((sum, item) => sum + item.amount, 0)
+        + data.investmentTransactions
+          .filter(item => item.date === dateStr && Number(item.amount || 0) > 0 && !item.notes?.startsWith('Statement snapshot:'))
+          .reduce((sum, item) => sum + Number(item.amount || 0), 0);
       last7Days.push({
         date, day: date.toLocaleDateString('en', { weekday: 'short' }),
         fullDate: date.toLocaleDateString('en', { month: 'short', day: 'numeric' }),
@@ -149,7 +155,7 @@ export const Home = () => {
     }
     let cumulative = 0;
     return last7Days.map(day => { cumulative += day.balance; return { ...day, balance: cumulative, dailyChange: day.balance }; });
-  }, [data.income, data.expenses]);
+  }, [data.income, data.expenses, data.investmentTransactions]);
 
   const chartDomain = useMemo(() => {
     const values = trendData.map(d => d.balance);

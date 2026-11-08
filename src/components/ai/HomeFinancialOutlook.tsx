@@ -109,7 +109,7 @@ export const HomeFinancialOutlook = ({ isFinancialLoading = false }: { isFinanci
       income: sumMonth(data.income, month),
       expenses: sumMonth(data.expenses, month),
       savings: sumMonth(data.savingsTransactions, month),
-      investments: data.investmentTransactions.filter(entry => entry.date?.startsWith(month) && Number(entry.amount || 0) > 0)
+      investments: data.investmentTransactions.filter(entry => entry.date?.startsWith(month) && Number(entry.amount || 0) > 0 && !entry.notes?.startsWith('Statement snapshot:'))
         .reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
     }));
     const activeMonths = monthTotals.filter(item => item.income || item.expenses || item.savings).length || 1;

@@ -58,8 +58,8 @@ const chatReply = (content: string, changes: {
   expenseChanged?: boolean;
   incomeChanged?: boolean;
   savingsChanged?: boolean;
-} = {}) => new Response(
-  `data: ${JSON.stringify({ choices: [{ delta: { content, ...changes } }] })}\n\ndata: [DONE]\n\n`,
+} = {}, pendingRecordChange?: Record<string, unknown>) => new Response(
+  `data: ${JSON.stringify({ choices: [{ delta: { content, ...changes, ...(pendingRecordChange ? { pendingRecordChange } : {}) } }] })}\n\ndata: [DONE]\n\n`,
   { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } },
 );
 
@@ -300,6 +300,12 @@ Instructions:
 
     } else if (action === "chat") {
       const finData = await fetchFinancialData();
+      const [incomeRecordsRes, expenseRecordsRes] = await Promise.all([
+        supabase.from("income_entries").select("id,amount,category,date,payment_mode,notes").eq("user_id", userId).order("date", { ascending: false }).limit(40),
+        supabase.from("expense_entries").select("id,amount,category,date,payment_mode,notes").eq("user_id", userId).order("date", { ascending: false }).limit(40),
+      ]);
+      if (incomeRecordsRes.error) throw incomeRecordsRes.error;
+      if (expenseRecordsRes.error) throw expenseRecordsRes.error;
       const { data: preferences, error: preferencesError } = await supabase
         .from("user_preferences")
         .select("ai_memory_enabled")
@@ -339,6 +345,8 @@ You may suggest simple, non-judgmental budgets based only on the user's recorded
 You can create or update an expense budget only when the user explicitly asks you to do so. Use the create_expense_budget tool for a clear request with a category, amount, and period. Never claim a budget was created or updated unless the tool succeeds. For hypothetical questions or suggestions, do not call the tool.
 You can record an expense only when the user explicitly asks to add, log, or record one and provides a clear amount and category. Use the create_expense tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. Never claim an expense was recorded unless the tool succeeds. Do not record hypothetical expenses or merely discuss a past expense as a new record.
 You can record income only when the user explicitly asks to add, log, or record it and provides a clear amount and category. Use the create_income tool for such a request. If the date is omitted, use today; if the payment method is omitted, use UPI. If the category is Custom, require a clear custom category. Never claim income was recorded unless the tool succeeds. Do not record hypothetical income or merely discuss past income as a new record.
+For every new income entry, prepare a review card with create_income; never write it directly. The user must press Confirm and save before any new income is inserted. Preserve the exact amount the user stated; do not round, adjust, or infer it. If the request is unclear, ask instead of preparing a record.
+You may help edit existing income or expense records only when explicitly asked. Use propose_record_edit to prepare a change; never write an edit directly or say it has already been saved. The user must review the current record and proposed values, then press Confirm and save. Use only a uniquely matching record from the records listed below. If multiple records could match or no record matches, ask the user which one. Preserve exact amounts and only change fields requested by the user.
 You can create a savings goal only when the user explicitly asks you to create one and provides a clear goal name and target amount. Use the create_savings_goal tool for such a request. If the starting amount is omitted, use zero; if the date is omitted, use today. Never claim a goal was created unless the tool succeeds. Do not create goals for hypothetical questions or suggestions.
 ${memoryInstructions}
 Here is the user's current financial data for ${finData.month}:
@@ -349,7 +357,9 @@ Here is the user's current financial data for ${finData.month}:
 - Savings goals: ${JSON.stringify(finData.savings)}
 - Investments: ${JSON.stringify(finData.investments)}
 - Budgets: ${JSON.stringify(finData.budgets)}
-- Recent expenses: ${JSON.stringify(finData.expenses.slice(0, 20))}`;
+- Recent expenses: ${JSON.stringify(finData.expenses.slice(0, 20))}
+- Income records available for editing (recent 40): ${JSON.stringify(incomeRecordsRes.data || [])}
+- Expense records available for editing (recent 40): ${JSON.stringify(expenseRecordsRes.data || [])}`;
       userPrompt = chatMessages[chatMessages.length - 1]?.content || input;
 
     } else if (action === "insights") {
@@ -787,8 +797,29 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
       {
         type: "function",
         function: {
+          name: "propose_record_edit",
+          description: "Prepare an edit proposal for one existing income or expense record after the user explicitly asks to change it. This does not save anything; the user must confirm in the app.",
+          parameters: {
+            type: "object",
+            properties: {
+              transactionType: { type: "string", enum: ["income", "expense"] },
+              recordId: { type: "string", description: "ID of the uniquely matching record from the records context." },
+              amount: { type: "number", description: "New amount, only if requested." },
+              category: { type: "string", description: "New category, only if requested." },
+              date: { type: "string", description: "New date in YYYY-MM-DD, only if requested." },
+              paymentMode: { type: "string", enum: ["Cash", "UPI", "Card", "Bank Transfer", "Net Banking"], description: "New payment method, only if requested." },
+              notes: { type: "string", description: "New notes, only if requested." },
+            },
+            required: ["transactionType", "recordId"],
+            additionalProperties: false,
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
           name: "create_income",
-          description: "Record new income only when the user explicitly asks to add, log, or record it.",
+          description: "Prepare a new income entry for user review only when the user explicitly asks to add, log, or record income. The app requires user confirmation before saving.",
           parameters: {
             type: "object",
             properties: {
@@ -1052,6 +1083,59 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         return chatReply(savedMessage, { expenseChanged: true });
       }
 
+      if (toolCall?.function?.name === "propose_record_edit") {
+        const args = JSON.parse(toolCall.function.arguments);
+        const transactionType = args.transactionType;
+        const recordId = typeof args.recordId === "string" ? args.recordId : "";
+        if (!["income", "expense"].includes(transactionType) || !recordId) {
+          throw new Error("I could not identify the income or expense record to edit. Please describe it more specifically.");
+        }
+
+        const { data: existing, error: existingError } = transactionType === "income"
+          ? await supabase.from("income_entries").select("id,amount,category,date,payment_mode,notes").eq("id", recordId).eq("user_id", userId).maybeSingle()
+          : await supabase.from("expense_entries").select("id,amount,category,date,payment_mode,notes").eq("id", recordId).eq("user_id", userId).maybeSingle();
+        if (existingError) throw existingError;
+        if (!existing) throw new Error("I could not find that record in your account. No changes were made.");
+
+        const amount = args.amount === undefined ? Number(existing.amount) : Number(args.amount);
+        const category = args.category === undefined ? existing.category : typeof args.category === "string" ? args.category.trim() : "";
+        const date = args.date === undefined ? existing.date : args.date;
+        const paymentMode = args.paymentMode === undefined ? existing.payment_mode : args.paymentMode;
+        const notes = args.notes === undefined ? (existing.notes || "") : typeof args.notes === "string" ? args.notes.trim() : "";
+        const paymentModes = ["Cash", "UPI", "Card", "Bank Transfer", "Net Banking"];
+        const validDate = typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)
+          && !Number.isNaN(Date.parse(`${date}T00:00:00Z`))
+          && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+        if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000
+          || typeof category !== "string" || !category || category.length > 100
+          || !validDate || !paymentModes.includes(paymentMode)
+          || typeof notes !== "string" || notes.length > 500) {
+          throw new Error("The proposed edit contains invalid record details. No changes were made.");
+        }
+        const before = {
+          amount: Number(existing.amount),
+          category: existing.category,
+          date: existing.date,
+          paymentMode: existing.payment_mode,
+          notes: existing.notes || "",
+        };
+        if (before.amount === amount && before.category === category && before.date === date
+          && before.paymentMode === paymentMode && before.notes === notes) {
+          throw new Error("The requested values match the current record, so there is nothing to change.");
+        }
+
+        return chatReply("Review the proposed change below. Nothing has been updated yet; confirm to save it.", {}, {
+          mode: transactionType === "income" ? "edit_income" : "edit_expense",
+          id: existing.id,
+          before,
+          amount,
+          category,
+          date,
+          paymentMode,
+          notes,
+        });
+      }
+
       if (toolCall?.function?.name === "create_income") {
         const args = JSON.parse(toolCall.function.arguments);
         const amount = Number(args.amount);
@@ -1084,19 +1168,14 @@ Predict total month-end spending, compare with budget, and give a risk assessmen
         }
 
         const savedCategory = category === "Custom" ? customCategory : category;
-        const { error: incomeError } = await supabase.from("income_entries").insert({
+        return chatReply("Review this income entry below. Nothing has been saved yet; confirm to add it.", {}, {
+          mode: "create_income",
           amount,
           category: savedCategory,
-          custom_category: category === "Custom" ? customCategory : null,
           date,
-          payment_mode: paymentMode,
+          paymentMode,
           notes,
-          user_id: userId,
         });
-        if (incomeError) throw incomeError;
-
-        const savedMessage = chatConfirmations[insightLanguage].income(savedCategory, amount.toLocaleString("en-IN"), date, paymentMode);
-        return chatReply(savedMessage, { incomeChanged: true });
       }
 
       if (toolCall?.function?.name === "create_savings_goal") {
