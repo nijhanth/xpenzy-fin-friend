@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useToast } from '@/hooks/use-toast';
+import { ReminderCompletionField } from '@/components/forms/ReminderCompletionField';
+import { offerReminderCompletion } from '@/lib/reminderCompletion';
 
 const investmentSchema = z.object({
   type: z.enum(['Mutual Fund', 'Stocks', 'FD', 'Crypto', 'Gold', 'Real Estate', 'Custom']),
@@ -31,6 +33,13 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
   const { addInvestment, updateInvestmentEntry, data } = useFinancial();
   const { toast } = useToast();
   const isEditing = !!editingId;
+  const [relatedReminderId, setRelatedReminderId] = useState('');
+  const remindersUsedElsewhere = useMemo(() => new Set([
+    ...data.expenses.filter(item => item.linkedNoteId).map(item => item.linkedNoteId as string),
+    ...data.savingsTransactions.filter(item => item.linked_note_id).map(item => item.linked_note_id as string),
+    ...data.investmentTransactions.filter(item => item.linked_note_id).map(item => item.linked_note_id as string),
+    ...data.investments.filter(item => item.id !== editingId && item.linked_note_id).map(item => item.linked_note_id as string),
+  ]), [data.expenses, data.savingsTransactions, data.investmentTransactions, data.investments, editingId]);
 
   const form = useForm<InvestmentFormData>({
     resolver: zodResolver(investmentSchema),
@@ -48,6 +57,7 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
     if (editingId && open) {
       const existingEntry = data.investments.find(entry => entry.id === editingId);
       if (existingEntry) {
+        setRelatedReminderId(existingEntry.linked_note_id || '');
         form.reset({
           type: existingEntry.type as any,
           name: existingEntry.name,
@@ -57,6 +67,7 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
         });
       }
     } else if (!editingId) {
+      setRelatedReminderId('');
       form.reset();
     }
   }, [editingId, open, data.investments, form]);
@@ -74,17 +85,24 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
       current: 0, // Will be calculated as invested + profit/loss
       date: formData.date,
       notes: formData.notes || '',
-      customType: formData.type === 'Custom' ? formData.customType : undefined
+      customType: formData.type === 'Custom' ? formData.customType : undefined,
+      linked_note_id: relatedReminderId || null
     };
 
     if (isEditing && editingId) {
-      await updateInvestmentEntry(editingId, investmentData);
+      const existingEntry = data.investments.find(entry => entry.id === editingId);
+      const saved = await updateInvestmentEntry(editingId, investmentData);
+      if (saved === false) return;
+      if (relatedReminderId && relatedReminderId !== existingEntry?.linked_note_id) {
+        void offerReminderCompletion(relatedReminderId);
+      }
       toast({
         title: "Investment Updated",
         description: `${formData.name} investment updated successfully!`
       });
     } else {
-      await addInvestment(investmentData);
+      const saved = await addInvestment(investmentData);
+      if (saved && relatedReminderId) void offerReminderCompletion(relatedReminderId);
       toast({
         title: "Investment Added",
         description: `${formData.name} investment added successfully!`
@@ -188,6 +206,13 @@ export const InvestmentForm: React.FC<InvestmentFormProps> = ({ open, onClose, e
                   <FormMessage />
                 </FormItem>
               )}
+            />
+
+            <ReminderCompletionField
+              value={relatedReminderId}
+              onChange={setRelatedReminderId}
+              refreshKey={`${open}-${editingId ?? 'new'}`}
+              excludedReminderIds={remindersUsedElsewhere}
             />
 
             <div className="flex justify-end space-x-2">

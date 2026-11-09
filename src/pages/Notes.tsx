@@ -61,6 +61,7 @@ export const Notes = () => {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [reopeningNote, setReopeningNote] = useState<Note | null>(null);
   const [linkingNote, setLinkingNote] = useState<Note | null>(null);
+  const [linkingType, setLinkingType] = useState<'expense' | 'savings' | 'investment' | 'investment-holding'>('expense');
   const [expenseSearch, setExpenseSearch] = useState('');
   const [selectedExpenseId, setSelectedExpenseId] = useState('');
   const [linkingExpense, setLinkingExpense] = useState(false);
@@ -71,7 +72,7 @@ export const Notes = () => {
   const [customDateFrom, setCustomDateFrom] = useState('');
   const [customDateTo, setCustomDateTo] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const { data: financialData, refreshExpenses, updateExpense } = useFinancial();
+  const { data: financialData, refreshExpenses, updateExpense, updateSavingsTransaction, updateInvestmentTransaction, updateInvestmentEntry } = useFinancial();
 
   const loadNotes = useCallback(async (showLoading = false) => {
     try {
@@ -140,7 +141,15 @@ export const Notes = () => {
   const linkedExpenses = reopeningNote
     ? financialData.expenses.filter((expense) => expense.linkedNoteId === reopeningNote.id)
     : [];
-  const linkedExpenseTotal = linkedExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const linkedSavingsTransactions = reopeningNote
+    ? financialData.savingsTransactions.filter((transaction) => transaction.linked_note_id === reopeningNote.id)
+    : [];
+  const linkedInvestmentTransactions = reopeningNote
+    ? financialData.investmentTransactions.filter((transaction) => transaction.linked_note_id === reopeningNote.id)
+    : [];
+  const linkedInvestmentEntries = reopeningNote
+    ? financialData.investments.filter((investment) => investment.linked_note_id === reopeningNote.id)
+    : [];
   const expenseCandidates = linkingNote
     ? financialData.expenses.filter((expense) => !expense.linkedNoteId || expense.linkedNoteId === linkingNote.id)
     : [];
@@ -149,11 +158,32 @@ export const Notes = () => {
     return !query || [expense.category, expense.subcategory, expense.notes, expense.paymentMode, expense.date]
       .some((value) => String(value || '').toLowerCase().includes(query));
   });
+  const savingsCandidates = linkingNote ? financialData.savingsTransactions.filter((item) => !item.linked_note_id || item.linked_note_id === linkingNote.id) : [];
+  const filteredSavingsCandidates = savingsCandidates.filter((item) => {
+    const goalName = financialData.savings.find((goal) => goal.id === item.savings_goal_id)?.name || '';
+    const query = expenseSearch.trim().toLowerCase();
+    return !query || [goalName, item.notes, item.date, item.amount].some((value) => String(value || '').toLowerCase().includes(query));
+  });
+  const investmentCandidates = linkingNote ? financialData.investmentTransactions.filter((item) => !item.linked_note_id || item.linked_note_id === linkingNote.id) : [];
+  const filteredInvestmentCandidates = investmentCandidates.filter((item) => {
+    const investmentName = financialData.investments.find((investment) => investment.id === item.investment_id)?.name || '';
+    const query = expenseSearch.trim().toLowerCase();
+    return !query || [investmentName, item.notes, item.date, item.amount].some((value) => String(value || '').toLowerCase().includes(query));
+  });
+  const investmentHoldingCandidates = linkingNote ? financialData.investments.filter((item) => !item.linked_note_id || item.linked_note_id === linkingNote.id) : [];
+  const filteredInvestmentHoldingCandidates = investmentHoldingCandidates.filter((item) => {
+    const query = expenseSearch.trim().toLowerCase();
+    return !query || [item.name, item.type, item.notes, item.date].some((value) => String(value || '').toLowerCase().includes(query));
+  });
 
   const openExpenseLinker = (note: Note) => {
     const currentLink = financialData.expenses.find((expense) => expense.linkedNoteId === note.id);
+    const currentSavingsLink = financialData.savingsTransactions.find((transaction) => transaction.linked_note_id === note.id);
+    const currentInvestmentLink = financialData.investmentTransactions.find((transaction) => transaction.linked_note_id === note.id);
+    const currentInvestmentHoldingLink = financialData.investments.find((investment) => investment.linked_note_id === note.id);
     setLinkingNote(note);
-    setSelectedExpenseId(currentLink?.id || '');
+    setLinkingType(currentLink ? 'expense' : currentSavingsLink ? 'savings' : currentInvestmentLink ? 'investment' : currentInvestmentHoldingLink ? 'investment-holding' : 'expense');
+    setSelectedExpenseId(currentLink?.id || currentSavingsLink?.id || currentInvestmentLink?.id || currentInvestmentHoldingLink?.id || '');
     setExpenseSearch('');
   };
 
@@ -161,42 +191,83 @@ export const Notes = () => {
     if (!linkingNote || !selectedExpenseId || linkingExpense) return;
     setLinkingExpense(true);
     try {
-      const currentLinks = financialData.expenses.filter((expense) => expense.linkedNoteId === linkingNote.id);
-      for (const expense of currentLinks) {
-        if (expense.id === selectedExpenseId) continue;
-        const unlinked = await updateExpense(expense.id, { linkedNoteId: null });
+      for (const item of financialData.expenses.filter((entry) => entry.linkedNoteId === linkingNote.id)) {
+        if (linkingType === 'expense' && item.id === selectedExpenseId) continue;
+        const unlinked = await updateExpense(item.id, { linkedNoteId: null });
         if (!unlinked) return;
       }
-
-      const selectedExpense = financialData.expenses.find((expense) => expense.id === selectedExpenseId);
-      if (!selectedExpense) return;
-      if (selectedExpense.linkedNoteId !== linkingNote.id) {
-        const linked = await updateExpense(selectedExpense.id, { linkedNoteId: linkingNote.id });
-        if (!linked) return;
+      for (const item of financialData.savingsTransactions.filter((entry) => entry.linked_note_id === linkingNote.id)) {
+        if (linkingType === 'savings' && item.id === selectedExpenseId) continue;
+        if (await updateSavingsTransaction(item.id, { linked_note_id: null }, false) === false) return;
+      }
+      for (const item of financialData.investmentTransactions.filter((entry) => entry.linked_note_id === linkingNote.id)) {
+        if (linkingType === 'investment' && item.id === selectedExpenseId) continue;
+        if (await updateInvestmentTransaction(item.id, { linked_note_id: null }, false) === false) return;
+      }
+      for (const item of financialData.investments.filter((entry) => entry.linked_note_id === linkingNote.id)) {
+        if (linkingType === 'investment-holding' && item.id === selectedExpenseId) continue;
+        await updateInvestmentEntry(item.id, { linked_note_id: null }, false);
       }
 
-      await refreshExpenses();
-      toast.success('Expense linked', {
-        description: `${selectedExpense.category} · ${currency(selectedExpense.amount)} · ${formatDisplayDate(selectedExpense.date)}. You can mark the reminder complete from its card.`,
+      let description = '';
+      if (linkingType === 'expense') {
+        const selected = financialData.expenses.find((entry) => entry.id === selectedExpenseId);
+        if (!selected) return;
+        if (selected.linkedNoteId !== linkingNote.id) {
+          const linked = await updateExpense(selected.id, { linkedNoteId: linkingNote.id });
+          if (!linked) return;
+        }
+        description = `${selected.category} - ${currency(selected.amount)} - ${formatDisplayDate(selected.date)}`;
+        await refreshExpenses();
+      } else if (linkingType === 'savings') {
+        const selected = financialData.savingsTransactions.find((entry) => entry.id === selectedExpenseId);
+        if (!selected) return;
+        if (await updateSavingsTransaction(selected.id, { linked_note_id: linkingNote.id }, false) === false) return;
+        description = `Savings deposit - ${currency(selected.amount)} - ${formatDisplayDate(selected.date)}`;
+      } else if (linkingType === 'investment') {
+        const selected = financialData.investmentTransactions.find((entry) => entry.id === selectedExpenseId);
+        if (!selected) return;
+        if (await updateInvestmentTransaction(selected.id, { linked_note_id: linkingNote.id }, false) === false) return;
+        description = `Investment contribution - ${currency(selected.amount)} - ${formatDisplayDate(selected.date)}`;
+      } else {
+        const selected = financialData.investments.find((entry) => entry.id === selectedExpenseId);
+        if (!selected) return;
+        await updateInvestmentEntry(selected.id, { linked_note_id: linkingNote.id }, false);
+        description = `${selected.name} holding - ${selected.type} - ${formatDisplayDate(selected.date)}`;
+      }
+
+      toast.success('Transaction linked', {
+        description: `${description}. You can mark the reminder complete from its card.`,
       });
       setLinkingNote(null);
     } catch (error: any) {
-      toast.error('Could not link expense', { description: error.message });
+      toast.error('Could not link transaction', { description: error.message });
     } finally {
       setLinkingExpense(false);
     }
   };
-
   const confirmReopenReminder = async () => {
     if (!reopeningNote || reopening) return;
     setReopening(true);
     try {
       await expenseService.unlinkReminder(reopeningNote.id);
+      const unlinkResults = await Promise.all([
+        ...financialData.savingsTransactions
+          .filter((transaction) => transaction.linked_note_id === reopeningNote.id)
+          .map((transaction) => updateSavingsTransaction(transaction.id, { linked_note_id: null }, false)),
+        ...financialData.investmentTransactions
+          .filter((transaction) => transaction.linked_note_id === reopeningNote.id)
+          .map((transaction) => updateInvestmentTransaction(transaction.id, { linked_note_id: null }, false)),
+        ...financialData.investments
+          .filter((investment) => investment.linked_note_id === reopeningNote.id)
+          .map((investment) => updateInvestmentEntry(investment.id, { linked_note_id: null }, false)),
+      ]);
+      if (unlinkResults.some((result) => result === false)) throw new Error('Some transaction links could not be cleared. Please try again.');
       await database.notes.markComplete(reopeningNote.id, false);
       await Promise.all([refreshExpenses(), loadNotes()]);
       toast.success('Reminder reopened', {
-        description: linkedExpenses.length
-          ? `${linkedExpenses.length} linked expense${linkedExpenses.length === 1 ? '' : 's'} totaling ${currency(linkedExpenseTotal)} remain in transaction history.`
+        description: linkedExpenses.length || linkedSavingsTransactions.length || linkedInvestmentTransactions.length || linkedInvestmentEntries.length
+          ? `Linked transactions remain in history; their reminder links were cleared.`
           : 'You can link this reminder to a future expense.',
       });
       setReopeningNote(null);
@@ -366,6 +437,10 @@ export const Notes = () => {
               const due = getDueLabel(note);
               const DueIcon = due.icon;
               const noteLinkedExpenses = financialData.expenses.filter((expense) => expense.linkedNoteId === note.id);
+              const noteLinkedSavings = financialData.savingsTransactions.filter((transaction) => transaction.linked_note_id === note.id);
+              const noteLinkedInvestments = financialData.investmentTransactions.filter((transaction) => transaction.linked_note_id === note.id);
+              const noteLinkedInvestmentEntries = financialData.investments.filter((investment) => investment.linked_note_id === note.id);
+              const hasLinkedTransactions = noteLinkedExpenses.length + noteLinkedSavings.length + noteLinkedInvestments.length + noteLinkedInvestmentEntries.length > 0;
               return (
                 <Card key={note.id} className={`overflow-hidden border-border/70 shadow-sm transition-shadow hover:shadow-md ${note.is_completed ? 'opacity-70' : ''}`}>
                   <CardContent className="p-3.5 sm:p-5">
@@ -388,14 +463,38 @@ export const Notes = () => {
                           </div>
                         </div>
                         {note.notes && <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{note.notes}</p>}
-                        {noteLinkedExpenses.length > 0 && (
+                        {hasLinkedTransactions && (
                           <div className="mt-3 space-y-1 rounded-lg bg-muted/50 px-3 py-2">
                             {noteLinkedExpenses.map((expense) => (
                               <p key={expense.id} className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
                                 <Wallet className="h-3.5 w-3.5 shrink-0" />
                                 <span>Linked expense:</span>
                                 <span className="font-medium text-foreground">{expense.category}</span>
-                                <span>· {currency(expense.amount)} · {formatDisplayDate(expense.date)}</span>
+                                <span>- {currency(expense.amount)} - {formatDisplayDate(expense.date)}</span>
+                              </p>
+                            ))}
+                            {noteLinkedSavings.map((transaction) => (
+                              <p key={transaction.id} className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                                <Wallet className="h-3.5 w-3.5 shrink-0" />
+                                <span>Linked savings:</span>
+                                <span className="font-medium text-foreground">{financialData.savings.find((goal) => goal.id === transaction.savings_goal_id)?.name || 'Savings goal'}</span>
+                                <span>· {currency(transaction.amount)} · {formatDisplayDate(transaction.date)}</span>
+                              </p>
+                            ))}
+                            {noteLinkedInvestments.map((transaction) => (
+                              <p key={transaction.id} className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                                <Wallet className="h-3.5 w-3.5 shrink-0" />
+                                <span>Linked investment:</span>
+                                <span className="font-medium text-foreground">{financialData.investments.find((investment) => investment.id === transaction.investment_id)?.name || 'Investment'}</span>
+                                <span>· {currency(transaction.amount)} · {formatDisplayDate(transaction.date)}</span>
+                              </p>
+                            ))}
+                            {noteLinkedInvestmentEntries.map((investment) => (
+                              <p key={investment.id} className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                                <Wallet className="h-3.5 w-3.5 shrink-0" />
+                                <span>Linked investment:</span>
+                                <span className="font-medium text-foreground">{investment.name}</span>
+                                <span>- {investment.type} - {formatDisplayDate(investment.date)}</span>
                               </p>
                             ))}
                           </div>
@@ -407,7 +506,7 @@ export const Notes = () => {
                           </div>
                           <div className="grid grid-cols-2 gap-2 sm:flex">
                             <Button variant="outline" onClick={() => openExpenseLinker(note)} className="min-h-11 w-full px-2 text-xs sm:min-h-9 sm:w-auto sm:px-3 sm:text-sm">
-                              {noteLinkedExpenses.length ? 'Change expense' : 'Link expense'}
+                              {hasLinkedTransactions ? 'Change link' : 'Link transaction'}
                             </Button>
                             <Button variant={note.is_completed ? 'outline' : 'secondary'} onClick={() => handleMarkComplete(note)} className="min-h-11 w-full px-2 text-xs sm:min-h-9 sm:w-auto sm:px-3 sm:text-sm">
                               {note.is_completed ? 'Reopen' : 'Mark complete'}
@@ -446,49 +545,82 @@ export const Notes = () => {
       <Dialog open={!!linkingNote} onOpenChange={(open) => !open && !linkingExpense && setLinkingNote(null)}>
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-0 sm:max-w-lg">
           <DialogHeader className="shrink-0 border-b border-border/70 px-5 py-4">
-            <DialogTitle>Link an expense to {linkingNote?.title}</DialogTitle>
-            <DialogDescription>Choose one unlinked expense. Each expense can be linked to one reminder.</DialogDescription>
+            <DialogTitle>Link a transaction to {linkingNote?.title}</DialogTitle>
+            <DialogDescription>Choose one unlinked expense, savings deposit, investment holding, or investment contribution.</DialogDescription>
           </DialogHeader>
+          <div className="shrink-0 px-5 pt-4">
+            <Select value={linkingType} onValueChange={(value) => {
+              if (value === 'expense' || value === 'savings' || value === 'investment' || value === 'investment-holding') {
+                setLinkingType(value);
+                setSelectedExpenseId('');
+              }
+            }}>
+              <SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="expense">Expense</SelectItem>
+                <SelectItem value="savings">Savings deposit</SelectItem>
+                <SelectItem value="investment">Investment contribution</SelectItem>
+                <SelectItem value="investment-holding">Investment holding</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="relative shrink-0 px-5 pt-4">
             <Search className="pointer-events-none absolute left-8 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={expenseSearch}
               onChange={(event) => setExpenseSearch(event.target.value)}
-              placeholder="Search category, notes, payment method, or date"
-              aria-label="Search unlinked expenses"
+              placeholder={`Search ${linkingType === 'expense' ? 'category, payment method, notes, or date' : 'name, notes, or date'}`}
+              aria-label={`Search unlinked ${linkingType} transactions`}
               className="min-h-11 pl-9"
             />
           </div>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-3">
-            {filteredExpenseCandidates.length ? filteredExpenseCandidates.map((expense) => (
-              <button
-                key={expense.id}
-                type="button"
-                aria-pressed={selectedExpenseId === expense.id}
-                onClick={() => setSelectedExpenseId(expense.id)}
-                className={`min-h-16 w-full rounded-xl border p-3 text-left transition-colors ${selectedExpenseId === expense.id ? 'border-primary bg-primary/5' : 'border-border/70 hover:bg-muted/60'}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+            {linkingType === 'expense' ? (
+              filteredExpenseCandidates.length ? filteredExpenseCandidates.map((expense) => (
+                <button key={expense.id} type="button" aria-pressed={selectedExpenseId === expense.id} onClick={() => setSelectedExpenseId(expense.id)} className={`min-h-16 w-full rounded-xl border p-3 text-left transition-colors ${selectedExpenseId === expense.id ? 'border-primary bg-primary/5' : 'border-border/70 hover:bg-muted/60'}`}>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0">
                     <p className="truncate font-medium text-foreground">{expense.category}{expense.subcategory ? ` · ${expense.subcategory}` : ''}</p>
                     {expense.notes && <p className="mt-0.5 truncate text-sm text-muted-foreground">{expense.notes}</p>}
                     <p className="mt-1 text-xs text-muted-foreground">{formatDisplayDate(expense.date)} · {expense.paymentMode}</p>
-                  </div>
-                  <p className="shrink-0 font-semibold tabular-nums text-foreground">{currency(expense.amount)}</p>
-                </div>
-              </button>
-            )) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                {expenseCandidates.length
-                  ? 'No unlinked expenses match this search.'
-                  : 'No unlinked expenses are available. Add an expense or change its current reminder link first.'}
-              </p>
+                  </div><p className="shrink-0 font-semibold tabular-nums text-foreground">{currency(expense.amount)}</p></div>
+                </button>
+              )) : <p className="py-8 text-center text-sm text-muted-foreground">No unlinked expenses match this search.</p>
+            ) : linkingType === 'savings' ? (
+              filteredSavingsCandidates.length ? filteredSavingsCandidates.map((transaction) => (
+                <button key={transaction.id} type="button" aria-pressed={selectedExpenseId === transaction.id} onClick={() => setSelectedExpenseId(transaction.id)} className={`min-h-16 w-full rounded-xl border p-3 text-left transition-colors ${selectedExpenseId === transaction.id ? 'border-primary bg-primary/5' : 'border-border/70 hover:bg-muted/60'}`}>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">{financialData.savings.find((goal) => goal.id === transaction.savings_goal_id)?.name || 'Savings goal'}</p>
+                    {transaction.notes && <p className="mt-0.5 truncate text-sm text-muted-foreground">{transaction.notes}</p>}
+                    <p className="mt-1 text-xs text-muted-foreground">{formatDisplayDate(transaction.date)} · Savings deposit</p>
+                  </div><p className="shrink-0 font-semibold tabular-nums text-foreground">{currency(transaction.amount)}</p></div>
+                </button>
+              )) : <p className="py-8 text-center text-sm text-muted-foreground">No unlinked savings deposits match this search.</p>
+            ) : linkingType === 'investment' ? (
+              filteredInvestmentCandidates.length ? filteredInvestmentCandidates.map((transaction) => (
+                <button key={transaction.id} type="button" aria-pressed={selectedExpenseId === transaction.id} onClick={() => setSelectedExpenseId(transaction.id)} className={`min-h-16 w-full rounded-xl border p-3 text-left transition-colors ${selectedExpenseId === transaction.id ? 'border-primary bg-primary/5' : 'border-border/70 hover:bg-muted/60'}`}>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">{financialData.investments.find((investment) => investment.id === transaction.investment_id)?.name || 'Investment'}</p>
+                    {transaction.notes && <p className="mt-0.5 truncate text-sm text-muted-foreground">{transaction.notes}</p>}
+                    <p className="mt-1 text-xs text-muted-foreground">{formatDisplayDate(transaction.date)} · Investment contribution</p>
+                  </div><p className="shrink-0 font-semibold tabular-nums text-foreground">{currency(transaction.amount)}</p></div>
+                </button>
+              )) : <p className="py-8 text-center text-sm text-muted-foreground">No unlinked investment contributions match this search.</p>
+            ) : (
+              filteredInvestmentHoldingCandidates.length ? filteredInvestmentHoldingCandidates.map((investment) => (
+                <button key={investment.id} type="button" aria-pressed={selectedExpenseId === investment.id} onClick={() => setSelectedExpenseId(investment.id)} className={`min-h-16 w-full rounded-xl border p-3 text-left transition-colors ${selectedExpenseId === investment.id ? 'border-primary bg-primary/5' : 'border-border/70 hover:bg-muted/60'}`}>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">{investment.name}</p>
+                    {investment.notes && <p className="mt-0.5 truncate text-sm text-muted-foreground">{investment.notes}</p>}
+                    <p className="mt-1 text-xs text-muted-foreground">{investment.type} - {formatDisplayDate(investment.date)}</p>
+                  </div><p className="shrink-0 font-semibold tabular-nums text-foreground">{currency(investment.current || investment.invested)}</p></div>
+                </button>
+              )) : <p className="py-8 text-center text-sm text-muted-foreground">No unlinked investment holdings match this search.</p>
             )}
           </div>
           <DialogFooter className="shrink-0 border-t border-border/70 px-4 py-3 sm:px-5">
             <Button variant="outline" className="min-h-11" onClick={() => setLinkingNote(null)} disabled={linkingExpense}>Cancel</Button>
             <Button className="min-h-11" onClick={handleLinkSelectedExpense} disabled={!selectedExpenseId || linkingExpense}>
-              {linkingExpense ? 'Linking…' : 'Link expense'}
+              {linkingExpense ? 'Linking...' : `Link ${linkingType === 'expense' ? 'expense' : linkingType === 'savings' ? 'savings' : linkingType === 'investment-holding' ? 'holding' : 'investment'}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -513,15 +645,15 @@ export const Notes = () => {
           <DialogHeader>
             <DialogTitle>Reopen this reminder?</DialogTitle>
             <DialogDescription>
-              {linkedExpenses.length
-                ? `This reminder is linked to ${linkedExpenses.length} expense${linkedExpenses.length === 1 ? '' : 's'} totaling ${currency(linkedExpenseTotal)}. Reopening will unlink those expenses, but their records and amounts will stay in transaction history.`
-                : 'This reminder has no linked expenses. Reopening it will make it available to link to a future expense.'}
+              {linkedExpenses.length || linkedSavingsTransactions.length || linkedInvestmentTransactions.length || linkedInvestmentEntries.length
+                ? 'This reminder is linked to financial transactions. Reopening will clear those links, but keep every transaction in history.'
+                : 'This reminder has no linked transactions. Reopening it will make it available to link again.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setReopeningNote(null)} disabled={reopening}>Cancel</Button>
             <Button onClick={confirmReopenReminder} disabled={reopening}>
-              {reopening ? 'Reopening…' : 'Reopen and unlink'}
+              {reopening ? 'Reopening...' : 'Reopen and unlink'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -45,6 +45,12 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
   const { data, addInvestmentTransaction, updateInvestmentTransaction } = useFinancial();
   const [relatedReminderId, setRelatedReminderId] = useState('');
   const submitLock = useRef(false);
+  const remindersUsedElsewhere = useMemo(() => new Set([
+    ...data.expenses.filter(item => item.id !== editingId && item.linkedNoteId).map(item => item.linkedNoteId as string),
+    ...data.savingsTransactions.filter(item => item.linked_note_id).map(item => item.linked_note_id as string),
+    ...data.investmentTransactions.filter(item => item.id !== editingId && item.linked_note_id).map(item => item.linked_note_id as string),
+    ...data.investments.filter(item => item.linked_note_id).map(item => item.linked_note_id as string),
+  ]), [data.expenses, data.savingsTransactions, data.investmentTransactions, data.investments, editingId]);
 
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
@@ -61,6 +67,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
     if (editingId && open) {
       const transaction = data.investmentTransactions.find(t => t.id === editingId);
       if (transaction) {
+        setRelatedReminderId(transaction.linked_note_id || '');
         form.reset({
           amount: transaction.amount,
           date: transaction.date,
@@ -83,12 +90,18 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
     submitLock.current = true;
     try {
       if (editingId) {
-        await updateInvestmentTransaction(editingId, data);
+        const existingTransaction = data.investmentTransactions.find(transaction => transaction.id === editingId);
+        const saved = await updateInvestmentTransaction(editingId, { ...data, linked_note_id: relatedReminderId || null });
+        if (!saved) return;
+        if (relatedReminderId && relatedReminderId !== existingTransaction?.linked_note_id) {
+          void offerReminderCompletion(relatedReminderId);
+        }
       } else {
         await addInvestmentTransaction({
           investment_id: investmentId,
           amount: data.amount,
           date: data.date,
+          linked_note_id: relatedReminderId || null,
           notes: data.notes || (data.amount > 0 ? `Monthly contribution to ${investmentName}` : `Monthly performance update for ${investmentName}`),
           profit_loss: data.profit_loss
         }, false);
@@ -201,7 +214,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
               )}
             />
 
-            {!editingId && <ReminderCompletionField value={relatedReminderId} onChange={setRelatedReminderId} refreshKey={open} />}
+            <ReminderCompletionField value={relatedReminderId} onChange={setRelatedReminderId} refreshKey={open} excludedReminderIds={remindersUsedElsewhere} />
 
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={onClose}>

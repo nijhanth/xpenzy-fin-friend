@@ -132,7 +132,15 @@ export const Budget = () => {
             isInSelectedPeriod(transaction.date, budget.period))
           .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
       } else if (budget.linked_type === 'savings') {
-        spent = budget.current || 0;
+        // Read savings activity directly so progress stays accurate even when
+        // the database's cached budget.current value has not been refreshed.
+        const goalTransactions = data.savingsTransactions
+          .filter(transaction => transaction.savings_goal_id === budget.linked_id);
+        spent = goalTransactions.length > 0
+          ? goalTransactions
+            .filter(transaction => isInSelectedPeriod(transaction.date, budget.period))
+            .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0)
+          : budget.current || 0;
       } else {
         // For expense budgets, calculate from actual expenses matching this budget category
         const filteredExpenses = getFilteredExpenses(budget.period);
@@ -146,7 +154,7 @@ export const Budget = () => {
         spent
       };
     });
-  }, [filteredBudgets, data.expenses, data.investmentTransactions, selectedYear, selectedMonth, selectedWeek]);
+  }, [filteredBudgets, data.expenses, data.investmentTransactions, data.savingsTransactions, selectedYear, selectedMonth, selectedWeek]);
 
   // Calculate expenses that don't have budgets (Others/Unbudgeted)
   const unbudgetedExpensesList = useMemo(() => {

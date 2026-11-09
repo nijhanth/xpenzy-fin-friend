@@ -167,10 +167,15 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     [data.savings]
   );
   const remindersUsedByOtherExpenses = useMemo(() => new Set(
-    data.expenses
-      .filter(entry => entry.id !== editingId && entry.linkedNoteId)
-      .map(entry => entry.linkedNoteId as string)
-  ), [data.expenses, editingId]);
+    [
+      ...data.expenses
+        .filter(entry => entry.id !== editingId && entry.linkedNoteId)
+        .map(entry => entry.linkedNoteId as string),
+      ...data.savingsTransactions.map(transaction => transaction.linked_note_id).filter((id): id is string => !!id),
+      ...data.investmentTransactions.map(transaction => transaction.linked_note_id).filter((id): id is string => !!id),
+      ...data.investments.map(investment => investment.linked_note_id).filter((id): id is string => !!id),
+    ]
+  ), [data.expenses, data.savingsTransactions, data.investmentTransactions, data.investments, editingId]);
 
   // Smart suggestion: when category/notes match an active goal name
   const watchedCategory = form.watch('category');
@@ -429,51 +434,54 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
               excludedReminderIds={remindersUsedByOtherExpenses}
             />
 
-            {/* Linked Goal (Optional) */}
-            <FormField
-              control={form.control}
-              name="goalId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Linked Goal (Optional)</FormLabel>
-                  <Select
-                    onValueChange={(val) => field.onChange(val === '__none__' ? null : val)}
-                    value={field.value ?? '__none__'}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="No goal linked" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="bg-background border-border z-50">
-                      <SelectItem value="__none__">No goal linked</SelectItem>
-                      {activeGoals.map(g => (
-                        <SelectItem key={g.id} value={g.id}>
-                          {g.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {isEditing && (
+              <>
+                {/* Keep existing goal links editable without showing this in Add Expense. */}
+                <FormField
+                  control={form.control}
+                  name="goalId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Linked Goal (Optional)</FormLabel>
+                      <Select
+                        onValueChange={(val) => field.onChange(val === '__none__' ? null : val)}
+                        value={field.value ?? '__none__'}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="No goal linked" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background border-border z-50">
+                          <SelectItem value="__none__">No goal linked</SelectItem>
+                          {activeGoals.map(g => (
+                            <SelectItem key={g.id} value={g.id}>
+                              {g.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {/* Smart suggestion */}
-            {suggestedGoal && (
-              <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 flex items-center justify-between gap-3">
-                <p className="text-sm">
-                  Link this expense to <span className="font-medium">'{suggestedGoal.name}'</span>?
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => form.setValue('goalId', suggestedGoal.id, { shouldDirty: true })}
-                >
-                  Link
-                </Button>
-              </div>
+                {suggestedGoal && (
+                  <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 flex items-center justify-between gap-3">
+                    <p className="text-sm">
+                      Link this expense to <span className="font-medium">'{suggestedGoal.name}'</span>?
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => form.setValue('goalId', suggestedGoal.id, { shouldDirty: true })}
+                    >
+                      Link
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
 
             </div>

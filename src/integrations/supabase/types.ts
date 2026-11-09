@@ -280,6 +280,7 @@ export type Database = {
           id: string
           initial_invested: number
           invested: number
+          linked_note_id: string | null
           name: string
           notes: string | null
           type: string
@@ -294,6 +295,7 @@ export type Database = {
           id?: string
           initial_invested: number
           invested: number
+          linked_note_id?: string | null
           name: string
           notes?: string | null
           type: string
@@ -308,13 +310,22 @@ export type Database = {
           id?: string
           initial_invested?: number
           invested?: number
+          linked_note_id?: string | null
           name?: string
           notes?: string | null
           type?: string
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "investment_entries_linked_note_id_fkey"
+            columns: ["linked_note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       investment_transactions: {
         Row: {
@@ -323,6 +334,7 @@ export type Database = {
           date: string
           id: string
           investment_id: string
+          linked_note_id: string | null
           notes: string | null
           profit_loss: number | null
           updated_at: string
@@ -334,6 +346,7 @@ export type Database = {
           date?: string
           id?: string
           investment_id: string
+          linked_note_id?: string | null
           notes?: string | null
           profit_loss?: number | null
           updated_at?: string
@@ -345,12 +358,21 @@ export type Database = {
           date?: string
           id?: string
           investment_id?: string
+          linked_note_id?: string | null
           notes?: string | null
           profit_loss?: number | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "investment_transactions_linked_note_id_fkey"
+            columns: ["linked_note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -510,6 +532,7 @@ export type Database = {
           created_at: string | null
           date: string
           id: string
+          linked_note_id: string | null
           notes: string | null
           savings_goal_id: string
           updated_at: string | null
@@ -520,6 +543,7 @@ export type Database = {
           created_at?: string | null
           date?: string
           id?: string
+          linked_note_id?: string | null
           notes?: string | null
           savings_goal_id: string
           updated_at?: string | null
@@ -530,12 +554,20 @@ export type Database = {
           created_at?: string | null
           date?: string
           id?: string
+          linked_note_id?: string | null
           notes?: string | null
           savings_goal_id?: string
           updated_at?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "savings_transactions_linked_note_id_fkey"
+            columns: ["linked_note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "savings_transactions_savings_goal_id_fkey"
             columns: ["savings_goal_id"]

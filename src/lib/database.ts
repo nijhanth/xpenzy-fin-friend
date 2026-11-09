@@ -269,7 +269,8 @@ export const investmentService = {
       current: item.current,
       date: item.date,
       notes: item.notes,
-      customType: item.custom_type
+      customType: item.custom_type,
+      linked_note_id: item.linked_note_id ?? null
     })) || [];
   },
 
@@ -285,6 +286,7 @@ export const investmentService = {
         date: investment.date,
         notes: investment.notes,
         custom_type: investment.customType,
+        linked_note_id: investment.linked_note_id ?? null,
         user_id: (await supabase.auth.getUser()).data.user?.id
       }])
       .select()
@@ -300,7 +302,8 @@ export const investmentService = {
       current: data.current,
       date: data.date,
       notes: data.notes,
-      customType: data.custom_type
+      customType: data.custom_type,
+      linked_note_id: data.linked_note_id ?? null
     };
   },
 
@@ -315,7 +318,8 @@ export const investmentService = {
         current: investment.current,
         date: investment.date,
         notes: investment.notes,
-        custom_type: investment.customType
+        custom_type: investment.customType,
+        linked_note_id: investment.linked_note_id
       })
       .eq('id', id)
       .select()
@@ -331,7 +335,8 @@ export const investmentService = {
       current: data.current,
       date: data.date,
       notes: data.notes,
-      customType: data.custom_type
+      customType: data.custom_type,
+      linked_note_id: data.linked_note_id ?? null
     };
   },
 

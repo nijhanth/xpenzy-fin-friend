@@ -18,8 +18,9 @@ import { useToast } from '@/hooks/use-toast';
 import { readFirstWorksheet } from '@/lib/xlsxReader';
 import type { InvestmentEntry, InvestmentTransaction } from '@/types/financial';
 import { formatDisplayDate } from '@/lib/dateFormat';
+import { ReminderCompletionField } from '@/components/forms/ReminderCompletionField';
 
-type ImportedMutualFund = { name: string; units: number; invested: number; current: number; monthlyContribution: number; type: 'Mutual Fund' | 'Stocks' };
+type ImportedMutualFund = { name: string; units: number; invested: number; current: number; monthlyContribution: number; linkedReminderId?: string; type: 'Mutual Fund' | 'Stocks' };
 type ImportedSummary = { holdings: ImportedMutualFund[]; asOfDate: string; summaryInvested: number; summaryCurrent: number; source: 'Groww' | 'Angel One' };
 type FundSnapshot = { date: string; invested: number; current: number; units: number; transaction?: InvestmentTransaction };
 type GrowthRange = '1m' | '3m' | '6m' | '1y' | 'all';
@@ -263,8 +264,27 @@ export const Investments = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportedSummary | null>(null);
   
   const { toast } = useToast();
+  const occupiedReminderIds = useMemo(() => new Set([
+    ...data.expenses.map(item => item.linkedNoteId).filter((id): id is string => !!id),
+    ...data.savingsTransactions.map(item => item.linked_note_id).filter((id): id is string => !!id),
+    ...data.investmentTransactions.map(item => item.linked_note_id).filter((id): id is string => !!id),
+    ...data.investments.map(item => item.linked_note_id).filter((id): id is string => !!id),
+  ]), [data.expenses, data.savingsTransactions, data.investmentTransactions, data.investments]);
+  const importReminderExclusions = useMemo(() => {
+    const exclusions = new Map<string, ReadonlySet<string>>();
+    if (!importPreview) return exclusions;
+    for (const holding of importPreview.holdings) {
+      const excluded = new Set(occupiedReminderIds);
+      for (const other of importPreview.holdings) {
+        if ((other.name !== holding.name || other.type !== holding.type) && other.linkedReminderId) excluded.add(other.linkedReminderId);
+      }
+      exclusions.set(`${holding.type}:${holding.name}`, excluded);
+    }
+    return exclusions;
+  }, [importPreview, occupiedReminderIds]);
   const [transactionFormOpen, setTransactionFormOpen] = useState(false);
   const [currentInvestment, setCurrentInvestment] = useState<{
     id: string;
@@ -276,7 +296,6 @@ export const Investments = () => {
   const [historyMonth, setHistoryMonth] = useState(String(new Date().getMonth() + 1));
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [importPreview, setImportPreview] = useState<ImportedSummary | null>(null);
   const [statementSource, setStatementSource] = useState<'Groww' | 'Angel One'>('Groww');
   const [importError, setImportError] = useState('');
   const [redemptionTarget, setRedemptionTarget] = useState<InvestmentEntry | null>(null);
@@ -505,7 +524,7 @@ export const Investments = () => {
             data.investmentTransactions,
             Number(investment?.initial_invested || 0),
           );
-          return { ...holding, monthlyContribution: Number(existingContribution?.amount ?? estimatedContribution) };
+          return { ...holding, linkedReminderId: investment?.linked_note_id || '', monthlyContribution: Number(existingContribution?.amount ?? estimatedContribution) };
         }),
       });
     } catch (error) {
@@ -527,13 +546,16 @@ export const Investments = () => {
       const importedTypes = new Set(importPreview.holdings.map(holding => holding.type));
       const omittedImportedFunds = data.investments
         .filter(item => importedTypes.has(item.type as 'Mutual Fund' | 'Stocks') && isStatementImportedInvestment(item.notes) && !reportNames.has(item.name.trim().toLowerCase()))
-        .map(item => ({ name: item.name, units: 0, invested: 0, current: 0, monthlyContribution: 0, type: item.type as 'Mutual Fund' | 'Stocks' }));
+        .map(item => ({ name: item.name, units: 0, invested: 0, current: 0, monthlyContribution: 0, linkedReminderId: item.linked_note_id || '', type: item.type as 'Mutual Fund' | 'Stocks' }));
       const statementHoldings = [...importPreview.holdings, ...omittedImportedFunds];
 
       for (const holding of statementHoldings) {
         const existing = data.investments.find(item => item.type === holding.type && item.name.trim().toLowerCase() === holding.name.toLowerCase());
         const importedByStatement = isStatementImportedInvestment(existing?.notes);
         if (existing && !importedByStatement) {
+          if (holding.linkedReminderId !== (existing.linked_note_id || '')) {
+            await updateInvestmentEntry(existing.id, { linked_note_id: holding.linkedReminderId || null }, false);
+          }
           const contributionNotes = statementContributionNotes(importPreview.asOfDate);
           const existingContribution = data.investmentTransactions.find(transaction =>
             transaction.investment_id === existing.id && transaction.notes === contributionNotes);
@@ -567,6 +589,7 @@ export const Investments = () => {
             current: holding.current,
             date: importPreview.asOfDate,
             notes: `Imported from ${importPreview.source === 'Angel One' ? 'Angel One' : 'mutual fund'} statement. Value as of ${importPreview.asOfDate}. Units: ${holding.units.toFixed(3)}.`,
+            linked_note_id: holding.linkedReminderId || null,
           }, false);
           if (!created) throw new Error(`Could not create ${holding.name}.`);
           investment = created;
@@ -615,6 +638,7 @@ export const Investments = () => {
           date: snapshots[0].date,
           initial_invested: initialBasis,
           notes: `Imported from ${importPreview.source === 'Angel One' ? 'Angel One' : 'mutual fund'} statement snapshots.${redeemedNote}`,
+          linked_note_id: holding.linkedReminderId || null,
         }, false);
 
         for (let index = 0; index < snapshots.length; index += 1) {
@@ -804,7 +828,7 @@ export const Investments = () => {
                     const importStatus = isStatementImportedInvestment(existing?.notes)
                       ? 'History will update for this statement date'
                       : existing ? 'Portfolio history will be skipped' : '';
-                    return <div key={holding.name} className="grid gap-2 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    return <div key={`${holding.type}:${holding.name}`} className="grid gap-2 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{holding.name}</p>
                         <p className="text-xs text-muted-foreground">{holding.units.toFixed(3)} units · {formatCurrency(holding.current)} current{importStatus ? ` · ${importStatus}` : ''}</p>
@@ -823,6 +847,19 @@ export const Investments = () => {
                           }}
                           className="h-8 w-full sm:w-44" />
                       </label>
+                      <div className="sm:col-span-2">
+                        <ReminderCompletionField
+                          value={holding.linkedReminderId || ''}
+                          onChange={linkedReminderId => setImportPreview(current => current ? {
+                            ...current,
+                            holdings: current.holdings.map(item => item.name === holding.name && item.type === holding.type
+                              ? { ...item, linkedReminderId }
+                              : item),
+                          } : current)}
+                          refreshKey={`${importPreview.asOfDate}-${holding.type}-${holding.name}`}
+                          excludedReminderIds={importReminderExclusions.get(`${holding.type}:${holding.name}`)}
+                        />
+                      </div>
                     </div>;
                   })}
                 </div>

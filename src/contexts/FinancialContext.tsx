@@ -502,6 +502,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         title: "Success",
         description: "Investment monthly update updated successfully",
       });
+      return true;
     } catch (error) {
       console.error('Error updating investment transaction:', error);
       if (!showToast) throw error;
@@ -510,6 +511,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         description: "Failed to update investment transaction",
         variant: "destructive",
       });
+      return false;
     }
   };
 
@@ -702,7 +704,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const updateSavingsTransaction = async (id: string, transaction: Partial<SavingsTransaction>) => {
+  const updateSavingsTransaction = async (id: string, transaction: Partial<SavingsTransaction>, showToast: boolean = true) => {
     try {
       const updatedTransaction = await savingsTransactionService.update(id, transaction);
       setData(prev => ({
@@ -725,17 +727,20 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         console.error('Error refreshing savings data:', refreshError);
       }
       
-      toast({
+      if (showToast) toast({
         title: "Success",
         description: "Savings transaction updated successfully",
       });
+      return true;
     } catch (error) {
       console.error('Error updating savings transaction:', error);
+      if (!showToast) throw error;
       toast({
         title: "Error",
         description: "Failed to update savings transaction",
         variant: "destructive",
       });
+      return false;
     }
   };
 
@@ -881,6 +886,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           item.id === id ? updatedInvestment : item
         )
       }));
+      return true;
     } catch (error) {
       console.error('Error updating investment:', error);
       if (!showToast) throw error;
@@ -889,6 +895,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         title: "Error",
         description: "Failed to update investment in database."
       });
+      return false;
     }
   };
 

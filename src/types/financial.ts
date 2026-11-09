@@ -44,6 +44,7 @@ export interface InvestmentEntry {
   date: string;
   notes: string;
   customType?: string;
+  linked_note_id?: string | null;
 }
 
 export interface InvestmentTransaction {
@@ -54,6 +55,7 @@ export interface InvestmentTransaction {
   notes?: string;
   user_id?: string;
   profit_loss?: number;
+  linked_note_id?: string | null;
 }
 
 export interface SavingsTransaction {
@@ -63,6 +65,7 @@ export interface SavingsTransaction {
   date: string;
   notes?: string;
   user_id?: string;
+  linked_note_id?: string | null;
 }
 
 export interface BudgetCategory {
