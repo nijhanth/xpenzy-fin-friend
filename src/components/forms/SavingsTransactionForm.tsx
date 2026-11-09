@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useFinancial } from '@/contexts/FinancialContext';
-import { useToast } from '@/hooks/use-toast';
+import { ReminderCompletionField } from '@/components/forms/ReminderCompletionField';
+import { offerReminderCompletion } from '@/lib/reminderCompletion';
 
 const transactionSchema = z.object({
   amount: z.number().min(1, 'Amount must be greater than 0'),
@@ -36,7 +37,8 @@ export const SavingsTransactionForm: React.FC<SavingsTransactionFormProps> = ({
   availableBalance
 }) => {
   const { data, addSavingsTransaction, updateSavingsTransaction } = useFinancial();
-  const { toast } = useToast();
+  const [relatedReminderId, setRelatedReminderId] = useState('');
+  const submitLock = useRef(false);
 
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
@@ -48,6 +50,7 @@ export const SavingsTransactionForm: React.FC<SavingsTransactionFormProps> = ({
   });
 
   useEffect(() => {
+    if (open && !editingId) setRelatedReminderId('');
     if (editingId && open) {
       const transaction = data.savingsTransactions.find(t => t.id === editingId);
       if (transaction) {
@@ -67,6 +70,8 @@ export const SavingsTransactionForm: React.FC<SavingsTransactionFormProps> = ({
   }, [editingId, open, form, data.savingsTransactions]);
 
   const onSubmit = async (formData: TransactionFormData) => {
+    if (submitLock.current) return;
+    submitLock.current = true;
     try {
       if (formData.amount > availableBalance) {
         form.setError('amount', { message: `You can add up to ${formatCurrency(availableBalance)} from your estimated bank balance.` });
@@ -88,10 +93,13 @@ export const SavingsTransactionForm: React.FC<SavingsTransactionFormProps> = ({
           notes: formData.notes || `Added ₹${formData.amount.toLocaleString('en-IN')} to ${savingsGoalName}`
         });
         if (!saved) return;
+        void offerReminderCompletion(relatedReminderId);
       }
       onClose();
     } catch (error) {
       console.error('Savings transaction form error:', error);
+    } finally {
+      submitLock.current = false;
     }
   };
 
@@ -177,12 +185,14 @@ export const SavingsTransactionForm: React.FC<SavingsTransactionFormProps> = ({
               )}
             />
 
+            {!editingId && <ReminderCompletionField value={relatedReminderId} onChange={setRelatedReminderId} refreshKey={open} />}
+
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-savings text-white" disabled={availableBalance < 1}>
-                {editingId ? 'Update Transaction' : 'Add Money'}
+              <Button type="submit" className="bg-savings text-white" disabled={availableBalance < 1 || form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Saving…' : editingId ? 'Update Transaction' : 'Add Money'}
               </Button>
             </div>
           </form>

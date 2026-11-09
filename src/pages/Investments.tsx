@@ -22,6 +22,7 @@ import { formatDisplayDate } from '@/lib/dateFormat';
 type ImportedMutualFund = { name: string; units: number; invested: number; current: number; monthlyContribution: number; type: 'Mutual Fund' | 'Stocks' };
 type ImportedSummary = { holdings: ImportedMutualFund[]; asOfDate: string; summaryInvested: number; summaryCurrent: number; source: 'Groww' | 'Angel One' };
 type FundSnapshot = { date: string; invested: number; current: number; units: number; transaction?: InvestmentTransaction };
+type GrowthRange = '1m' | '3m' | '6m' | '1y' | 'all';
 
 const statementSnapshotPrefix = 'Statement snapshot:';
 const statementContributionNotes = (date: string) => `Statement contribution: actual contribution for ${date}`;
@@ -283,6 +284,7 @@ export const Investments = () => {
   const [redemptionProceeds, setRedemptionProceeds] = useState('');
   const [redemptionError, setRedemptionError] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [growthRange, setGrowthRange] = useState<GrowthRange>('1m');
 
   // Calculate allocation data from investments
   const allocationData = useMemo(() => {
@@ -312,80 +314,67 @@ export const Investments = () => {
       .sort((a, b) => b.value - a.value);
   }, [data.investments]);
 
-  // Calculate growth data from investment transactions
+  // Calculate estimated portfolio growth from investment history.
   const growthData = useMemo(() => {
-    const transactions = data.investmentTransactions || [];
-    if (transactions.length === 0 && data.investments.length === 0) return [];
-    
-    // Get last 30 days
-    const days = 30;
-    const today = new Date();
-    const dailyData: { date: string; value: number; change: number }[] = [];
-    
-    // Combine initial investments and transactions
     const allEvents: { date: Date; amount: number }[] = [];
-    
-    // Add initial investments
-    data.investments.forEach(inv => {
-      allEvents.push({
-        date: new Date(inv.date),
-        amount: inv.initial_invested || inv.invested || 0,
+    data.investments.forEach((investment) => {
+      const date = new Date(`${investment.date}T00:00:00`);
+      const amount = Number(investment.initial_invested || investment.invested || 0);
+      if (Number.isFinite(date.getTime()) && amount !== 0) allEvents.push({ date, amount });
+    });
+    data.investmentTransactions.forEach((transaction) => {
+        const date = new Date(`${transaction.date}T00:00:00`);
+        const amount = Number(transaction.amount || 0) + Number(transaction.profit_loss || 0);
+        if (Number.isFinite(date.getTime()) && amount !== 0) allEvents.push({ date, amount });
       });
-    });
-    
-    // Add transactions
-      transactions.forEach(tx => {
-        allEvents.push({
-          date: new Date(tx.date),
-          amount: tx.amount + (tx.profit_loss || 0),
-        });
-    });
-    
-    // Sort by date
+    if (!allEvents.length) return [];
     allEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
-    
-    // Calculate cumulative value for each day
-    let cumulativeValue = 0;
-    let prevValue = 0;
-    
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      date.setHours(0, 0, 0, 0);
-      
-      const nextDate = new Date(date);
-      nextDate.setDate(nextDate.getDate() + 1);
-      
-      // Add events up to this date
-      allEvents.forEach(event => {
-        if (event.date <= date && event.date > (dailyData.length > 0 ? new Date(dailyData[dailyData.length - 1].date) : new Date(0))) {
-          cumulativeValue += event.amount;
-        }
-      });
-      
-      // Recalculate cumulative up to this date
-      cumulativeValue = allEvents
-        .filter(e => e.date <= date)
-        .reduce((sum, e) => sum + e.amount, 0);
-      
-      const change = cumulativeValue - prevValue;
-      
-      dailyData.push({
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        value: cumulativeValue,
-        change: prevValue > 0 ? change : 0,
-      });
-      
-      prevValue = cumulativeValue;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let startDate = new Date(today);
+    if (growthRange === 'all') {
+      startDate = new Date(allEvents[0].date.getFullYear(), allEvents[0].date.getMonth(), 1);
+    } else {
+      const months = growthRange === '1m' ? 1 : growthRange === '3m' ? 3 : growthRange === '6m' ? 6 : 12;
+      startDate.setMonth(startDate.getMonth() - months);
     }
-    
-    return dailyData;
-  }, [data.investments, data.investmentTransactions]);
+
+    const dates: Date[] = [];
+    if (growthRange === 'all' || growthRange === '1y') {
+      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (cursor <= today) {
+        dates.push(new Date(cursor));
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    } else {
+      const stepDays = growthRange === '6m' ? 7 : growthRange === '3m' ? 3 : 1;
+      const cursor = new Date(startDate);
+      while (cursor <= today) {
+        dates.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + stepDays);
+      }
+    }
+    if (!dates.length || dates[dates.length - 1].getTime() !== today.getTime()) dates.push(today);
+
+    let previousValue = 0;
+    return dates.map((date, index) => {
+      const value = allEvents
+        .filter((event) => event.date <= date)
+        .reduce((sum, event) => sum + event.amount, 0);
+      const label = growthRange === 'all' || growthRange === '1y'
+        ? date.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
+        : date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+      const point = { date: label, value, change: index === 0 ? 0 : value - previousValue };
+      previousValue = value;
+      return point;
+    });
+  }, [data.investments, data.investmentTransactions, growthRange]);
 
   // Calculate average for reference line
   const avgPortfolioValue = useMemo(() => {
     if (growthData.length === 0) return 0;
-    return growthData.reduce((sum, d) => sum + d.value, 0) / growthData.length;
+    return Math.round(growthData.reduce((sum, d) => sum + d.value, 0) / growthData.length);
   }, [growthData]);
   
   // Calculate totals from all investments
@@ -1043,20 +1032,30 @@ export const Investments = () => {
 
         {/* Portfolio Growth Area Chart - Modern Trade Style */}
         <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+          <CardHeader className="space-y-3 pb-2 sm:flex sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <TrendingUp className="w-5 h-5 text-investment" />
               Portfolio Growth
             </CardTitle>
-            <Badge variant="outline" className="text-xs">
-              Last 30 Days
-            </Badge>
+            <div className="grid w-full grid-cols-5 gap-1 sm:flex sm:w-auto sm:gap-2" role="group" aria-label="Portfolio growth date range">
+              {([
+                { id: '1m', label: '1M' },
+                { id: '3m', label: '3M' },
+                { id: '6m', label: '6M' },
+                { id: '1y', label: '1Y' },
+                { id: 'all', label: 'All' },
+              ] as const).map(({ id, label }) => (
+                <Button key={id} type="button" size="sm" variant={growthRange === id ? 'secondary' : 'ghost'} aria-pressed={growthRange === id} onClick={() => setGrowthRange(id)} className="h-8 min-w-0 px-2 text-xs sm:px-3">
+                  {label}
+                </Button>
+              ))}
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="min-w-0 px-3 pb-4 pt-2 sm:p-6">
             {growthData.length > 0 && growthData.some(d => d.value > 0) ? (
-              <div className="h-64">
+              <div className="h-60 min-w-0 sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={growthData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <AreaChart data={growthData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="investmentGrowthGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="hsl(var(--investment))" stopOpacity={0.4} />
@@ -1073,17 +1072,20 @@ export const Investments = () => {
                       dataKey="date" 
                       axisLine={false} 
                       tickLine={false}
-                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
                       interval="preserveStartEnd"
                     />
                     <YAxis 
                       axisLine={false} 
                       tickLine={false}
-                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
                       tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
-                      width={50}
+                      width={44}
                     />
-                    <Tooltip content={<GrowthTooltip />} />
+                    <Tooltip
+                      content={<GrowthTooltip />}
+                      cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeDasharray: '4 4', strokeOpacity: 0.55 }}
+                    />
                     <ReferenceLine 
                       y={avgPortfolioValue} 
                       stroke="hsl(var(--muted-foreground))" 
@@ -1098,24 +1100,25 @@ export const Investments = () => {
                       fill="url(#investmentGrowthGradient)"
                       dot={false}
                       activeDot={{
-                        r: 6,
+                        r: 7,
                         fill: 'hsl(var(--investment))',
                         stroke: 'hsl(var(--background))',
-                        strokeWidth: 2,
+                        strokeWidth: 3,
                       }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-                <div className="flex items-center justify-center gap-4 mt-2 text-xs text-muted-foreground">
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] text-muted-foreground sm:text-xs">
                   <div className="flex items-center gap-1">
                     <div className="w-6 h-0.5 bg-gradient-to-r from-investment/80 to-investment rounded" />
                     <span>Portfolio Value</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <div className="w-6 h-0.5 border-t border-dashed border-muted-foreground" />
-                    <span>Avg: ₹{avgPortfolioValue.toLocaleString()}</span>
+                    <span>Avg: {formatCurrency(avgPortfolioValue)}</span>
                   </div>
                 </div>
+                <p className="mt-2 text-center text-[11px] text-muted-foreground">Hover or tap the chart to see portfolio value and change.</p>
               </div>
             ) : (
               <div className="h-64 flex items-center justify-center text-muted-foreground">

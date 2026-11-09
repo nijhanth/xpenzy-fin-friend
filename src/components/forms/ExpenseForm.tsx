@@ -1,6 +1,6 @@
 
-import React, { useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -12,6 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Badge } from '@/components/ui/badge';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useToast } from '@/hooks/use-toast';
+import { ReminderCompletionField } from '@/components/forms/ReminderCompletionField';
+import { completeLinkedReminder } from '@/lib/reminderCompletion';
 
 const expenseSchema = z.object({
   amount: z.number().min(1, 'Amount must be greater than 0'),
@@ -19,8 +21,12 @@ const expenseSchema = z.object({
   category: z.string().min(1, 'Category is required'),
   paymentMode: z.enum(['Cash', 'UPI', 'Card', 'Bank Transfer', 'Net Banking']),
   notes: z.string().optional().default(''),
-  customCategory: z.string().optional(),
+  customCategory: z.string().optional().default(''),
   goalId: z.string().nullable().optional()
+}).superRefine((values, context) => {
+  if (values.category === 'Custom' && !values.customCategory.trim()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['customCategory'], message: 'Enter a name for this category.' });
+  }
 });
 
 type ExpenseFormData = z.infer<typeof expenseSchema>;
@@ -37,6 +43,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
   const { toast } = useToast();
   const isEditing = !!editingId;
   const [completionPrompt, setCompletionPrompt] = React.useState<{ goalId: string; goalName: string } | null>(null);
+  const [relatedReminderId, setRelatedReminderId] = React.useState('');
+  const submitLock = useRef(false);
 
   const form = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),
@@ -51,11 +59,11 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     }
   });
 
-  const selectedCategory = form.watch('category');
+  const selectedCategory = useWatch({ control: form.control, name: 'category' });
+  const expenseDate = useWatch({ control: form.control, name: 'date' });
 
   // Only show budget categories relevant to the expense date plus "Custom" option
   const categoryOptions = useMemo(() => {
-    const expenseDate = form.watch('date');
     if (!expenseDate) {
       return ['Custom'];
     }
@@ -93,9 +101,12 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     const budgetCategories = relevantBudgets
       .map(budget => budget.category)
       .filter(category => category && category.trim() !== '');
-    
-    return [...budgetCategories, 'Custom'];
-  }, [data.budgets, form.watch('date')]);
+    const existingCategory = editingId
+      ? data.expenses.find(entry => entry.id === editingId)?.category
+      : undefined;
+
+    return [...new Set([...budgetCategories, ...(existingCategory ? [existingCategory] : []), 'Custom'])];
+  }, [data.budgets, data.expenses, expenseDate, editingId]);
 
   // Get budget info for the selected category
   const budgetInfo = useMemo(() => {
@@ -121,13 +132,15 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
 
   // Load existing data when editing
   useEffect(() => {
+    if (open && !editingId) setRelatedReminderId('');
     if (editingId && open) {
       const existingEntry = data.expenses.find(entry => entry.id === editingId);
       if (existingEntry) {
+        setRelatedReminderId(existingEntry.linkedNoteId ?? '');
         form.reset({
           amount: existingEntry.amount,
           date: existingEntry.date,
-          category: existingEntry.category,
+          category: existingEntry.customCategory ? 'Custom' : existingEntry.category,
           paymentMode: existingEntry.paymentMode as any,
           notes: existingEntry.notes,
           customCategory: existingEntry.customCategory || '',
@@ -144,6 +157,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
         customCategory: '',
         goalId: null
       });
+      setRelatedReminderId('');
     }
   }, [editingId, open, data.expenses, form]);
 
@@ -152,6 +166,11 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     () => data.savings.filter(g => (g.status ?? 'active') === 'active'),
     [data.savings]
   );
+  const remindersUsedByOtherExpenses = useMemo(() => new Set(
+    data.expenses
+      .filter(entry => entry.id !== editingId && entry.linkedNoteId)
+      .map(entry => entry.linkedNoteId as string)
+  ), [data.expenses, editingId]);
 
   // Smart suggestion: when category/notes match an active goal name
   const watchedCategory = form.watch('category');
@@ -175,7 +194,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     }) || null;
   }, [activeGoals, watchedCategory, watchedCustomCategory, watchedNotes, watchedGoalId]);
 
-  const onSubmit = async (formData: ExpenseFormData) => {
+  const saveExpense = async (formData: ExpenseFormData) => {
     if (formData.goalId) {
       const linkedGoal = data.savings.find(goal => goal.id === formData.goalId);
       const previousExpense = editingId ? data.expenses.find(expense => expense.id === editingId) : undefined;
@@ -190,16 +209,22 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     const expenseData = {
       amount: formData.amount,
       date: formData.date,
-      category: formData.category === 'Custom' ? formData.customCategory || 'Custom' : formData.category,
+      category: formData.category === 'Custom' ? formData.customCategory?.trim() || 'Custom' : formData.category,
       subcategory: 'General', // Default subcategory since we removed the field
       paymentMode: formData.paymentMode,
       notes: formData.notes || '',
       customCategory: formData.category === 'Custom' ? formData.customCategory : undefined,
-      goalId: formData.goalId || null
+      goalId: formData.goalId || null,
+      linkedNoteId: relatedReminderId || null
     };
 
     if (isEditing && editingId) {
-      await updateExpense(editingId, expenseData);
+      const previousLinkedNoteId = data.expenses.find(entry => entry.id === editingId)?.linkedNoteId ?? null;
+      const updated = await updateExpense(editingId, expenseData);
+      if (!updated) return;
+      if (relatedReminderId && relatedReminderId !== previousLinkedNoteId) {
+        await completeLinkedReminder(relatedReminderId);
+      }
       toast({
         title: "Expense Updated",
         description: `₹${formData.amount.toLocaleString()} expense updated successfully!`
@@ -207,6 +232,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     } else {
       const savedExpense = await addExpense(expenseData);
       if (!savedExpense) return;
+
+      if (relatedReminderId) await completeLinkedReminder(relatedReminderId);
 
       toast({
         title: "Expense Added",
@@ -226,15 +253,26 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
     onClose();
   };
 
+  const onSubmit = async (formData: ExpenseFormData) => {
+    if (submitLock.current) return;
+    submitLock.current = true;
+    try {
+      await saveExpense(formData);
+    } finally {
+      submitLock.current = false;
+    }
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-0 sm:max-w-[425px]">
+        <DialogHeader className="shrink-0 border-b border-border/70 px-5 py-4">
           <DialogTitle>{isEditing ? 'Edit Expense' : 'Add Expense'}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
             <FormField
               control={form.control}
               name="amount"
@@ -328,7 +366,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
               </div>
             )}
 
-            {selectedCategory === 'Custom' && (
+            {selectedCategory?.trim().toLowerCase() === 'custom' && (
               <FormField
                 control={form.control}
                 name="customCategory"
@@ -383,6 +421,14 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
               )}
             />
 
+            <ReminderCompletionField
+              value={relatedReminderId}
+              onChange={setRelatedReminderId}
+              refreshKey={`${open}-${editingId ?? 'new'}`}
+              completionMode="complete"
+              excludedReminderIds={remindersUsedByOtherExpenses}
+            />
+
             {/* Linked Goal (Optional) */}
             <FormField
               control={form.control}
@@ -430,12 +476,14 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
               </div>
             )}
 
-            <div className="flex justify-end space-x-2">
+            </div>
+
+            <div className="sticky bottom-0 flex shrink-0 justify-end gap-2 border-t border-border/70 bg-background/95 px-5 py-3 backdrop-blur">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-gradient-expense">
-                {isEditing ? 'Update Expense' : 'Add Expense'}
+              <Button type="submit" className="bg-gradient-expense" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Saving…' : isEditing ? 'Update Expense' : 'Add Expense'}
               </Button>
             </div>
           </form>

@@ -178,6 +178,7 @@ export type Database = {
           date: string
           goal_id: string | null
           id: string
+          linked_note_id: string | null
           notes: string | null
           payment_mode: string
           subcategory: string
@@ -192,6 +193,7 @@ export type Database = {
           date: string
           goal_id?: string | null
           id?: string
+          linked_note_id?: string | null
           notes?: string | null
           payment_mode: string
           subcategory: string
@@ -206,6 +208,7 @@ export type Database = {
           date?: string
           goal_id?: string | null
           id?: string
+          linked_note_id?: string | null
           notes?: string | null
           payment_mode?: string
           subcategory?: string
@@ -218,6 +221,13 @@ export type Database = {
             columns: ["goal_id"]
             isOneToOne: false
             referencedRelation: "savings_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_entries_linked_note_id_fkey"
+            columns: ["linked_note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
             referencedColumns: ["id"]
           },
         ]

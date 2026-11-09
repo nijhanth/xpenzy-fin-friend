@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useFinancial } from '@/contexts/FinancialContext';
-import { useToast } from '@/hooks/use-toast';
+import { ReminderCompletionField } from '@/components/forms/ReminderCompletionField';
+import { offerReminderCompletion } from '@/lib/reminderCompletion';
 
 const transactionSchema = z.object({
   amount: z.number().min(0, 'Contribution cannot be negative'),
@@ -42,7 +43,8 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
   investmentName
 }) => {
   const { data, addInvestmentTransaction, updateInvestmentTransaction } = useFinancial();
-  const { toast } = useToast();
+  const [relatedReminderId, setRelatedReminderId] = useState('');
+  const submitLock = useRef(false);
 
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
@@ -55,6 +57,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
   });
 
   useEffect(() => {
+    if (open && !editingId) setRelatedReminderId('');
     if (editingId && open) {
       const transaction = data.investmentTransactions.find(t => t.id === editingId);
       if (transaction) {
@@ -76,6 +79,8 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
   }, [editingId, open, form, data.investmentTransactions, initialDate]);
 
   const onSubmit = async (data: TransactionFormData) => {
+    if (submitLock.current) return;
+    submitLock.current = true;
     try {
       if (editingId) {
         await updateInvestmentTransaction(editingId, data);
@@ -86,11 +91,14 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
           date: data.date,
           notes: data.notes || (data.amount > 0 ? `Monthly contribution to ${investmentName}` : `Monthly performance update for ${investmentName}`),
           profit_loss: data.profit_loss
-        });
+        }, false);
+        void offerReminderCompletion(relatedReminderId);
       }
       onClose();
     } catch (error) {
       console.error('Transaction form error:', error);
+    } finally {
+      submitLock.current = false;
     }
   };
 
@@ -193,12 +201,14 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
               )}
             />
 
+            {!editingId && <ReminderCompletionField value={relatedReminderId} onChange={setRelatedReminderId} refreshKey={open} />}
+
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-investment text-white">
-                {editingId ? 'Save update' : 'Save monthly update'}
+              <Button type="submit" className="bg-investment text-white" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Saving…' : editingId ? 'Save update' : 'Save monthly update'}
               </Button>
             </div>
           </form>

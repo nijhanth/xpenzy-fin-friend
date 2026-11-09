@@ -19,6 +19,7 @@ export interface ExpenseEntry {
   notes: string;
   customCategory?: string;
   goalId?: string | null;
+  linkedNoteId?: string | null;
 }
 
 export interface SavingsGoal {

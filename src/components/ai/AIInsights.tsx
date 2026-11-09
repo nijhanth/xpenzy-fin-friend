@@ -16,7 +16,7 @@ const insightLanguages = [
   { value: 'te', label: 'Telugu' },
 ] as const;
 
-export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'budget' | 'income' | 'savings' | 'investments'; autoGenerate?: boolean; isDataLoading?: boolean; refreshKey?: unknown; showLanguageSelector?: boolean }> = ({
+export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'budget' | 'income' | 'savings' | 'investments' | 'notes'; autoGenerate?: boolean; isDataLoading?: boolean; refreshKey?: unknown; showLanguageSelector?: boolean }> = ({
   title = 'AI Insights', focus = 'expenses', autoGenerate = false, isDataLoading = false, refreshKey, showLanguageSelector = false,
 }) => {
   const [insights, setInsights] = useState<string | null>(null);
@@ -168,8 +168,8 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
         {!insights && !isLoading && errorState === 'no_data' && (
           <div className="text-center py-6">
             <TrendingDown className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground mb-1 font-medium">Add expenses to see insights</p>
-            <p className="text-xs text-muted-foreground">You need at least 2 expense entries for AI analysis.</p>
+            <p className="text-sm text-muted-foreground mb-1 font-medium">{focus === 'notes' ? 'Add a reminder to get tips' : 'Add expenses to see insights'}</p>
+            <p className="text-xs text-muted-foreground">{focus === 'notes' ? 'AI tips use the due dates and priorities in your active reminders.' : 'You need at least 2 expense entries for AI analysis.'}</p>
           </div>
         )}
         {!insights && !isLoading && errorState === 'error' && (

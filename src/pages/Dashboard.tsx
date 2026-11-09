@@ -7,7 +7,9 @@ import {
   ChartNoAxesColumn,
   CircleDollarSign,
   PiggyBank,
+  LogOut,
   Plus,
+  RefreshCw,
   ReceiptText,
   Target,
   TrendingDown,
@@ -19,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { HomeFinancialOutlook } from '@/components/ai/HomeFinancialOutlook';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -107,8 +110,11 @@ interface Props {
 }
 
 export const Dashboard = ({ onAdd, onNavigate }: Props) => {
-  const { data, isLoading } = useFinancial();
-  const { user } = useAuth();
+  const { data, isLoading, refreshBudgets, refreshExpenses, refreshIncome, refreshSavingsTransactions, refreshInvestmentTransactions } = useFinancial();
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [categoryType, setCategoryType] = useState<'expenses' | 'savings' | 'investment'>('expenses');
   const budgetDateFilter = useDateRangeFilter();
   const categoryDateFilter = useDateRangeFilter();
   const cashFlowDateFilter = useDateRangeFilter('this_year');
@@ -156,23 +162,79 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       return false;
     });
     const budget = monthlyBudgets.reduce((total, entry) => total + Number(entry.limit_amount || 0), 0);
-    const rangeSpent = budgetExpenses.reduce((total, entry) => total + Number(entry.amount || 0), 0);
-    const budgetCategoryTotals = budgetExpenses.reduce<Record<string, number>>((totals, entry) => {
+    const expenseCategories = categoryExpenses.reduce<Record<string, number>>((totals, entry) => {
       totals[entry.category] = (totals[entry.category] || 0) + Number(entry.amount || 0);
       return totals;
     }, {});
-    const categories = categoryExpenses.reduce<Record<string, number>>((totals, entry) => {
-      totals[entry.category] = (totals[entry.category] || 0) + Number(entry.amount || 0);
-      return totals;
-    }, {});
-    const budgetLimits = monthlyBudgets.reduce<Record<string, number>>((totals, entry) => {
-      totals[entry.category] = (totals[entry.category] || 0) + Number(entry.limit_amount || 0);
-      return totals;
-    }, {});
-    const budgetCategories = Object.entries(budgetLimits)
-      .map(([category, limit]) => ({ category, limit, spent: budgetCategoryTotals[category] || 0 }))
+    const savingsCategories: Record<string, number> = {};
+    const categorySavingsTransactions = data.savingsTransactions.filter((entry) => inRange(entry.date, categoryDateFilter.range) && Number(entry.amount || 0) > 0 && !entry.notes?.startsWith('Existing balance adjustment:') && !entry.notes?.startsWith('Existing balance allocation:'));
+    for (const transaction of categorySavingsTransactions) {
+      const goal = data.savings.find((item) => item.id === transaction.savings_goal_id);
+      const name = goal?.name || 'Other savings';
+      savingsCategories[name] = (savingsCategories[name] || 0) + Number(transaction.amount || 0);
+    }
+    for (const goal of data.savings) {
+      const transactionTotal = data.savingsTransactions
+        .filter((transaction) => transaction.savings_goal_id === goal.id)
+        .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+      const startingBalance = Math.max(0, Number(goal.current || 0) - transactionTotal);
+      if (startingBalance > 0 && inRange(goal.date, categoryDateFilter.range)) {
+        savingsCategories[goal.name] = (savingsCategories[goal.name] || 0) + startingBalance;
+      }
+    }
+    const investmentCategories: Record<string, number> = {};
+    const categoryInvestmentTransactions = data.investmentTransactions.filter((entry) => inRange(entry.date, categoryDateFilter.range) && Number(entry.amount || 0) > 0 && !entry.notes?.startsWith('Statement snapshot:'));
+    for (const transaction of categoryInvestmentTransactions) {
+      const investment = data.investments.find((item) => item.id === transaction.investment_id);
+      const name = investment?.name || 'Other investments';
+      investmentCategories[name] = (investmentCategories[name] || 0) + Number(transaction.amount || 0);
+    }
+    for (const investment of data.investments) {
+      if (investment.notes?.startsWith('Imported from mutual fund statement snapshots.') || investment.notes?.startsWith('Imported from Angel One statement snapshots.')) continue;
+      const hasTransactions = data.investmentTransactions.some((transaction) => transaction.investment_id === investment.id);
+      const startingInvestment = Number(investment.initial_invested || (!hasTransactions ? investment.invested : 0) || 0);
+      if (startingInvestment > 0 && inRange(investment.date, categoryDateFilter.range)) {
+        investmentCategories[investment.name] = (investmentCategories[investment.name] || 0) + startingInvestment;
+      }
+    }
+    const categoryBreakdowns = {
+      expenses: expenseCategories,
+      savings: savingsCategories,
+      investment: investmentCategories,
+    };
+    const categoryDetails = Object.fromEntries(Object.entries(categoryBreakdowns).map(([type, entries]) => {
+      const categories = Object.entries(entries).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+      const chart = categories.slice(0, 4);
+      const otherCategoryTotal = categories.slice(4).reduce((total, entry) => total + entry.value, 0);
+      if (otherCategoryTotal > 0) chart.push({ name: 'Other', value: otherCategoryTotal });
+      return [type, { categories, chart }];
+    })) as Record<'expenses' | 'savings' | 'investment', { categories: Array<{ name: string; value: number }>; chart: Array<{ name: string; value: number }> }>;
+    const budgetGroups = new Map<string, { category: string; type: 'expenses' | 'savings' | 'investment'; linkedId?: string; limit: number }>();
+    monthlyBudgets.forEach((entry) => {
+      const type = entry.linked_type || 'expenses';
+      const key = `${type}:${entry.linked_id || entry.category}`;
+      const existing = budgetGroups.get(key);
+      if (existing) existing.limit += Number(entry.limit_amount || 0);
+      else budgetGroups.set(key, { category: entry.category, type, linkedId: entry.linked_id, limit: Number(entry.limit_amount || 0) });
+    });
+    const budgetCategories = Array.from(budgetGroups.values()).map((entry) => {
+      let actual = 0;
+      if (entry.type === 'savings' && entry.linkedId) {
+        actual = data.savingsTransactions
+          .filter((transaction) => transaction.savings_goal_id === entry.linkedId && inRange(transaction.date, budgetDateFilter.range) && Number(transaction.amount || 0) > 0 && !transaction.notes?.startsWith('Existing balance adjustment:') && !transaction.notes?.startsWith('Existing balance allocation:'))
+          .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+      } else if (entry.type === 'investment' && entry.linkedId) {
+        actual = data.investmentTransactions
+          .filter((transaction) => transaction.investment_id === entry.linkedId && inRange(transaction.date, budgetDateFilter.range) && Number(transaction.amount || 0) > 0 && !transaction.notes?.startsWith('Statement snapshot:'))
+          .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+      } else if (entry.type === 'expenses') {
+        actual = budgetExpenses.filter((expense) => expense.category === entry.category).reduce((total, expense) => total + Number(expense.amount || 0), 0);
+      }
+      return { ...entry, spent: actual };
+    })
       .sort((a, b) => (b.limit > 0 ? b.spent / b.limit : 0) - (a.limit > 0 ? a.spent / a.limit : 0))
-      .slice(0, 4);
+    const rangeSpent = budgetExpenses.reduce((total, entry) => total + Number(entry.amount || 0), 0)
+      + budgetCategories.filter((entry) => entry.type !== 'expenses').reduce((total, entry) => total + entry.spent, 0);
     const rangeStartDate = new Date(`${cashFlowRange.start}T00:00:00`);
     const rangeEndDate = new Date(`${cashFlowRange.end}T00:00:00`);
     const monthlyMoneyBreakdown: Array<{ month: string; monthKey: string; income: number; expenses: number; setAside: number; withdrawals: number }> = [];
@@ -218,10 +280,6 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       const startingInvestment = Number(investment.initial_invested || (!hasTransactions ? investment.invested : 0) || 0);
       if (startingInvestment > 0 && inRange(investment.date, cashFlowRange)) addToMonth(investment.date, 'setAside', startingInvestment);
     }
-    const sortedCategories = Object.entries(categories).sort((a, b) => b[1] - a[1]);
-    const categoryDistribution = sortedCategories.slice(0, 4).map(([name, value]) => ({ name, value }));
-    const otherCategoryTotal = sortedCategories.slice(4).reduce((total, [, value]) => total + value, 0);
-    if (otherCategoryTotal > 0) categoryDistribution.push({ name: 'Other', value: otherCategoryTotal });
     const activity = [
       ...activityExpenses.map((entry) => ({
         id: `expense-${entry.id}`,
@@ -255,7 +313,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       monthIncome,
       budgetCategories,
       monthlyMoneyBreakdown,
-      categoryDistribution,
+      categoryDetails,
       topExpenses,
       activity,
       savings,
@@ -267,12 +325,38 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
   const firstName = (user?.user_metadata?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name || '').trim().split(/\s+/)[0];
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
   const budgetUsed = stats.budget > 0 ? Math.min(100, (stats.rangeSpent / stats.budget) * 100) : 0;
+  const activeCategoryDetails = stats.categoryDetails[categoryType];
   const dateLabel = now.toLocaleDateString('en-IN', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   });
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refreshBudgets(),
+        refreshExpenses(),
+        refreshIncome(),
+        refreshSavingsTransactions(),
+        refreshInvestmentTransactions(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to sign out' });
+      return;
+    }
+    window.location.href = '/auth';
+  };
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-8 pt-5 sm:space-y-8 sm:px-6 sm:pt-8">
@@ -286,10 +370,14 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">Here’s your money snapshot for this month.</p>
         </div>
-        <Button onClick={onAdd} className="h-11 shrink-0 rounded-xl px-3.5 sm:px-4">
-          <Plus className="mr-1.5 h-4 w-4" aria-hidden />
-          <span className="hidden sm:inline">Add expense</span><span className="sm:hidden">Add</span>
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button type="button" variant="ghost" size="icon" onClick={handleRefresh} disabled={isRefreshing} aria-label="Refresh financial data" title="Refresh data" className="h-10 w-10 rounded-xl">
+            <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden />
+          </Button>
+          <Button type="button" variant="ghost" size="icon" onClick={handleSignOut} aria-label="Log out" title="Log out" className="h-10 w-10 rounded-xl">
+            <LogOut className="h-5 w-5" aria-hidden />
+          </Button>
+        </div>
       </header>
 
       <section aria-label="Monthly cash flow">
@@ -329,7 +417,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
       <section className="grid gap-5 lg:grid-cols-2" aria-label="Spending charts">
         <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div><div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><h2 className="font-semibold text-foreground">Monthly budget</h2></div><p className="mt-1 text-xs text-muted-foreground">Category limits and spending | {budgetDateFilter.label}</p></div>
+            <div><div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><h2 className="font-semibold text-foreground">Monthly budget</h2></div><p className="mt-1 text-xs text-muted-foreground">Expense, savings, and investment budgets | {budgetDateFilter.label}</p></div>
             <div className="flex flex-wrap items-center gap-2">
               <DateRangeFilterControl filter={budgetDateFilter} widget="Monthly budget" />
               <Button variant="ghost" size="sm" className="shrink-0 text-primary" onClick={() => onNavigate('budget')}>Manage <ArrowRight className="ml-1 h-4 w-4" aria-hidden /></Button>
@@ -346,7 +434,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
                   <div className="relative text-center"><p className="text-2xl font-bold tabular-nums text-foreground">{Math.round(budgetUsed)}%</p><p className="text-[11px] text-muted-foreground">used</p></div>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-muted-foreground">Spent in selected range</p>
+                  <p className="text-xs font-medium text-muted-foreground">Used in selected range</p>
                   <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{inr(stats.rangeSpent)}</p>
                   <p className="mt-1 text-sm text-muted-foreground">of {inr(stats.budget)} total budget</p>
                   <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${stats.remaining >= 0 ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
@@ -356,14 +444,15 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
                 </div>
               </div>
               <div className="mt-5 border-t border-border/70 pt-4">
-                <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground"><ChartNoAxesColumn className="h-3.5 w-3.5" /> CATEGORY PROGRESS</div>
-                {stats.budgetCategories.length ? <div className="space-y-4">
-              {stats.budgetCategories.map((item) => {
+                <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground"><ChartNoAxesColumn className="h-3.5 w-3.5" /> BUDGET PROGRESS</div>
+                {stats.budgetCategories.length ? <div className={stats.budgetCategories.length > 5 ? 'h-[280px] overflow-y-auto pr-2' : 'pr-2'} role="region" aria-label="Budget progress list" tabIndex={0}>
+                {stats.budgetCategories.map((item) => {
                 const percent = item.limit > 0 ? Math.min(100, item.spent / item.limit * 100) : 0;
                 const tone = percent >= 100 ? 'bg-destructive' : percent >= 80 ? 'bg-warning' : 'bg-primary';
-                return <div key={item.category}>
-                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-                    <span className="truncate font-medium text-foreground">{item.category}</span>
+                const typeLabel = item.type === 'savings' ? 'Savings' : item.type === 'investment' ? 'Investment' : 'Expense';
+                return <div key={`${item.type}:${item.linkedId || item.category}`} className="flex h-14 flex-col justify-center gap-2">
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className="truncate font-medium text-foreground">{item.category} <span className="text-muted-foreground">· {typeLabel}</span></span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">{inr(item.spent)} <span className="text-muted-foreground/60">/ {inr(item.limit)}</span></span>
                   </div>
                   <div role="progressbar" aria-label={`${item.category} budget used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)} className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full transition-all ${tone}`} style={{ width: `${percent}%` }} /></div>
@@ -376,7 +465,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
             <div className="mt-5 rounded-xl border border-dashed border-border px-4 py-7 text-center">
               <Target className="mx-auto h-7 w-7 text-muted-foreground/70" />
               <p className="mt-2 text-sm font-medium text-foreground">No monthly budget yet</p>
-              <p className="mt-1 text-xs text-muted-foreground">Set category limits to see your progress here.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Set expense, savings, or investment limits to see your progress here.</p>
               <Button variant="outline" size="sm" className="mt-3 rounded-lg" onClick={() => onNavigate('budget')}>Create a budget</Button>
             </div>
           )}
@@ -384,27 +473,38 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
 
         <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div><h2 className="font-semibold text-foreground">Spending by category</h2><p className="mt-1 text-xs text-muted-foreground">Expense breakdown | {categoryDateFilter.label}</p></div>
+            <div><h2 className="font-semibold text-foreground">Spending by category</h2><p className="mt-1 text-xs text-muted-foreground">{categoryType === 'expenses' ? 'Expense' : categoryType === 'savings' ? 'Savings' : 'Investment'} breakdown | {categoryDateFilter.label}</p></div>
             <div className="flex flex-wrap items-center gap-2">
               <DateRangeFilterControl filter={categoryDateFilter} widget="Spending by category" />
-              <button onClick={() => onNavigate('expenses')} className="text-xs font-semibold text-primary hover:underline">All expenses</button>
+              <button onClick={() => onNavigate(categoryType === 'expenses' ? 'expenses' : categoryType === 'savings' ? 'savings' : 'investments')} className="text-xs font-semibold text-primary hover:underline">View all</button>
             </div>
           </div>
-          {isLoading ? <Skeleton className="mt-5 h-56 w-full" /> : stats.categoryDistribution.length ? (
+          <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Category type">
+            {([
+              { id: 'expenses', label: 'Expense' },
+              { id: 'savings', label: 'Savings' },
+              { id: 'investment', label: 'Investment' },
+            ] as const).map(({ id, label }) => (
+              <button key={id} type="button" role="tab" aria-selected={categoryType === id} onClick={() => setCategoryType(id)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${categoryType === id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {isLoading ? <Skeleton className="mt-5 h-56 w-full" /> : activeCategoryDetails.chart.length ? (
             <div className="mt-3 flex flex-col items-center gap-4 sm:flex-row">
               <div className="h-52 w-full sm:w-1/2">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={stats.categoryDistribution} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="82%" paddingAngle={3} stroke="none">
-                      {stats.categoryDistribution.map((entry, index) => <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />)}
+                    <Pie data={activeCategoryDetails.chart} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="82%" paddingAngle={3} stroke="none">
+                      {activeCategoryDetails.chart.map((entry, index) => <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />)}
                     </Pie>
                     <Tooltip formatter={(value: number) => inr(value)} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <ul className="w-full space-y-2 sm:w-1/2">
-                {stats.categoryDistribution.map((entry, index) => (
-                  <li key={entry.name} className="flex items-center justify-between gap-3 text-xs">
+              <ul className={`w-full sm:w-1/2 ${activeCategoryDetails.categories.length > 5 ? 'h-[200px] overflow-y-auto pr-2' : ''}`} aria-label={`${categoryType} categories`}>
+                {activeCategoryDetails.categories.map((entry, index) => (
+                  <li key={entry.name} className="flex h-10 items-center justify-between gap-3 text-xs">
                     <span className="flex min-w-0 items-center gap-2 text-muted-foreground"><span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }} /><span className="truncate">{entry.name}</span></span>
                     <span className="shrink-0 font-medium tabular-nums text-foreground">{inr(entry.value)}</span>
                   </li>
@@ -412,43 +512,46 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
               </ul>
             </div>
           ) : (
-            <div className="mt-5 flex h-56 items-center justify-center rounded-xl bg-muted/40 px-4 text-center text-sm text-muted-foreground">Add expenses to see your category breakdown.</div>
+            <div className="mt-5 flex h-56 items-center justify-center rounded-xl bg-muted/40 px-4 text-center text-sm text-muted-foreground">No {categoryType === 'expenses' ? 'expenses' : categoryType === 'savings' ? 'savings contributions' : 'investment contributions'} in this date range.</div>
           )}
         </div>
 
-        <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6 lg:col-span-2">
+        <div className="min-w-0 rounded-2xl border border-border/80 bg-card p-4 shadow-sm sm:p-6 lg:col-span-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div><h2 className="font-semibold text-foreground">Monthly money breakdown</h2><p className="mt-1 text-xs text-muted-foreground">Compare income, expenses, savings, investments, and withdrawals | {cashFlowDateFilter.preset === 'this_year' ? year : cashFlowDateFilter.label}</p></div>
+            <div className="min-w-0"><h2 className="font-semibold text-foreground">Monthly money breakdown</h2><p className="mt-1 text-xs text-muted-foreground">Compare income, expenses, savings, investments, and withdrawals | {cashFlowDateFilter.preset === 'this_year' ? year : cashFlowDateFilter.label}</p></div>
             <DateRangeFilterControl filter={cashFlowDateFilter} widget="Monthly money breakdown" />
           </div>
           {isLoading ? <Skeleton className="mt-5 h-48 w-full" /> : stats.monthlyMoneyBreakdown.some((item) => item.income || item.expenses || item.setAside || item.withdrawals) ? (
-            <div className="mt-5 rounded-2xl border border-border/70 bg-gradient-to-b from-muted/30 to-muted/5 p-3 sm:p-5">
-              <div className="mb-4 flex flex-wrap justify-center gap-2 sm:justify-end">
+            <div className="mt-5 min-w-0 rounded-2xl border border-border/70 bg-gradient-to-b from-muted/30 to-muted/5 p-3 sm:p-5">
+              <div className="mb-4 grid grid-cols-2 justify-center gap-2 sm:flex sm:flex-wrap sm:justify-end">
                 <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-emerald-600" />Income</span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-rose-600" />Expenses</span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-violet-600" />Saved & invested</span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-amber-500" />Withdrawals</span>
               </div>
-              <div className="h-64 sm:h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.monthlyMoneyBreakdown} margin={{ top: 12, right: 12, left: 4, bottom: 0 }} barCategoryGap="28%" barGap={4}>
-                    <CartesianGrid strokeDasharray="3 5" vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.65} />
-                    <XAxis dataKey="month" interval={0} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} dy={10} minTickGap={8} />
-                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(value: number) => `${String.fromCharCode(8377)}${Math.abs(value) >= 1000 ? `${Math.round(value / 1000)}k` : value}`} width={52} />
-                    <Tooltip
-                      cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.35 }}
-                      formatter={(value: number, name: string) => [inr(value), name === 'income' ? 'Income' : name === 'expenses' ? 'Expenses' : name === 'setAside' ? 'Saved & invested' : 'Withdrawals']}
-                      contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--popover))', boxShadow: '0 12px 28px -14px rgba(15,23,42,0.4)', padding: '9px 12px' }}
-                      labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 600, marginBottom: 5 }}
-                      itemStyle={{ color: 'hsl(var(--muted-foreground))', fontSize: 12, padding: '2px 0' }}
-                    />
-                    <Bar dataKey="income" name="income" fill="#059669" radius={[5, 5, 0, 0]} maxBarSize={24} />
-                    <Bar dataKey="expenses" name="expenses" fill="#e11d48" radius={[5, 5, 0, 0]} maxBarSize={24} />
-                    <Bar dataKey="setAside" name="setAside" fill="#7c3aed" radius={[5, 5, 0, 0]} maxBarSize={24} />
-                    <Bar dataKey="withdrawals" name="withdrawals" fill="#f59e0b" radius={[5, 5, 0, 0]} maxBarSize={24} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="-mx-1 min-w-0 max-w-full overflow-x-auto overscroll-x-contain sm:mx-0" role="region" aria-label="Monthly money breakdown chart; scroll horizontally to view all months" tabIndex={0}>
+                <div className="h-64 sm:h-72" style={{ minWidth: stats.monthlyMoneyBreakdown.length > 6 ? 640 : '100%' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stats.monthlyMoneyBreakdown} margin={{ top: 12, right: 12, left: 4, bottom: 0 }} barCategoryGap="28%" barGap={4}>
+                      <CartesianGrid strokeDasharray="3 5" vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.65} />
+                      <XAxis dataKey="month" interval={0} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} dy={10} minTickGap={8} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(value: number) => `${String.fromCharCode(8377)}${Math.abs(value) >= 1000 ? `${Math.round(value / 1000)}k` : value}`} width={52} />
+                      <Tooltip
+                        cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.35 }}
+                        formatter={(value: number, name: string) => [inr(value), name === 'income' ? 'Income' : name === 'expenses' ? 'Expenses' : name === 'setAside' ? 'Saved & invested' : 'Withdrawals']}
+                        contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--popover))', boxShadow: '0 12px 28px -14px rgba(15,23,42,0.4)', padding: '9px 12px' }}
+                        labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 600, marginBottom: 5 }}
+                        itemStyle={{ color: 'hsl(var(--muted-foreground))', fontSize: 12, padding: '2px 0' }}
+                      />
+                      <Bar dataKey="income" name="income" fill="#059669" radius={[5, 5, 0, 0]} maxBarSize={24} />
+                      <Bar dataKey="expenses" name="expenses" fill="#e11d48" radius={[5, 5, 0, 0]} maxBarSize={24} />
+                      <Bar dataKey="setAside" name="setAside" fill="#7c3aed" radius={[5, 5, 0, 0]} maxBarSize={24} />
+                      <Bar dataKey="withdrawals" name="withdrawals" fill="#f59e0b" radius={[5, 5, 0, 0]} maxBarSize={24} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
+              {stats.monthlyMoneyBreakdown.length > 6 && <p className="mt-2 text-center text-[11px] text-muted-foreground sm:hidden">Swipe the chart sideways to view every month.</p>}
               <p className="mt-3 text-center text-[11px] text-muted-foreground">Redemptions and savings withdrawals appear as positive withdrawal amounts, keeping the monthly comparison easy to scan.</p>
             </div>
           ) : (

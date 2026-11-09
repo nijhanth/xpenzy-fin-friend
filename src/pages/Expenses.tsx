@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { PieChart, Pie, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, AreaChart, Area, ReferenceLine } from 'recharts';
-import { Plus, CreditCard, Calendar, TrendingDown, ShoppingBag, BarChart3, Filter, Search, ReceiptText, Calculator } from 'lucide-react';
+import { Plus, CreditCard, Calendar, TrendingDown, ShoppingBag, BarChart3, Filter, Search, ReceiptText, Calculator, Bell } from 'lucide-react';
 
 // Trade-style tooltip for donut chart
 const DonutChartTooltip = ({ active, payload }: any) => {
@@ -65,6 +65,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, startOfYear, endOfYear, isWithinInterval, parseISO } from 'date-fns';
 import { formatCompactDisplayDate, formatDisplayDate } from '@/lib/dateFormat';
+import { database } from '@/lib/database';
 
 export const Expenses = () => {
   const { data, isLoading: isFinancialLoading } = useFinancial();
@@ -81,6 +82,15 @@ export const Expenses = () => {
   const [selectedDate, setSelectedDate] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [reminderTitles, setReminderTitles] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    void database.notes.getAll().then((notes) => {
+      if (!cancelled) setReminderTitles(Object.fromEntries(notes.map((note) => [note.id, note.title])));
+    }).catch((error) => console.error('Could not load linked reminder labels:', error));
+    return () => { cancelled = true; };
+  }, []);
 
   const categories = useMemo(
     () => [...new Set(data.expenses.map((expense) => expense.category))].sort((a, b) => a.localeCompare(b)),
@@ -651,6 +661,12 @@ export const Expenses = () => {
                         {entry.paymentMode}
                       </Badge>
                     </div>
+                    {entry.linkedNoteId && (
+                      <p className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Bell className="h-3 w-3 shrink-0" />
+                        Reminder: {reminderTitles[entry.linkedNoteId] || 'Linked reminder'}
+                      </p>
+                    )}
                     <p className="font-medium text-foreground">₹{entry.amount.toLocaleString()}</p>
                     {entry.notes && <p className="truncate text-sm text-muted-foreground">{entry.notes}</p>}
                   </div>

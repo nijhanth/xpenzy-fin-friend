@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -33,6 +33,7 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose, editingId
   const { addIncome, updateIncome, data } = useFinancial();
   const { toast } = useToast();
   const isEditing = !!editingId;
+  const submitLock = useRef(false);
 
   const form = useForm<IncomeFormData>({
     resolver: zodResolver(incomeSchema),
@@ -65,7 +66,7 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose, editingId
     }
   }, [editingId, open, data.income, form]);
 
-  const onSubmit = async (formData: IncomeFormData) => {
+  const saveIncome = async (formData: IncomeFormData) => {
     const finalCategory = formData.category === 'Custom' && formData.customCategory 
       ? formData.customCategory as any
       : formData.category;
@@ -95,6 +96,16 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose, editingId
     
     form.reset();
     onClose();
+  };
+
+  const onSubmit = async (formData: IncomeFormData) => {
+    if (submitLock.current) return;
+    submitLock.current = true;
+    try {
+      await saveIncome(formData);
+    } finally {
+      submitLock.current = false;
+    }
   };
 
   return (
@@ -224,8 +235,8 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose, editingId
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-gradient-income">
-                {isEditing ? 'Update Income' : 'Add Income'}
+              <Button type="submit" className="bg-gradient-income" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Saving…' : isEditing ? 'Update Income' : 'Add Income'}
               </Button>
             </div>
           </form>

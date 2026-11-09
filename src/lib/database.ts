@@ -103,7 +103,8 @@ export const expenseService = {
       paymentMode: item.payment_mode as any,
       notes: item.notes,
       customCategory: item.custom_category,
-      goalId: (item as any).goal_id ?? null
+      goalId: (item as any).goal_id ?? null,
+      linkedNoteId: (item as any).linked_note_id ?? null
     })) || [];
   },
 
@@ -117,7 +118,8 @@ export const expenseService = {
       notes: expense.notes,
       custom_category: expense.customCategory,
       user_id: (await supabase.auth.getUser()).data.user?.id,
-      ...(expense.goalId ? { goal_id: expense.goalId } : {})
+      ...(expense.goalId ? { goal_id: expense.goalId } : {}),
+      linked_note_id: expense.linkedNoteId ?? null
     };
     const { data, error } = await supabase
       .from('expense_entries')
@@ -135,7 +137,8 @@ export const expenseService = {
       paymentMode: data.payment_mode as any,
       notes: data.notes,
       customCategory: data.custom_category,
-      goalId: (data as any).goal_id ?? null
+      goalId: (data as any).goal_id ?? null,
+      linkedNoteId: (data as any).linked_note_id ?? null
     };
   },
 
@@ -151,6 +154,9 @@ export const expenseService = {
     };
     if (expense.goalId !== undefined) {
       updatePayload.goal_id = expense.goalId;
+    }
+    if (expense.linkedNoteId !== undefined) {
+      updatePayload.linked_note_id = expense.linkedNoteId;
     }
     const { data, error } = await supabase
       .from('expense_entries')
@@ -169,7 +175,8 @@ export const expenseService = {
       paymentMode: data.payment_mode as any,
       notes: data.notes,
       customCategory: data.custom_category,
-      goalId: (data as any).goal_id ?? null
+      goalId: (data as any).goal_id ?? null,
+      linkedNoteId: (data as any).linked_note_id ?? null
     };
   },
 
@@ -179,6 +186,15 @@ export const expenseService = {
       .delete()
       .eq('id', id);
     
+    if (error) throw error;
+  },
+
+  async unlinkReminder(reminderId: string): Promise<void> {
+    const { error } = await supabase
+      .from('expense_entries')
+      .update({ linked_note_id: null })
+      .eq('linked_note_id', reminderId);
+
     if (error) throw error;
   }
 };

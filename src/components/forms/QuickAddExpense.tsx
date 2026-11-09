@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { useFinancial } from '@/contexts/FinancialContext';
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ReminderCompletionField } from '@/components/forms/ReminderCompletionField';
+import { completeLinkedReminder } from '@/lib/reminderCompletion';
 
 const CHAT_URL = `${SUPABASE_URL}/functions/v1/ai-assistant`;
 const DEFAULTS = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education', 'Other'];
@@ -36,6 +38,8 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const [relatedReminderId, setRelatedReminderId] = useState('');
 
   // Recent categories first, then budgets, then defaults
   const categories = useMemo(() => {
@@ -47,7 +51,7 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
 
   useEffect(() => {
     if (open) {
-      setText(''); setAmount(''); setNote(''); setDate(today()); setError(null); setAiNote(null);
+      setText(''); setAmount(''); setNote(''); setDate(today()); setError(null); setAiNote(null); setRelatedReminderId('');
       setCategory(localStorage.getItem(LAST_CAT_KEY) || '');
     }
   }, [open]);
@@ -100,25 +104,37 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
   };
 
   const save = async () => {
+    if (saveLock.current) return;
     const value = Number(amount);
     if (!value || value <= 0) return setError('Enter an amount greater than 0.');
     if (!category.trim()) return setError('Pick a category.');
     if (!date || date > today()) return setError('Choose today or an earlier date.');
+    saveLock.current = true;
     setError(null); setSaving(true);
     try {
-      const added = await addExpense({ amount: value, date, category: category.trim(), subcategory: 'General', paymentMode: 'UPI', notes: note.trim() });
+      const added = await addExpense({
+        amount: value,
+        date,
+        category: category.trim(),
+        subcategory: 'General',
+        paymentMode: 'UPI',
+        notes: note.trim(),
+        linkedNoteId: relatedReminderId || null,
+      });
       if (!added) {
         setError('Could not save this expense. Please try again.');
         return;
       }
+      if (relatedReminderId) await completeLinkedReminder(relatedReminderId);
       localStorage.setItem(LAST_CAT_KEY, category.trim());
       onOpenChange(false);
       toast.success(`Saved ₹${value.toLocaleString('en-IN')} for ${category}`, {
-        duration: 6000,
+        duration: 3000,
         action: added ? { label: 'Undo', onClick: () => deleteExpense(added.id) } : undefined,
       });
     } finally {
       setSaving(false);
+      saveLock.current = false;
     }
   };
 
@@ -175,6 +191,7 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
               <Input id="qa-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Shop or detail" />
             </div>
           </div>
+          <ReminderCompletionField value={relatedReminderId} onChange={setRelatedReminderId} disabled={saving} refreshKey={open} />
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <Button className="w-full h-12 text-base" onClick={save} disabled={saving}>
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save expense'}

@@ -32,7 +32,7 @@ interface FinancialContextType {
   updateInvestment: (id: string, current: number) => void;
   addMoneyToInvestment: (investmentId: string, amount: number, date: string) => void;
   updateIncome: (id: string, income: Partial<Omit<IncomeEntry, 'id'>>) => void;
-  updateExpense: (id: string, expense: Partial<Omit<ExpenseEntry, 'id'>>) => void;
+  updateExpense: (id: string, expense: Partial<Omit<ExpenseEntry, 'id'>>) => Promise<boolean>;
   updateSavings: (id: string, savings: Partial<Omit<SavingsGoal, 'id'>>) => void;
   updateInvestmentEntry: (id: string, investment: Partial<Omit<InvestmentEntry, 'id'>>, showToast?: boolean) => Promise<void>;
   updateBudget: (id: string, budget: Partial<Omit<BudgetCategory, 'id'>>) => void;
@@ -841,6 +841,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       for (const gid of goalsToRefresh) {
         await refreshGoalAfterLinkedExpense(gid);
       }
+      return true;
     } catch (error) {
       console.error('Error updating expense:', error);
       toast({
@@ -848,6 +849,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         title: "Error",
         description: "Failed to update expense in database."
       });
+      return false;
     }
   };
 
