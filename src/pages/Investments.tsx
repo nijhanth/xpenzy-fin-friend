@@ -441,11 +441,13 @@ export const Investments = () => {
   };
 
   const handleDelete = async (entryId: string) => {
-    await deleteInvestment(entryId);
-    toast({
-      title: "Investment Deleted",
-      description: "Investment entry has been successfully deleted."
-    });
+    const deleted = await deleteInvestment(entryId);
+    if (deleted) {
+      toast({
+        title: "Investment Deleted",
+        description: "Investment entry and its transaction history have been deleted. Linked budget spending has been cleared."
+      });
+    }
   };
 
   const handleAddMoney = (investmentId: string, investmentName: string) => {
@@ -820,7 +822,7 @@ export const Investments = () => {
                       </div>
                       <label className="space-y-1 text-xs text-muted-foreground">
                         Actual contribution on {importPreview.asOfDate} (₹)
-                        <Input type="number" min="0" max="1000000000" step="0.01" value={holding.monthlyContribution}
+                        <Input type="number" min="0" max="1000000000" step="0.01" value={holding.monthlyContribution || ''}
                           onChange={event => {
                             const monthlyContribution = event.target.value === '' ? 0 : Number(event.target.value);
                             setImportPreview(current => current ? {

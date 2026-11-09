@@ -246,6 +246,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
                       type="number"
                       placeholder="Enter amount"
                       {...field}
+                      value={field.value || ''}
                       onChange={e => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>
@@ -318,6 +319,11 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
                   <div className={budgetInfo.remaining >= 0 ? 'text-green-600' : 'text-red-600'}>
                     Remaining: ₹{budgetInfo.remaining.toLocaleString()}
                   </div>
+                  {budgetInfo.remaining < 0 && (
+                    <div className="pt-1">
+                      Going over budget does not automatically use savings. Link a goal below to record this expense against it.
+                    </div>
+                  )}
                 </div>
               </div>
             )}

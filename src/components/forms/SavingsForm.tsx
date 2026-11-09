@@ -132,6 +132,7 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
                       type="number"
                       placeholder="Enter target amount"
                       {...field}
+                      value={field.value || ''}
                       onChange={e => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>
@@ -151,6 +152,7 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
                       type="number"
                       placeholder="Enter current saved amount"
                       {...field}
+                      value={field.value || ''}
                       onChange={e => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>

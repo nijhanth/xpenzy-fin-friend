@@ -184,11 +184,44 @@ export const Budget = () => {
     return <CheckCircle className="w-4 h-4 text-green-500" />;
   };
 
+  const selectedSavingsGoal = newBudget.type === 'savings'
+    ? data.savings.find(goal => goal.id === newBudget.linkedId)
+    : undefined;
+  const selectedGoalUsedAmount = selectedSavingsGoal
+    ? data.expenses
+      .filter(expense => expense.goalId === selectedSavingsGoal.id)
+      .reduce((total, expense) => total + Number(expense.amount || 0), 0)
+    : 0;
+  const savingsGoalRemainingTarget = selectedSavingsGoal
+    ? Math.max(0, Number(selectedSavingsGoal.target || 0) - Math.max(0, Number(selectedSavingsGoal.current || 0) - selectedGoalUsedAmount))
+    : undefined;
+  const enteredBudgetLimit = newBudget.limit.trim() ? Number(newBudget.limit) : 0;
+  const savingsLimitExceedsGoal = savingsGoalRemainingTarget !== undefined
+    && enteredBudgetLimit > savingsGoalRemainingTarget;
+
   const handleAddBudget = async () => {
     if (!newBudget.name || !newBudget.limit) {
       toast({
         title: "Error",
         description: "Please fill in all fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!Number.isFinite(enteredBudgetLimit) || enteredBudgetLimit <= 0) {
+      toast({
+        title: "Invalid budget limit",
+        description: "Enter a budget amount greater than zero.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (savingsLimitExceedsGoal && savingsGoalRemainingTarget !== undefined) {
+      toast({
+        title: "Budget exceeds the goal target",
+        description: `This goal has ${formatCurrency(savingsGoalRemainingTarget)} left to reach its target. Set the period limit to that amount or less.`,
         variant: "destructive"
       });
       return;
@@ -213,7 +246,7 @@ export const Budget = () => {
     // Add date-specific fields based on the selected period
     const budgetData: Omit<BudgetCategory, 'id'> = {
       category: newBudget.name,
-      limit_amount: parseFloat(newBudget.limit),
+      limit_amount: enteredBudgetLimit,
       period: newBudget.period,
       icon: newBudget.type === 'expenses' ? newBudget.icon : (newBudget.type === 'savings' ? '🎯' : '📈'),
       year: selectedYear,
@@ -272,6 +305,16 @@ export const Budget = () => {
   const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', {
     style: 'currency', currency: 'INR', maximumFractionDigits: 0,
   }).format(amount);
+  const getBudgetPeriodGuidance = (amount: number, period: BudgetCategory['period']) => {
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    if (period === 'yearly') {
+      return `About ${formatCurrency(amount / 12)} per month or ${formatCurrency(amount / 52)} per week.`;
+    }
+    if (period === 'monthly') {
+      return `About ${formatCurrency((amount * 12) / 52)} per week (${formatCurrency(amount * 12)} per year).`;
+    }
+    return `About ${formatCurrency((amount * 52) / 12)} per month (${formatCurrency(amount * 52)} per year).`;
+  };
   const selectedPeriodLabel = format(new Date(selectedYear, selectedMonth), 'MMMM yyyy');
 
   return (
@@ -598,7 +641,14 @@ export const Budget = () => {
                   value={newBudget.limit}
                   onChange={(e) => setNewBudget({...newBudget, limit: e.target.value})}
                   placeholder="5000"
+                  min="1"
+                  max={savingsGoalRemainingTarget}
                 />
+                {savingsGoalRemainingTarget !== undefined && (
+                  <p className={`mt-1 text-xs ${savingsLimitExceedsGoal ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    This goal has {formatCurrency(savingsGoalRemainingTarget)} left to reach its target. The budget limit for this period cannot exceed that amount.
+                  </p>
+                )}
                 {newBudget.type === 'investment' && (
                   <p className="mt-1 text-xs text-muted-foreground">Only contributions added during this period count. Imported statement snapshots do not use this budget.</p>
                 )}
@@ -615,6 +665,11 @@ export const Budget = () => {
                     <SelectItem value="yearly">Yearly</SelectItem>
                   </SelectContent>
                 </Select>
+                {getBudgetPeriodGuidance(Number(newBudget.limit), newBudget.period) && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Planning estimate: {getBudgetPeriodGuidance(Number(newBudget.limit), newBudget.period)} This is a reference only; the budget limit still applies to the selected period and is not automatically divided or transferred.
+                  </p>
+                )}
               </div>
               {newBudget.type === 'expenses' && (
                 <div>
@@ -680,6 +735,11 @@ export const Budget = () => {
                           <Badge variant="outline" className="text-xs mt-1">
                             {budget.period}
                           </Badge>
+                          {getBudgetPeriodGuidance(budget.limit_amount, budget.period) && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {getBudgetPeriodGuidance(budget.limit_amount, budget.period)}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

@@ -477,6 +477,18 @@ export const budgetService = {
       .eq('id', id);
     
     if (error) throw error;
+  },
+
+  async resetInvestmentBudgets(investmentIds: string[]): Promise<void> {
+    if (investmentIds.length === 0) return;
+
+    const { error } = await supabase
+      .from('budget_categories')
+      .update({ current: 0 })
+      .eq('linked_type', 'investment')
+      .in('linked_id', investmentIds);
+
+    if (error) throw error;
   }
 };
 
@@ -527,6 +539,15 @@ export const investmentTransactionService = {
       .from('investment_transactions')
       .delete()
       .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async deleteByInvestmentId(investmentId: string): Promise<void> {
+    const { error } = await supabase
+      .from('investment_transactions')
+      .delete()
+      .eq('investment_id', investmentId);
 
     if (error) throw error;
   },

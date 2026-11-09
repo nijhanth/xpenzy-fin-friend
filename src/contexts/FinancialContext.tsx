@@ -21,7 +21,7 @@ interface FinancialContextType {
   updateInvestmentTransaction: (id: string, transaction: Partial<InvestmentTransaction>, showToast?: boolean) => Promise<void>;
   deleteInvestmentTransaction: (id: string) => Promise<void>;
   getInvestmentTransactions: (investmentId: string) => InvestmentTransaction[];
-  addSavingsTransaction: (transaction: Omit<SavingsTransaction, 'id'>) => Promise<void>;
+  addSavingsTransaction: (transaction: Omit<SavingsTransaction, 'id'>) => Promise<boolean>;
   allocateExistingSavingsBalance: (goalId: string, amount: number, date: string) => Promise<boolean>;
   withdrawFromSavingsGoal: (goalId: string, amount: number, date: string, notes?: string) => Promise<boolean>;
   updateSavingsTransaction: (id: string, transaction: Partial<SavingsTransaction>) => Promise<void>;
@@ -39,7 +39,7 @@ interface FinancialContextType {
   deleteIncome: (id: string) => void;
   deleteExpense: (id: string) => void;
   deleteSavings: (id: string) => void;
-  deleteInvestment: (id: string) => void;
+  deleteInvestment: (id: string) => Promise<boolean>;
   deleteBudget: (id: string) => void;
   markGoalCompleted: (id: string) => Promise<void>;
   restoreGoal: (id: string) => Promise<void>;
@@ -186,14 +186,42 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           savingsTransactionService.getAll()
         ]);
 
+        const existingInvestmentIds = new Set(investmentData.map(investment => investment.id));
+        const orphanedInvestmentIds = [...new Set(investmentTransactionData
+          .filter(transaction => !existingInvestmentIds.has(transaction.investment_id))
+          .map(transaction => transaction.investment_id))];
+        let visibleInvestmentTransactions = investmentTransactionData;
+        let visibleBudgets = budgetData;
+
+        if (orphanedInvestmentIds.length > 0) {
+          try {
+            await Promise.all(orphanedInvestmentIds.map(id => investmentTransactionService.deleteByInvestmentId(id)));
+            await budgetService.resetInvestmentBudgets(orphanedInvestmentIds);
+            visibleInvestmentTransactions = investmentTransactionData
+              .filter(transaction => !orphanedInvestmentIds.includes(transaction.investment_id));
+            visibleBudgets = await budgetService.getAll();
+            toast({
+              title: 'Deleted investment history cleaned up',
+              description: 'History and linked budget spending for removed holdings have been cleared.',
+            });
+          } catch (cleanupError) {
+            console.error('Failed to clean up deleted investment history:', cleanupError);
+            toast({
+              variant: 'destructive',
+              title: 'Could not clean up deleted investment history',
+              description: 'Reload the app to retry clearing history and linked budget spending for removed holdings.',
+            });
+          }
+        }
+
         setData({
           income: incomeData,
           expenses: expenseData,
           savings: savingsData,
           investments: investmentData,
-          investmentTransactions: investmentTransactionData,
+          investmentTransactions: visibleInvestmentTransactions,
           savingsTransactions: savingsTransactionData,
-          budgets: budgetData
+          budgets: visibleBudgets
         });
       } catch (error) {
         console.error('Error loading financial data:', error);
@@ -549,6 +577,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         title: "Success",
         description: "Money added to savings goal successfully",
       });
+      return true;
     } catch (error) {
       console.error('Error adding savings transaction:', error);
       toast({
@@ -556,6 +585,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         description: "Failed to add money to savings goal",
         variant: "destructive",
       });
+      return false;
     }
   };
 
@@ -934,20 +964,43 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const deleteInvestment = async (id: string) => {
+  const deleteInvestment = async (id: string): Promise<boolean> => {
     try {
+      await investmentTransactionService.deleteByInvestmentId(id);
       await investmentService.delete(id);
       setData(prev => ({
         ...prev,
-        investments: prev.investments.filter(item => item.id !== id)
+        investments: prev.investments.filter(item => item.id !== id),
+        investmentTransactions: prev.investmentTransactions.filter(transaction => transaction.investment_id !== id),
+        budgets: prev.budgets.map(budget => budget.linked_type === 'investment' && budget.linked_id === id
+          ? { ...budget, current: 0 }
+          : budget),
       }));
+
+      try {
+        const [investments, investmentTransactions, refreshedBudgets] = await Promise.all([
+          investmentService.getAll(),
+          investmentTransactionService.getAll(),
+          budgetService.getAll(),
+        ]);
+        setData(prev => ({ ...prev, investments, investmentTransactions, budgets: refreshedBudgets }));
+      } catch (refreshError) {
+        console.error('Investment deleted but financial data refresh failed:', refreshError);
+        toast({
+          variant: 'destructive',
+          title: 'Investment deleted, but refresh failed',
+          description: 'Reload the page to confirm the latest investment and budget totals.',
+        });
+      }
+      return true;
     } catch (error) {
       console.error('Error deleting investment:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to delete investment from database."
+        description: `Failed to delete investment and its history: ${getErrorMessage(error)}`
       });
+      return false;
     }
   };
 

@@ -1,10 +1,21 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
-import { PiggyBank, Target, Plus, TrendingUp, Award, Wallet, History, ChevronDown, ChevronUp, CheckCircle2, Sparkles, WalletCards, CalendarDays } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from 'recharts';
+import { PiggyBank, Target, Plus, TrendingUp, Award, Wallet, History, CheckCircle2, Sparkles, WalletCards, CalendarDays, Trash2, MoreHorizontal, ArrowDownToLine, ArrowUpFromLine, CircleCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -28,11 +39,11 @@ const SavingsTrendTooltip = ({ active, payload, label }: any) => {
         <p className="text-xs text-muted-foreground mb-1">{label}</p>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-savings" />
-          <span className="text-lg font-bold text-savings">₹{payload[0].value.toLocaleString()}</span>
+          <span className="text-lg font-bold text-savings">{formatCurrency(payload[0].value)}</span>
         </div>
         {payload[0].payload.change !== undefined && (
           <p className={`text-xs mt-1 ${payload[0].payload.change >= 0 ? 'text-success' : 'text-expense'}`}>
-            {payload[0].payload.change >= 0 ? '+' : ''}₹{payload[0].payload.change.toLocaleString()} from previous
+            {payload[0].payload.change >= 0 ? '+' : ''}{formatCurrency(payload[0].payload.change)} from previous
           </p>
         )}
       </div>
@@ -52,12 +63,19 @@ const savingsTips = [
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', {
   style: 'currency', currency: 'INR', maximumFractionDigits: 0,
 }).format(amount);
+const formatCompactCurrency = (amount: number) => new Intl.NumberFormat('en-IN', {
+  style: 'currency', currency: 'INR', notation: 'compact', maximumFractionDigits: 1,
+}).format(amount);
+const subtractCalendarMonths = (date: Date, months: number) => {
+  const result = new Date(date);
+  const day = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() - months);
+  result.setDate(Math.min(day, new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate()));
+  return result;
+};
 const isBalanceReconciliation = (notes?: string) => notes?.startsWith('Existing balance adjustment:') ?? false;
 const isExistingBalanceAllocation = (notes?: string) => notes?.startsWith('Existing balance allocation:') ?? false;
-const getAllocationTarget = (notes?: string) => {
-  const match = notes?.match(/ to ([\d.]+)$/);
-  return match ? Number(match[1]) : null;
-};
 type GoalActivityType = 'contribution' | 'withdrawal' | 'adjustment' | 'allocation' | 'spending';
 const goalActivityLabel = (type: GoalActivityType) => ({
   contribution: 'Added to goal',
@@ -80,6 +98,7 @@ export const Savings = () => {
   const [isOpeningBalanceDialogOpen, setIsOpeningBalanceDialogOpen] = useState(false);
   const [goalAmountTarget, setGoalAmountTarget] = useState<{ id: string; name: string; current: number } | null>(null);
   const [goalAmountDraft, setGoalAmountDraft] = useState('0');
+  const [assignmentToRemove, setAssignmentToRemove] = useState<{ id: string; name: string; amount: number } | null>(null);
   const [spendingGoalId, setSpendingGoalId] = useState<string | null>(null);
   const [withdrawalGoalId, setWithdrawalGoalId] = useState<string | null>(null);
   const [editingGoalExpenseId, setEditingGoalExpenseId] = useState<string | null>(null);
@@ -112,7 +131,7 @@ export const Savings = () => {
   } | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
-  const [timePeriod, setTimePeriod] = useState<'7d' | '30d' | '3m'>('30d');
+  const [timePeriod, setTimePeriod] = useState<'7d' | '30d' | '3m' | '6m' | '1y' | 'all'>('30d');
   const getGoalUsedAmount = (goalId: string) => data.expenses
     .filter(expense => expense.goalId === goalId)
     .reduce((total, expense) => total + Number(expense.amount || 0), 0);
@@ -146,6 +165,21 @@ export const Savings = () => {
   const balanceSavings = data.savingsTransactions.filter((entry) => entry.date >= openingDate && !isBalanceReconciliation(entry.notes) && !isExistingBalanceAllocation(entry.notes)).reduce((total, entry) => total + Number(entry.amount || 0), 0);
   const balanceInvestments = data.investmentTransactions.filter((entry) => entry.date >= openingDate && !entry.notes?.startsWith('Statement snapshot:')).reduce((total, entry) => total + Number(entry.amount || 0), 0);
   const estimatedBankBalance = openingBalance + balanceIncome - balanceExpenses - balanceSavings - balanceInvestments;
+  const editedSavingsTransaction = editingTransaction
+    ? data.savingsTransactions.find(transaction => transaction.id === editingTransaction)
+    : undefined;
+  const availableBalanceForSavings = Math.max(
+    0,
+    estimatedBankBalance + (
+      editedSavingsTransaction &&
+      editedSavingsTransaction.date >= openingDate &&
+      editedSavingsTransaction.amount > 0 &&
+      !isBalanceReconciliation(editedSavingsTransaction.notes) &&
+      !isExistingBalanceAllocation(editedSavingsTransaction.notes)
+        ? editedSavingsTransaction.amount
+        : 0
+    )
+  );
   const getExistingAllocationForGoal = (goalId: string) => data.savingsTransactions
     .filter(transaction => transaction.savings_goal_id === goalId && isExistingBalanceAllocation(transaction.notes))
     .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
@@ -196,79 +230,106 @@ export const Savings = () => {
   // Generate savings trend from transactions with time period filter
   const savingsTrend = useMemo(() => {
     const now = new Date();
-    let startDate: Date;
-    
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const transactions = data.savingsTransactions
+      .filter(transaction => !isBalanceReconciliation(transaction.notes) && !isExistingBalanceAllocation(transaction.notes))
+      .filter(transaction => transaction.date && transaction.date <= today.toISOString().slice(0, 10))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const startDate = new Date(today);
+
     switch (timePeriod) {
       case '7d':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        startDate.setDate(startDate.getDate() - 6);
         break;
       case '30d':
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        startDate.setDate(startDate.getDate() - 29);
         break;
       case '3m':
-        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        startDate.setTime(subtractCalendarMonths(startDate, 3).getTime());
         break;
+      case '6m':
+        startDate.setTime(subtractCalendarMonths(startDate, 6).getTime());
+        break;
+      case '1y':
+        startDate.setTime(subtractCalendarMonths(startDate, 12).getTime());
+        break;
+      case 'all': {
+        const firstDate = transactions[0]?.date || data.savings
+          .map(goal => goal.date)
+          .filter(Boolean)
+          .sort()[0];
+        if (firstDate) {
+          const [year, month, day] = firstDate.split('-').map(Number);
+          startDate.setFullYear(year, month - 1, day);
+        }
+        break;
+      }
+    }
+    const startDateKey = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+
+    if (transactions.length === 0) {
+      return data.savings
+        .filter(goal => goal.date >= startDateKey && goal.date <= today.toISOString().slice(0, 10))
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(goal => ({
+          date: goal.date,
+          displayDate: new Date(`${goal.date}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+          amount: Number(goal.current || 0),
+          daily: Number(goal.current || 0),
+          change: Number(goal.current || 0),
+        }));
     }
 
-    // Collect all savings transactions
-    const allTransactions: { date: string; amount: number }[] = [];
-    data.savings.forEach(goal => {
-      const transactions = getSavingsTransactions(goal.id);
-      transactions.forEach(t => {
-        if (isBalanceReconciliation(t.notes) || isExistingBalanceAllocation(t.notes)) return;
-        const tDate = new Date(t.date);
-        if (tDate >= startDate && tDate <= now) {
-          allTransactions.push({ date: t.date, amount: t.amount });
-        }
-      });
+    const baseline = transactions
+      .filter(transaction => transaction.date < startDateKey)
+      .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+    const periodTransactions = transactions.filter(transaction => transaction.date >= startDateKey);
+    const monthlyGrouping = !['7d', '30d'].includes(timePeriod);
+    const buckets = new Map<string, number>();
+    periodTransactions.forEach(transaction => {
+      const key = monthlyGrouping ? transaction.date.slice(0, 7) : transaction.date;
+      buckets.set(key, (buckets.get(key) || 0) + Number(transaction.amount || 0));
     });
 
-    // Group by date and calculate cumulative
-    const dailyTotals: Record<string, number> = {};
-    allTransactions.forEach(t => {
-      dailyTotals[t.date] = (dailyTotals[t.date] || 0) + t.amount;
-    });
-
-    const sortedDates = Object.keys(dailyTotals).sort();
-    let cumulative = 0;
-    let prevAmount = 0;
-    
-    const trendData = sortedDates.map(date => {
-      cumulative += dailyTotals[date];
-      const change = cumulative - prevAmount;
-      prevAmount = cumulative;
-      return {
+    let cumulative = baseline;
+    let previousAmount = baseline;
+    const trendData = [{
+      date: startDateKey,
+      displayDate: 'Start',
+      amount: baseline,
+      daily: 0,
+      change: 0,
+    }];
+    [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).forEach(([key, amount]) => {
+      cumulative += amount;
+      const date = monthlyGrouping ? `${key}-01` : key;
+      trendData.push({
         date,
-        displayDate: formatDisplayDate(date),
+        displayDate: monthlyGrouping
+          ? new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
+          : new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
         amount: cumulative,
-        daily: dailyTotals[date],
-        change
-      };
-    });
-
-    // If no transaction data, fall back to goal-based data
-    if (trendData.length === 0) {
-      const monthlyData = data.savings.reduce((acc, goal) => {
-        const month = new Date(goal.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-        acc[month] = (acc[month] || 0) + goal.current;
-        return acc;
-      }, {} as Record<string, number>);
-
-      return Object.entries(monthlyData).map(([month, amount], index, arr) => ({
-        date: month,
-        displayDate: month,
-        amount,
         daily: amount,
-        change: index > 0 ? amount - arr[index - 1][1] : 0
-      }));
+        change: cumulative - previousAmount,
+      });
+      previousAmount = cumulative;
+    });
+    if (trendData.length === 1 && baseline > 0) {
+      trendData.push({
+        date: today.toISOString().slice(0, 10),
+        displayDate: 'Now',
+        amount: baseline,
+        daily: 0,
+        change: 0,
+      });
     }
 
     return trendData;
-  }, [data.savings, getSavingsTransactions, timePeriod]);
+  }, [data.savings, data.savingsTransactions, timePeriod]);
 
-  const avgSavings = savingsTrend.length > 0
-    ? savingsTrend.reduce((sum, d) => sum + d.amount, 0) / savingsTrend.length
-    : 0;
+  const trendStartAmount = savingsTrend[0]?.amount ?? 0;
+  const trendCurrentAmount = savingsTrend[savingsTrend.length - 1]?.amount ?? 0;
+  const trendChange = trendCurrentAmount - trendStartAmount;
 
   const handleEdit = (entryId: string) => {
     setEditingEntry(entryId);
@@ -333,33 +394,56 @@ export const Savings = () => {
   };
 
   // Combine contributions and linked expenses so the history explains goal spending.
-  const getSavingsGoalActivity = (goalId: string) => [
-    ...getSavingsTransactions(goalId).filter(transaction => !isBalanceReconciliation(transaction.notes)).map(transaction => ({
-      id: transaction.id,
-      date: transaction.date,
-      amount: isExistingBalanceAllocation(transaction.notes) ? getAllocationTarget(transaction.notes) ?? Math.abs(Number(transaction.amount || 0)) : Math.abs(Number(transaction.amount || 0)),
-      notes: isExistingBalanceAllocation(transaction.notes) ? null : transaction.notes,
-      type: isExistingBalanceAllocation(transaction.notes) ? 'allocation' as const : Number(transaction.amount) < 0 ? 'withdrawal' as const : 'contribution' as const,
-      transaction,
-    })),
-    ...data.expenses.filter(expense => expense.goalId === goalId).map(expense => ({
-      id: expense.id,
-      date: expense.date,
-      amount: Number(expense.amount || 0),
-      notes: expense.notes,
-      type: 'spending' as const,
-      transaction: null,
-    })),
-  ].sort((a, b) => b.date.localeCompare(a.date));
+  const getSavingsGoalActivity = (goalId: string) => {
+    const goalTransactions = getSavingsTransactions(goalId);
+    const allocationTransactions = goalTransactions.filter(transaction => isExistingBalanceAllocation(transaction.notes));
+    const currentAllocation = allocationTransactions.reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+    const latestAllocation = allocationTransactions[0];
+
+    return [
+      ...goalTransactions.filter(transaction => !isBalanceReconciliation(transaction.notes) && !isExistingBalanceAllocation(transaction.notes)).map(transaction => ({
+        id: transaction.id,
+        date: transaction.date,
+        amount: Math.abs(Number(transaction.amount || 0)),
+        notes: transaction.notes,
+        type: Number(transaction.amount) < 0 ? 'withdrawal' as const : 'contribution' as const,
+        transaction,
+      })),
+      ...(currentAllocation > 0 ? [{
+        id: `allocation-${goalId}`,
+        date: latestAllocation?.date ?? '',
+        amount: currentAllocation,
+        notes: null,
+        type: 'allocation' as const,
+        transaction: latestAllocation ?? null,
+      }] : []),
+      ...data.expenses.filter(expense => expense.goalId === goalId).map(expense => ({
+        id: expense.id,
+        date: expense.date,
+        amount: Number(expense.amount || 0),
+        notes: expense.notes,
+        type: 'spending' as const,
+        transaction: null,
+      })),
+    ].sort((a, b) => b.date.localeCompare(a.date));
+  };
+
+  const removeExistingAssignment = async () => {
+    if (!assignmentToRemove) return;
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const removed = await allocateExistingSavingsBalance(assignmentToRemove.id, 0, date);
+    if (removed) setAssignmentToRemove(null);
+  };
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 pb-8 animate-fade-in sm:p-6">
+    <div className="mx-auto w-full max-w-6xl space-y-4 p-3 pb-8 animate-fade-in sm:space-y-6 sm:p-6">
       {/* Header */}
-      <div className="relative isolate flex flex-col gap-5 overflow-hidden rounded-2xl border border-savings/15 bg-gradient-to-br from-card via-card to-savings/10 p-5 shadow-card sm:flex-row sm:items-center sm:justify-between sm:p-7">
+      <div className="relative isolate flex flex-col gap-4 overflow-hidden rounded-2xl border border-savings/15 bg-gradient-to-br from-card via-card to-savings/10 p-4 shadow-card sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:p-7">
         <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 h-56 w-56 rounded-full bg-savings/10 blur-3xl" />
         <div className="relative min-w-0 flex-1">
           <Badge variant="secondary" className="mb-3 gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Savings &amp; bank balance</Badge>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Track your balance and savings</h1>
+          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-3xl">Track your balance and savings</h1>
           <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">Start with the money already in your bank. Add savings goals only if you want to set money aside for something specific.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Badge variant="outline" className="gap-1.5 bg-background/70"><Target className="h-3.5 w-3.5 text-savings" />{activeGoals.length} active {activeGoals.length === 1 ? 'goal' : 'goals'}</Badge>
@@ -367,19 +451,19 @@ export const Savings = () => {
             <Badge variant="outline" className="gap-1.5 bg-background/70"><WalletCards className="h-3.5 w-3.5 text-savings" />{formatCurrency(availableStartingBalance)} unallocated starting savings</Badge>
           </div>
         </div>
-        <Button size="lg" className="relative shrink-0 bg-savings text-white shadow-sm" onClick={() => setIsFormOpen(true)}>
+        <Button size="lg" className="relative w-full shrink-0 bg-savings text-white shadow-sm sm:w-auto" onClick={() => setIsFormOpen(true)}>
           <Plus className="w-4 h-4 mr-2" /> Create savings goal
         </Button>
       </div>
 
       <Card aria-label="Estimated current bank balance" className="border-border shadow-sm">
-        <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="min-w-0">
             <p className="text-sm font-medium text-muted-foreground">Estimated current bank balance</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-foreground">{isFinancialLoading ? '—' : formatCurrency(estimatedBankBalance)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Starting balance on {formatDisplayDate(openingDate)}: {isFinancialLoading ? '—' : formatCurrency(openingBalance)}. Since then: income {isFinancialLoading ? '—' : `+${formatCurrency(balanceIncome)}`}, expenses {isFinancialLoading ? '—' : `−${formatCurrency(balanceExpenses)}`}, savings transfers {isFinancialLoading ? '—' : `${balanceSavings >= 0 ? '−' : '+'}${formatCurrency(Math.abs(balanceSavings))}`}, investments {isFinancialLoading ? '—' : `${balanceInvestments >= 0 ? '−' : '+'}${formatCurrency(Math.abs(balanceInvestments))}`}.</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground sm:text-3xl">{isFinancialLoading ? '—' : formatCurrency(estimatedBankBalance)}</p>
+            <p className="mt-1 break-words text-xs text-muted-foreground">Starting balance on {formatDisplayDate(openingDate)}: {isFinancialLoading ? '—' : formatCurrency(openingBalance)}. Since then: income {isFinancialLoading ? '—' : `+${formatCurrency(balanceIncome)}`}, expenses {isFinancialLoading ? '—' : `−${formatCurrency(balanceExpenses)}`}, savings transfers {isFinancialLoading ? '—' : `${balanceSavings >= 0 ? '−' : '+'}${formatCurrency(Math.abs(balanceSavings))}`}, investments {isFinancialLoading ? '—' : `${balanceInvestments >= 0 ? '−' : '+'}${formatCurrency(Math.abs(balanceInvestments))}`}.</p>
           </div>
-          <Button variant="outline" onClick={openOpeningBalanceDialog}>
+          <Button variant="outline" className="w-full sm:w-auto" onClick={openOpeningBalanceDialog}>
             {openingBalance > 0 ? 'Edit starting bank balance' : 'Set starting bank balance'}
           </Button>
         </CardContent>
@@ -391,7 +475,7 @@ export const Savings = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="opening-balance" className="text-sm font-medium">Amount already in your bank account</label>
-              <Input id="opening-balance" type="number" min="0" step="0.01" value={openingBalanceDraft} onChange={(event) => setOpeningBalanceDraft(event.target.value)} />
+              <Input id="opening-balance" type="number" min="0" step="0.01" value={openingBalanceDraft === '0' ? '' : openingBalanceDraft} onChange={(event) => setOpeningBalanceDraft(event.target.value)} />
             </div>
             <div className="space-y-2">
               <label htmlFor="opening-balance-date" className="text-sm font-medium">Date of this bank balance</label>
@@ -424,7 +508,7 @@ export const Savings = () => {
                 min="0"
                 max={goalAmountLimit}
                 step="1"
-                value={goalAmountDraft}
+                value={goalAmountDraft === '0' ? '' : goalAmountDraft}
                 onChange={(event) => setGoalAmountDraft(event.target.value)}
               />
               <p className="text-xs text-muted-foreground">Up to {formatCurrency(goalAmountLimit)} can be assigned to this goal. This only allocates existing money; it won’t record new income or reduce the bank balance.</p>
@@ -440,23 +524,23 @@ export const Savings = () => {
       {/* Financial Summary */}
       <Card className="bg-gradient-card border-border shadow-card">
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+            <div className="min-w-0 rounded-lg border border-primary/20 bg-primary/10 p-3 sm:p-4">
               <p className="text-xs text-muted-foreground">Starting bank balance</p>
-              <p className="text-lg font-bold text-foreground">{formatCurrency(openingBalance)}</p>
+              <p className="mt-1 truncate text-base font-bold text-foreground sm:text-lg">{formatCurrency(openingBalance)}</p>
               <p className="mt-1 text-xs text-muted-foreground">As of {formatDisplayDate(openingDate)}</p>
             </div>
-            <div className="p-4 rounded-lg bg-savings/10 border border-savings/20">
+            <div className="min-w-0 rounded-lg border border-savings/20 bg-savings/10 p-3 sm:p-4">
               <p className="text-xs text-muted-foreground">Currently saved in goals</p>
-              <p className="text-lg font-bold text-savings">₹{savingsBalance.toLocaleString()}</p>
+              <p className="mt-1 truncate text-base font-bold text-savings sm:text-lg">{formatCurrency(savingsBalance)}</p>
             </div>
-            <div className="p-4 rounded-lg bg-muted/50 border border-border">
+            <div className="min-w-0 rounded-lg border border-border bg-muted/50 p-3 sm:p-4">
               <p className="text-xs text-muted-foreground">Total added via Add Money</p>
-              <p className="text-lg font-bold text-foreground">₹{lifetimeAddMoneyContributions.toLocaleString()}</p>
+              <p className="mt-1 truncate text-base font-bold text-foreground sm:text-lg">{formatCurrency(lifetimeAddMoneyContributions)}</p>
             </div>
-            <div className="p-4 rounded-lg bg-expense/10 border border-expense/20">
+            <div className="min-w-0 rounded-lg border border-expense/20 bg-expense/10 p-3 sm:p-4">
               <p className="text-xs text-muted-foreground">Total Spent from Goals</p>
-              <p className="text-lg font-bold text-expense">₹{totalUsedFromGoals.toLocaleString()}</p>
+              <p className="mt-1 truncate text-base font-bold text-expense sm:text-lg">{formatCurrency(totalUsedFromGoals)}</p>
             </div>
           </div>
         </CardContent>
@@ -508,14 +592,14 @@ export const Savings = () => {
 
       {/* Savings Goals */}
       <Card className="border-border/80 bg-gradient-card shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-center justify-between px-4 py-4 sm:px-6">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Target className="w-5 h-5" />
             Savings Goals
           </CardTitle>
           <Badge variant="secondary">{activeGoals.length} active</Badge>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-4 sm:px-6">
           {activeGoals.length > 0 ? (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               {activeGoals.map((goal) => {
@@ -525,57 +609,46 @@ export const Savings = () => {
                 const remaining = Math.max(0, goal.target - netSaved);
 
                 return (
-                  <div key={goal.id} className="flex flex-col justify-between gap-4 rounded-2xl border border-border/70 bg-background/60 p-4 shadow-sm transition-shadow hover:shadow-card">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div key={goal.id} className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border/70 bg-background/60 p-3 shadow-sm transition-shadow hover:shadow-card sm:gap-4 sm:p-4">
+                    <div className="flex min-w-0 items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <h3 className="font-semibold text-foreground">{goal.name}</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">Saved {formatCurrency(netSaved)} of {formatCurrency(goal.target)}</p>
+                        <h3 className="break-words font-semibold leading-tight text-foreground">{goal.name}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">{formatCurrency(netSaved)} <span className="text-xs">of {formatCurrency(goal.target)} saved</span></p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-1">
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="default"
                           onClick={() => handleAddMoney(goal.id, goal.name)}
-                          className="bg-savings/10 border-savings/30 text-savings hover:bg-savings/20"
+                          className="h-9 bg-savings px-3 text-white hover:bg-savings/90"
                         >
-                          <Wallet className="w-3 h-3 mr-1" />
-                          Add Money
+                          <Wallet className="h-4 w-4 sm:mr-1" />
+                          <span className="hidden sm:inline">Add money</span>
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openGoalAmountDialog(goal)}
-                          aria-label={`Set existing saved amount for ${goal.name}`}
-                        >
-                          Assign existing savings
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setSpendingGoalId(goal.id)}>
-                          Spend from goal
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setWithdrawalGoalId(goal.id)} disabled={netSaved <= 0}>
-                          Withdraw to bank
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => markGoalCompleted(goal.id)}
-                          className="bg-success/10 border-success/30 text-success hover:bg-success/20"
-                        >
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
-                          Close goal
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => toggleGoalHistory(goal.id)}
-                        >
-                          <History className="w-3 h-3 mr-1" />
-                          {expandedGoals.has(goal.id) ? (
-                            <ChevronUp className="w-3 h-3" />
-                          ) : (
-                            <ChevronDown className="w-3 h-3" />
-                          )}
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-9 w-9" aria-label={`More actions for ${goal.name}`}>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem onSelect={() => openGoalAmountDialog(goal)}>
+                              <WalletCards className="mr-2 h-4 w-4" />Assign existing savings
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setSpendingGoalId(goal.id)}>
+                              <ArrowDownToLine className="mr-2 h-4 w-4" />Spend from goal
+                            </DropdownMenuItem>
+                            <DropdownMenuItem disabled={netSaved <= 0} onSelect={() => setWithdrawalGoalId(goal.id)}>
+                              <ArrowUpFromLine className="mr-2 h-4 w-4" />Withdraw to bank
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => toggleGoalHistory(goal.id)}>
+                              <History className="mr-2 h-4 w-4" />{expandedGoals.has(goal.id) ? 'Hide history' : 'View history'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => markGoalCompleted(goal.id)} className="text-success focus:text-success">
+                              <CircleCheck className="mr-2 h-4 w-4" />Close goal
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         <EditDeleteMenu
                           onEdit={() => handleEdit(goal.id)}
                           onDelete={() => handleDelete(goal.id)}
@@ -585,15 +658,10 @@ export const Savings = () => {
                         />
                       </div>
                     </div>
-                    <Progress 
-                      value={Math.min(progress, 100)} 
-                      className="h-3"
-                    />
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">{Math.round(progress)}% complete</span>
-                      <span className="text-muted-foreground">
-                        Used: ₹{used.toLocaleString()} • ₹{remaining.toLocaleString()} remaining
-                      </span>
+                    <Progress value={Math.min(progress, 100)} className="h-2.5" />
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
+                      <span className="font-medium text-muted-foreground">{Math.round(progress)}% complete</span>
+                      <span className="text-muted-foreground">{formatCurrency(remaining)} remaining <span className="hidden sm:inline">• Used: {formatCurrency(used)}</span></span>
                     </div>
                     {netSaved > 0 && <p className="text-xs text-muted-foreground">Closing archives this goal; {formatCurrency(netSaved)} remains assigned. Withdraw or spend it before reusing this goal name.</p>}
 
@@ -630,7 +698,21 @@ export const Savings = () => {
                                       deleteTitle="Delete Contribution"
                                       deleteDescription="Are you sure you want to delete this contribution? This will affect the total saved amount."
                                     />}
-                                    {activity.type === 'allocation' && <Button variant="ghost" size="sm" onClick={() => openGoalAmountDialog(goal)} aria-label="Edit existing savings assignment">Edit assignment</Button>}
+                                    {activity.type === 'allocation' && (
+                                      <div className="flex items-center gap-1">
+                                        <Button variant="ghost" size="sm" onClick={() => openGoalAmountDialog(goal)} aria-label="Edit existing savings assignment">Edit assignment</Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="text-destructive hover:text-destructive"
+                                          onClick={() => setAssignmentToRemove({ id: goal.id, name: goal.name, amount: activity.amount })}
+                                          aria-label={`Remove existing savings assignment for ${goal.name}`}
+                                        >
+                                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                          Remove
+                                        </Button>
+                                      </div>
+                                    )}
                                     {activity.type === 'spending' && <EditDeleteMenu
                                       onEdit={() => setEditingGoalExpenseId(activity.id)}
                                       onDelete={() => handleDeleteGoalSpending(activity.id)}
@@ -681,15 +763,15 @@ export const Savings = () => {
             </CardTitle>
             <Badge variant="outline">{completedGoalsCount} completed</Badge>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6">
             <div className="space-y-3">
               {data.savings.filter(g => (g.status ?? 'active') === 'completed').map(goal => {
                 const activity = getSavingsGoalActivity(goal.id);
                 const withdrawable = Math.max(0, Number(goal.current || 0) - getGoalUsedAmount(goal.id));
                 return (
-                  <div key={goal.id} className="rounded-xl border border-success/20 bg-success/5 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
+                  <div key={goal.id} className="rounded-xl border border-success/20 bg-success/5 p-3 sm:p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <h3 className="font-medium text-muted-foreground line-through">{goal.name}</h3>
                           <Badge variant="outline" className="text-success border-success">
@@ -701,28 +783,28 @@ export const Savings = () => {
                         </p>
                         {goal.completed_date && <p className="text-xs text-muted-foreground">Completed on {formatDisplayDate(goal.completed_date)}</p>}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => toggleGoalHistory(goal.id)}>
+                      <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => toggleGoalHistory(goal.id)}>
                           <History className="mr-1 h-3.5 w-3.5" />
                           {expandedGoals.has(goal.id) ? 'Hide history' : 'View history'}
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => setWithdrawalGoalId(goal.id)} disabled={withdrawable <= 0}>
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => setWithdrawalGoalId(goal.id)} disabled={withdrawable <= 0}>
                           Withdraw to bank
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => restoreGoal(goal.id)}>Restore</Button>
+                        <Button variant="outline" size="sm" className="col-span-2 w-full sm:col-span-1" onClick={() => restoreGoal(goal.id)}>Restore goal</Button>
                       </div>
                     </div>
                     {expandedGoals.has(goal.id) && (
                       <div className="mt-4 space-y-2 border-t border-success/20 pt-3">
                         <h4 className="text-sm font-medium text-muted-foreground">Goal history</h4>
                         {activity.length > 0 ? activity.map(item => (
-                          <div key={`${item.type}-${item.id}`} className="flex items-start justify-between gap-3 rounded-lg bg-background/70 p-3 text-sm">
+                          <div key={`${item.type}-${item.id}`} className="flex flex-col gap-2 rounded-lg bg-background/70 p-3 text-sm sm:flex-row sm:items-start sm:justify-between">
                             <div>
                               <p className="font-medium">{goalActivityLabel(item.type)}</p>
                               <p className="text-xs text-muted-foreground">{formatDisplayDate(item.date)}</p>
                               {item.notes && <p className="mt-1 text-xs text-muted-foreground">{item.notes}</p>}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-between gap-2 sm:justify-end">
                               <span className={`shrink-0 font-semibold ${goalActivityTone(item.type, item.amount)}`}>
                                 {goalActivitySign(item.type)}{formatCurrency(item.amount)}
                               </span>
@@ -748,45 +830,55 @@ export const Savings = () => {
       )}
       {/* Savings Trend - Trade Style */}
       <Card className="relative overflow-hidden border-border/80 bg-card shadow-sm">
-        {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-savings/5 via-transparent to-transparent pointer-events-none" />
-        
-        <CardHeader className="relative flex flex-row items-center justify-between pb-2">
-          <div>
-            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-              <div className="p-2 rounded-lg bg-savings/10">
-                <TrendingUp className="w-4 h-4 text-savings" />
-              </div>
-              Savings Goal Trend
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-savings/5 via-transparent to-transparent" />
+        <CardHeader className="relative space-y-4 pb-3 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+          <div className="min-w-0">
+            <CardTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
+              <span className="rounded-lg bg-savings/10 p-2"><TrendingUp className="h-4 w-4 text-savings" /></span>
+              Savings goal trend
             </CardTitle>
-            <p className="text-xs text-muted-foreground mt-1">
-              Cumulative savings over time
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Track your recorded savings over time</p>
           </div>
-          {/* Time Period Selector */}
-          <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
-            {(['7d', '30d', '3m'] as const).map((period) => (
+          <div className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:justify-end sm:pb-0" role="group" aria-label="Savings trend date range">
+            {([
+              ['7d', '7D'],
+              ['30d', '30D'],
+              ['3m', '3M'],
+              ['6m', '6M'],
+              ['1y', '1Y'],
+              ['all', 'All'],
+            ] as const).map(([period, label]) => (
               <Button
                 key={period}
+                type="button"
                 variant={timePeriod === period ? 'default' : 'ghost'}
                 size="sm"
-                className={`h-7 px-3 text-xs ${
-                  timePeriod === period 
-                    ? 'bg-savings text-white shadow-sm' 
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
+                aria-pressed={timePeriod === period}
+                className={`h-9 min-w-11 shrink-0 px-3 text-xs ${timePeriod === period ? 'bg-savings text-white shadow-sm hover:bg-savings/90' : 'text-muted-foreground hover:text-foreground'}`}
                 onClick={() => setTimePeriod(period)}
               >
-                {period === '7d' ? '7D' : period === '30d' ? '30D' : '3M'}
+                {label}
               </Button>
             ))}
           </div>
         </CardHeader>
-        <CardContent className="relative pt-0">
+        <CardContent className="relative space-y-3 pt-0">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
+              <p className="text-[11px] text-muted-foreground">Recorded savings</p>
+              <p className="mt-1 truncate text-base font-semibold tabular-nums text-foreground">{formatCurrency(trendCurrentAmount)}</p>
+            </div>
+            <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
+              <p className="text-[11px] text-muted-foreground">Change in range</p>
+              <p className={`mt-1 truncate text-base font-semibold tabular-nums ${trendChange >= 0 ? 'text-savings' : 'text-expense'}`}>
+                {trendChange > 0 ? '+' : ''}{formatCurrency(trendChange)}
+              </p>
+            </div>
+          </div>
           {savingsTrend.length > 0 ? (
-            <div className="h-64">
+            <div className="h-56 w-full sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={savingsTrend} margin={{ top: 20, right: 10, left: 10, bottom: 10 }}>
+                <AreaChart data={savingsTrend} margin={{ top: 12, right: 8, left: -16, bottom: 0 }}>
                   <defs>
                     <linearGradient id="savingsGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="hsl(217 91% 60%)" stopOpacity={0.4} />
@@ -805,30 +897,18 @@ export const Savings = () => {
                     axisLine={false} 
                     tickLine={false}
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-                    dy={10}
+                    dy={6}
+                    minTickGap={20}
+                    tickMargin={8}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false}
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-                    tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
-                    width={45}
+                    tickFormatter={(value) => formatCompactCurrency(Number(value))}
+                    width={52}
                   />
                   <Tooltip content={<SavingsTrendTooltip />} />
-                  {avgSavings > 0 && (
-                    <ReferenceLine 
-                      y={avgSavings} 
-                      stroke="hsl(var(--muted-foreground))" 
-                      strokeDasharray="5 5"
-                      strokeOpacity={0.5}
-                      label={{ 
-                        value: 'Avg', 
-                        position: 'right',
-                        fill: 'hsl(var(--muted-foreground))',
-                        fontSize: 10
-                      }}
-                    />
-                  )}
                   <Area
                     type="monotone"
                     dataKey="amount"
@@ -848,13 +928,13 @@ export const Savings = () => {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-muted-foreground">
+            <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground sm:h-56">
               <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted/50 flex items-center justify-center">
-                  <TrendingUp className="w-8 h-8 opacity-50" />
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/50">
+                  <TrendingUp className="h-6 w-6 opacity-50" />
                 </div>
-                <p className="font-medium">No savings trend available</p>
-                <p className="text-sm mt-1">Add savings goals and transactions to see trends</p>
+                <p className="font-medium">No trend data for this range</p>
+                <p className="mt-1 px-4 text-xs">Add a savings contribution to start tracking your progress.</p>
               </div>
             </div>
           )}
@@ -872,6 +952,29 @@ export const Savings = () => {
         }}
         editingId={editingEntry}
       />
+
+      <AlertDialog open={Boolean(assignmentToRemove)} onOpenChange={(open) => { if (!open) setAssignmentToRemove(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove existing savings assignment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {assignmentToRemove && `${formatCurrency(assignmentToRemove.amount)} will be unassigned from ${assignmentToRemove.name} and returned to unallocated starting savings. Your estimated bank balance will not change.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void removeExistingAssignment();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove assignment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       
       {/* Savings Transaction Form */}
       {currentSavingsGoal && (
@@ -885,6 +988,7 @@ export const Savings = () => {
           savingsGoalId={currentSavingsGoal.id}
           savingsGoalName={currentSavingsGoal.name}
           editingId={editingTransaction}
+          availableBalance={availableBalanceForSavings}
         />
       )}
       <GoalSpendingForm

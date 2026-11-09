@@ -116,6 +116,7 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose, editingId
                       type="number"
                       placeholder="Enter amount"
                       {...field}
+                      value={field.value || ''}
                       onChange={e => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>

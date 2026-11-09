@@ -116,6 +116,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
                       type="number"
                       placeholder="0"
                       {...field}
+                      value={field.value || ''}
                       onChange={(e) => field.onChange(Number(e.target.value))}
                       min="0"
                       step="1"
@@ -153,7 +154,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
                       type="number"
                       placeholder="Enter profit (+) or loss (-)"
                       {...field}
-                      value={field.value ?? ''}
+                      value={field.value || ''}
                       onChange={(e) => {
                         const value = e.target.value;
                         if (value === '' || value === '-') {
