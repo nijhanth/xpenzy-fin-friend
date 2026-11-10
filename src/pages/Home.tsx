@@ -192,7 +192,7 @@ export const Home = () => {
   });
 
   return (
-    <div className="w-full p-4 space-y-6 animate-fade-in font-xpenzy">
+    <div className="mx-auto w-full max-w-6xl min-w-0 space-y-6 p-4 animate-fade-in font-xpenzy">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -312,12 +312,12 @@ export const Home = () => {
             <CardContent>
               {monthlyData.length > 0 ? (
                 <>
-                  <div className="h-64">
+                  <div className="h-64 min-w-0">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthlyData} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
+                      <BarChart data={monthlyData} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.4} vertical={false} />
-                        <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9, fontFamily: 'monospace' }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                        <XAxis dataKey="label" interval="preserveStartEnd" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
+                        <YAxis width={42} axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9, fontFamily: 'monospace' }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                         <Tooltip
                           contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
                           formatter={(value: number, name: string) => [`₹${value.toLocaleString()}`, name]}
@@ -379,7 +379,7 @@ export const Home = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-56">
+              <div className="h-56 min-w-0">
                 {balanceData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -469,9 +469,9 @@ export const Home = () => {
                 </div>
               </div>
 
-              <div className="h-48">
+              <div className="h-48 min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trendData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                  <AreaChart data={trendData} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="balanceGradientPositive" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.3} />
@@ -480,7 +480,7 @@ export const Home = () => {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.4} vertical={false} />
                     <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontFamily: 'monospace' }} dy={8} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9, fontFamily: 'monospace' }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} domain={chartDomain} />
+                    <YAxis width={42} axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9, fontFamily: 'monospace' }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} domain={chartDomain} />
                     <Tooltip content={<TradeChartTooltip />} />
                     <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" strokeOpacity={0.4} />
                     <Area
@@ -497,8 +497,8 @@ export const Home = () => {
               </div>
 
               {/* Bottom ticker */}
-              <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-3">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-y-2 border-t border-border/50 pt-2.5 text-xs">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="text-muted-foreground flex items-center gap-1">
                     <span className="inline-block w-2 h-2 rounded-full bg-income" />
                     Income: <span className="text-income font-mono font-semibold">+₹{trendData.reduce((a, b) => a + b.income, 0).toLocaleString()}</span>

@@ -359,7 +359,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-8 pt-5 sm:space-y-8 sm:px-6 sm:pt-8">
+    <div className="mx-auto w-full max-w-6xl min-w-0 space-y-6 px-4 pb-8 pt-5 sm:space-y-8 sm:px-6 sm:pt-8">
       <header className="flex items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
@@ -414,8 +414,8 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-2" aria-label="Spending charts">
-        <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6">
+      <section className="grid min-w-0 gap-5 lg:grid-cols-2" aria-label="Spending charts">
+        <div className="min-w-0 rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div><div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><h2 className="font-semibold text-foreground">Monthly budget</h2></div><p className="mt-1 text-xs text-muted-foreground">Expense, savings, and investment budgets | {budgetDateFilter.label}</p></div>
             <div className="flex flex-wrap items-center gap-2">
@@ -471,7 +471,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
           )}
         </div>
 
-        <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6">
+        <div className="min-w-0 rounded-2xl border border-border/80 bg-card p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div><h2 className="font-semibold text-foreground">Spending by category</h2><p className="mt-1 text-xs text-muted-foreground">{categoryType === 'expenses' ? 'Expense' : categoryType === 'savings' ? 'Savings' : 'Investment'} breakdown | {categoryDateFilter.label}</p></div>
             <div className="flex flex-wrap items-center gap-2">
@@ -491,8 +491,8 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
             ))}
           </div>
           {isLoading ? <Skeleton className="mt-5 h-56 w-full" /> : activeCategoryDetails.chart.length ? (
-            <div className="mt-3 flex flex-col items-center gap-4 sm:flex-row">
-              <div className="h-52 w-full sm:w-1/2">
+            <div className="mt-3 flex min-w-0 flex-col items-center gap-4 sm:flex-row">
+              <div className="h-52 w-full min-w-0 sm:w-1/2">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={activeCategoryDetails.chart} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="82%" paddingAngle={3} stroke="none">
@@ -530,7 +530,7 @@ export const Dashboard = ({ onAdd, onNavigate }: Props) => {
                 <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground"><span className="h-2 w-2 rounded-full bg-amber-500" />Withdrawals</span>
               </div>
               <div className="-mx-1 min-w-0 max-w-full overflow-x-auto overscroll-x-contain sm:mx-0" role="region" aria-label="Monthly money breakdown chart; scroll horizontally to view all months" tabIndex={0}>
-                <div className="h-64 sm:h-72" style={{ minWidth: stats.monthlyMoneyBreakdown.length > 6 ? 640 : '100%' }}>
+                <div className="h-64 min-w-0 sm:h-72" style={{ minWidth: stats.monthlyMoneyBreakdown.length > 6 ? 480 : '100%' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={stats.monthlyMoneyBreakdown} margin={{ top: 12, right: 12, left: 4, bottom: 0 }} barCategoryGap="28%" barGap={4}>
                       <CartesianGrid strokeDasharray="3 5" vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.65} />
