@@ -206,6 +206,10 @@ export const Budget = () => {
   const enteredBudgetLimit = newBudget.limit.trim() ? Number(newBudget.limit) : 0;
   const savingsLimitExceedsGoal = savingsGoalRemainingTarget !== undefined
     && enteredBudgetLimit > savingsGoalRemainingTarget;
+  const missingLinkedRecord = !editingBudget && (
+    (newBudget.type === 'savings' && data.savings.length === 0)
+    || (newBudget.type === 'investment' && data.investments.length === 0)
+  );
 
   const handleAddBudget = async () => {
     if (!newBudget.name || !newBudget.limit) {
@@ -589,56 +593,60 @@ export const Budget = () => {
               ) : newBudget.type === 'savings' ? (
                 <div>
                   <Label htmlFor="savings-goal">Savings Goal</Label>
-                  <Select value={newBudget.linkedId || ''} onValueChange={(value) => {
-                    const selectedGoal = data.savings.find(s => s.id === value);
-                    setNewBudget({
-                      ...newBudget, 
-                      linkedId: value,
-                      name: selectedGoal ? selectedGoal.name : ''
-                    });
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a savings goal" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border-border z-50">
-                      {data.savings.length === 0 ? (
-                        <SelectItem value="" disabled>No savings goals available</SelectItem>
-                      ) : (
-                        data.savings.map((goal) => (
+                  {data.savings.length === 0 ? (
+                    <p role="status" className="mt-2 rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
+                      No savings goals yet. Create a savings goal in Savings before adding a savings budget.
+                    </p>
+                  ) : (
+                    <Select value={newBudget.linkedId || ''} onValueChange={(value) => {
+                      const selectedGoal = data.savings.find(s => s.id === value);
+                      setNewBudget({
+                        ...newBudget,
+                        linkedId: value,
+                        name: selectedGoal ? selectedGoal.name : ''
+                      });
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a savings goal" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background border-border z-50">
+                        {data.savings.map((goal) => (
                           <SelectItem key={goal.id} value={goal.id}>
                             {goal.name} (₹{goal.current.toLocaleString()} / ₹{goal.target.toLocaleString()})
                           </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               ) : (
                 <div>
                   <Label htmlFor="investment">Investment</Label>
-                  <Select value={newBudget.linkedId || ''} onValueChange={(value) => {
-                    const selectedInvestment = data.investments.find(i => i.id === value);
-                    setNewBudget({
-                      ...newBudget, 
-                      linkedId: value,
-                      name: selectedInvestment ? selectedInvestment.name : ''
-                    });
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select an investment" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border-border z-50">
-                      {data.investments.length === 0 ? (
-                        <SelectItem value="" disabled>No investments available</SelectItem>
-                      ) : (
-                        data.investments.map((investment) => (
+                  {data.investments.length === 0 ? (
+                    <p role="status" className="mt-2 rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
+                      No investments yet. Add an investment in Investments before creating an investment budget.
+                    </p>
+                  ) : (
+                    <Select value={newBudget.linkedId || ''} onValueChange={(value) => {
+                      const selectedInvestment = data.investments.find(i => i.id === value);
+                      setNewBudget({
+                        ...newBudget,
+                        linkedId: value,
+                        name: selectedInvestment ? selectedInvestment.name : ''
+                      });
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select an investment" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background border-border z-50">
+                        {data.investments.map((investment) => (
                           <SelectItem key={investment.id} value={investment.id}>
                             {investment.name} ({investment.type}) - ₹{investment.current.toLocaleString()}
                           </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               )}
               <div>
@@ -700,7 +708,7 @@ export const Budget = () => {
                   </Select>
                 </div>
               )}
-              <Button onClick={handleAddBudget} className="w-full">
+              <Button onClick={handleAddBudget} className="w-full" disabled={missingLinkedRecord}>
                 {editingBudget ? 'Update Budget' : 'Add Budget'}
               </Button>
             </div>
