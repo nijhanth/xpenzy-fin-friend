@@ -19,6 +19,7 @@ const isRssStory = (value: unknown): value is RssStory =>
 type Source = { title: string; url: string };
 type RssStory = { headline?: string; sourceTitle?: string; publisherUrl?: string; sourceUrl?: string };
 type Language = 'en' | 'hi' | 'ta' | 'te';
+type PortfolioSeriesFilter = 'both' | 'actual' | 'expected';
 type RecordTip =
   | { kind: 'income_surplus'; amount: number }
   | { kind: 'expenses_over_income'; amount: number }
@@ -98,6 +99,7 @@ export const HomeFinancialOutlook = ({ isFinancialLoading = false }: { isFinanci
   const annualReturn = 0;
   const [latestHeadline, setLatestHeadline] = useState('');
   const [language, setLanguage] = useState<Language>('en');
+  const [portfolioSeriesFilter, setPortfolioSeriesFilter] = useState<PortfolioSeriesFilter>('both');
   const copy = localCopy[language];
   const [sources, setSources] = useState<Source[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
@@ -235,19 +237,41 @@ export const HomeFinancialOutlook = ({ isFinancialLoading = false }: { isFinanci
 
   return <Card className="overflow-hidden border-border bg-card shadow-card">
     <CardHeader>
-      <CardTitle className="flex items-center gap-2 text-base font-semibold sm:text-lg"><TrendingUp className="h-5 w-5 text-investment" /> Portfolio: actual vs expected <Badge variant="secondary">{year}</Badge></CardTitle>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle className="flex items-center gap-2 text-base font-semibold sm:text-lg"><TrendingUp className="h-5 w-5 shrink-0 text-investment" /> Portfolio: actual vs expected <Badge variant="secondary">{year}</Badge></CardTitle>
+        <div className="flex items-center gap-2">
+          <label htmlFor="portfolio-series-filter" className="shrink-0 text-xs font-medium text-muted-foreground">Show</label>
+          <Select value={portfolioSeriesFilter} onValueChange={value => setPortfolioSeriesFilter(value as PortfolioSeriesFilter)}>
+            <SelectTrigger id="portfolio-series-filter" className="h-9 w-full sm:w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="both">Actual + expected</SelectItem>
+              <SelectItem value="actual">Actual only</SelectItem>
+              <SelectItem value="expected">Expected only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <p className="text-xs text-muted-foreground">Actual value includes savings goal balances and investment holdings. The expected line uses income after expenses, assuming any surplus is retained in savings or investments.</p>
     </CardHeader>
     <CardContent>
       <div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><LineChart data={portfolioData} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
         <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.45} vertical={false} />
         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-        <YAxis axisLine={false} tickLine={false} width={64} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickFormatter={value => `₹${(Number(value) / 1000).toFixed(0)}k`} />
-        <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 10 }} formatter={(value, name) => [value == null ? 'No data' : formatCurrency(Number(value)), name === 'actual' ? 'Actual savings + investments' : 'Expected savings + investments']} />
-        <Line type="monotone" dataKey="actual" name="actual" stroke="hsl(var(--investment))" strokeWidth={2.5} connectNulls={false} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-        <Line type="monotone" dataKey="expected" name="expected" stroke="hsl(var(--primary))" strokeWidth={2.5} strokeDasharray="7 5" connectNulls={false} dot={false} activeDot={{ r: 5 }} />
+        <YAxis axisLine={false} tickLine={false} width={52} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickFormatter={value => `₹${(Number(value) / 1000).toFixed(0)}k`} />
+        <Tooltip
+          allowEscapeViewBox={{ x: false, y: false }}
+          wrapperStyle={{ maxWidth: 'calc(100% - 8px)' }}
+          contentStyle={{ maxWidth: 180, padding: '8px 10px', whiteSpace: 'normal', overflowWrap: 'anywhere', background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 10, fontSize: 12 }}
+          labelStyle={{ marginBottom: 4, fontWeight: 600 }}
+          formatter={(value, name) => [value == null ? 'No data' : formatCurrency(Number(value)), name === 'actual' ? 'Actual' : 'Expected']}
+        />
+        {portfolioSeriesFilter !== 'expected' && <Line type="monotone" dataKey="actual" name="actual" stroke="hsl(var(--investment))" strokeWidth={2.5} connectNulls={false} dot={{ r: 4 }} activeDot={{ r: 8 }} />}
+        {portfolioSeriesFilter !== 'actual' && <Line type="monotone" dataKey="expected" name="expected" stroke="hsl(var(--primary))" strokeWidth={2.5} strokeDasharray="7 5" connectNulls={false} dot={{ r: 4 }} activeDot={{ r: 8 }} />}
       </LineChart></ResponsiveContainer></div>
-      <div className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground"><span className="inline-flex items-center gap-2"><span className="h-0.5 w-5 bg-investment" /> Actual savings + investments</span><span className="inline-flex items-center gap-2"><span className="h-0.5 w-5 border-t-2 border-dashed border-primary" /> Expected scenario</span></div>
+      <div className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+        {portfolioSeriesFilter !== 'expected' && <span className="inline-flex items-center gap-2"><span className="h-0.5 w-5 bg-investment" /> Actual savings + investments</span>}
+        {portfolioSeriesFilter !== 'actual' && <span className="inline-flex items-center gap-2"><span className="h-0.5 w-5 border-t-2 border-dashed border-primary" /> Expected scenario</span>}
+      </div>
       <p className="mt-2 text-center text-[11px] text-muted-foreground">For elapsed months, the expected line follows recorded balances. Future months change by about {formatCurrency(incomeProjection.expectedMonthlyContribution)} per month, based on average income less expenses, assuming 0% portfolio growth.</p>
       <div className="mt-5 border-t border-border/70 pt-4">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground"><Lightbulb className="h-4 w-4 text-primary" /> {copy.tipsTitle}</h3>

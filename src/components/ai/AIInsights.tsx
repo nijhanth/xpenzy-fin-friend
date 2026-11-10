@@ -26,9 +26,10 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
   const [language, setLanguage] = useState<(typeof insightLanguages)[number]['value']>('en');
   const [isDismissed, setIsDismissed] = useState(false);
   const lastAutoRequest = useRef('');
+  const englishInsights = useRef<string | null>(null);
 
-  const fetchInsights = useCallback(async (summaryPeriod: 'week' | 'month', outputLanguage: typeof language) => {
-    if (isLoading) return; // prevent double clicks
+  const fetchInsights = useCallback(async (summaryPeriod: 'week' | 'month') => {
+    if (isLoading) return null;
     setIsLoading(true);
     setErrorState('none');
     try {
@@ -50,7 +51,7 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
           action: 'insights',
           focus,
           period: summaryPeriod,
-          language: outputLanguage,
+          language: 'en',
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
         signal: controller.signal,
@@ -70,19 +71,18 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
       }
 
       const data = await resp.json();
-      if (outputLanguage !== 'en' && data.language !== outputLanguage) {
-        setInsights(null);
-        setErrorState('language_unavailable');
-        return;
-      }
       const content = (data.content || '').trim();
       console.log('AI insights response:', content.substring(0, 200));
 
       if (!content) {
         setErrorState('no_data');
         setInsights(null);
+        englishInsights.current = null;
+        return null;
       } else {
+        englishInsights.current = content;
         setInsights(content);
+        return content;
       }
     } catch (e: any) {
       console.error('AI insights fetch error:', e);
@@ -93,18 +93,93 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
         setInsights(null);
         setErrorState('error');
       }
+      return null;
     } finally {
       setIsLoading(false);
     }
   }, [isLoading, focus]);
 
+  const translateInsights = useCallback(async (source: string, outputLanguage: typeof language) => {
+    if (isLoading) return;
+    if (outputLanguage === 'en') {
+      setInsights(source);
+      setErrorState('none');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorState('none');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('Please sign in');
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const resp = await fetch(CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          action: 'translate_insights',
+          sourceContent: source,
+          language: outputLanguage,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!resp.ok) throw new Error('Could not translate AI tips.');
+      const data = await resp.json();
+      if (data.language !== outputLanguage) {
+        setInsights(null);
+        setErrorState('language_unavailable');
+        return;
+      }
+
+      const translated = (data.content || '').trim();
+      if (!translated) throw new Error('Translation returned no content.');
+      setInsights(translated);
+    } catch (error) {
+      console.error('AI insights translation error:', error);
+      setInsights(null);
+      setErrorState('error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoading]);
+
+  const refreshInsights = useCallback(async () => {
+    const source = await fetchInsights(period);
+    if (source && language !== 'en') await translateInsights(source, language);
+  }, [fetchInsights, language, period, translateInsights]);
+
+  const retryInsights = useCallback(async () => {
+    const source = englishInsights.current;
+    if (language !== 'en' && source) {
+      await translateInsights(source, language);
+      return;
+    }
+    await refreshInsights();
+  }, [language, refreshInsights, translateInsights]);
+
   useEffect(() => {
     if (!autoGenerate || isLoading || isDataLoading) return;
-    const requestKey = `${period}:${language}:${String(refreshKey ?? '')}`;
+    const requestKey = `${period}:${String(refreshKey ?? '')}`;
     if (lastAutoRequest.current === requestKey) return;
     lastAutoRequest.current = requestKey;
-    void fetchInsights(period, language);
-  }, [autoGenerate, fetchInsights, period, language, refreshKey, isLoading, isDataLoading]);
+    void refreshInsights();
+  }, [autoGenerate, refreshInsights, period, refreshKey, isLoading, isDataLoading]);
+
+  const handleLanguageChange = (value: string) => {
+    const nextLanguage = value as typeof language;
+    setLanguage(nextLanguage);
+    const source = englishInsights.current;
+    if (source) void translateInsights(source, nextLanguage);
+  };
 
   if (isDismissed) {
     return (
@@ -149,7 +224,7 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
                 This {value}
               </Button>
             ))}
-            <Button variant="ghost" size="icon" aria-label="Refresh AI summary" onClick={() => fetchInsights(period, language)} disabled={isLoading}>
+            <Button variant="ghost" size="icon" aria-label="Refresh AI summary" onClick={() => void refreshInsights()} disabled={isLoading}>
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             </Button>
           </div>
@@ -160,7 +235,7 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
           <div className="text-center py-6">
             <Sparkles className="w-10 h-10 mx-auto mb-3 text-primary/50" />
             <p className="text-sm text-muted-foreground mb-3">Get AI-powered insights about your spending</p>
-            <Button onClick={() => fetchInsights(period, language)} className="bg-gradient-primary" disabled={isLoading}>
+            <Button onClick={() => void refreshInsights()} className="bg-gradient-primary" disabled={isLoading}>
               <Sparkles className="w-4 h-4 mr-2" /> Generate {period === 'week' ? 'weekly' : 'monthly'} recap
             </Button>
           </div>
@@ -176,7 +251,7 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
           <div className="text-center py-6">
             <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-yellow-500/60" />
             <p className="text-sm text-muted-foreground mb-3">AI is temporarily unavailable. Check the Lovable AI setup and available credits, then try again.</p>
-            <Button onClick={() => fetchInsights(period, language)} variant="outline" size="sm" disabled={isLoading}>
+            <Button onClick={() => void retryInsights()} variant="outline" size="sm" disabled={isLoading}>
               <RefreshCw className="w-4 h-4 mr-2" /> Retry
             </Button>
           </div>
@@ -185,7 +260,7 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
           <div className="text-center py-6">
             <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-yellow-500/60" />
             <p className="text-sm text-muted-foreground">Tamil and other translated tips need the latest <code>ai-assistant</code> function deployed. Deploy it in Supabase, then choose the language again.</p>
-            <Button onClick={() => fetchInsights(period, language)} variant="outline" size="sm" className="mt-3" disabled={isLoading}>
+            <Button onClick={() => void retryInsights()} variant="outline" size="sm" className="mt-3" disabled={isLoading}>
               <RefreshCw className="w-4 h-4 mr-2" /> Retry
             </Button>
           </div>
@@ -203,7 +278,7 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
         )}
         {showLanguageSelector && <div className="mt-5 flex items-center justify-end gap-3 border-t border-border/70 pt-4">
           <label htmlFor="ai-insights-language" className="text-xs font-medium text-muted-foreground">Translate to</label>
-          <Select value={language} onValueChange={(value) => setLanguage(value as typeof language)} disabled={isLoading}>
+          <Select value={language} onValueChange={handleLanguageChange} disabled={isLoading}>
             <SelectTrigger id="ai-insights-language" className="h-9 w-40"><SelectValue /></SelectTrigger>
             <SelectContent>{insightLanguages.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
           </Select>

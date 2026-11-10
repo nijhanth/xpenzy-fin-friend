@@ -177,6 +177,14 @@ export const Home = () => {
     } else {
       tips.push('Create a savings goal and contribute regularly to give your spare balance a clear purpose.');
     }
+
+    if (monthExpenses.length > 0) {
+      const averageExpense = expenseTotal / monthExpenses.length;
+      tips.push(`Your average recorded expense is ${formatRupees(averageExpense)} across ${monthExpenses.length} entries this month. Use it to spot unusually large purchases.`);
+    } else {
+      tips.push('Once you start recording expenses, compare your average purchase size each month to catch spending changes early.');
+    }
+
     return tips.slice(0, 5);
   }, [data]);
 
