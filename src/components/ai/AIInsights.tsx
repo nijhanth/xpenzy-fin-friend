@@ -168,8 +168,8 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
         {!insights && !isLoading && errorState === 'no_data' && (
           <div className="text-center py-6">
             <TrendingDown className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground mb-1 font-medium">{focus === 'notes' ? 'Add a reminder to get tips' : 'Add expenses to see insights'}</p>
-            <p className="text-xs text-muted-foreground">{focus === 'notes' ? 'AI tips use the due dates and priorities in your active reminders.' : 'You need at least 2 expense entries for AI analysis.'}</p>
+            <p className="text-sm text-muted-foreground mb-1 font-medium">{focus === 'notes' ? 'No reminder tips to show yet' : focus === 'budget' ? 'No budget tips to show yet' : focus === 'savings' ? 'No savings tips to show yet' : focus === 'investments' ? 'No investment tips to show yet' : focus === 'income' ? 'No income tips to show yet' : 'No expense tips to show yet'}</p>
+            <p className="text-xs text-muted-foreground">{focus === 'notes' ? 'Add reminders with due dates and status to get suggestions. If your reminders do not support a useful tip, none will be shown.' : focus === 'budget' ? 'Add budget, spending, savings-goal, or investment-contribution records. If the data does not support a useful tip, none will be shown.' : focus === 'savings' ? 'Add a savings goal, savings contribution, or savings budget. If the data does not support a useful tip, none will be shown.' : focus === 'investments' ? 'Add investment holdings, contributions, or investment budgets. If the data does not support a useful tip, none will be shown.' : focus === 'income' ? 'Add income records with amounts, sources, and dates. If the records do not support a useful tip, none will be shown.' : 'Add expense records to get suggestions. If the records do not support a useful tip, none will be shown.'}</p>
           </div>
         )}
         {!insights && !isLoading && errorState === 'error' && (

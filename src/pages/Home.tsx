@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
-import { TrendingUp, TrendingDown, PiggyBank, Plus, CandlestickChart, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, PiggyBank, Plus, CandlestickChart, Wallet, ArrowUpRight, ArrowDownRight, Lightbulb } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,8 @@ import { InvestmentForm } from '@/components/forms/InvestmentForm';
 import { NotificationBell } from '@/components/ui/notification-bell';
 import { SmartExpenseInput } from '@/components/ai/SmartExpenseInput';
 import { AIInsightsCard, ExpensePredictionCard } from '@/components/ai/AIInsights';
+
+const formatRupees = (amount: number) => `₹${Math.round(amount).toLocaleString('en-IN')}`;
 
 const PieChartTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
@@ -119,6 +121,63 @@ export const Home = () => {
     const totalInvestments = data.investments.reduce((sum, item) => sum + item.invested, 0);
     const remainingBalance = totalIncome - totalExpenses - investmentContributions;
     return { totalIncome, totalExpenses, totalSavings, totalInvestments, remainingBalance };
+  }, [data]);
+
+  const financeTips = useMemo(() => {
+    const now = new Date();
+    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthIncome = data.income.filter(item => item.date?.startsWith(monthPrefix)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const monthExpenses = data.expenses.filter(item => item.date?.startsWith(monthPrefix));
+    const expenseTotal = monthExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const byCategory = monthExpenses.reduce<Record<string, number>>((groups, item) => {
+      const category = item.category || 'Other';
+      groups[category] = (groups[category] || 0) + Number(item.amount || 0);
+      return groups;
+    }, {});
+    const topCategory = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0];
+    const tips: string[] = [];
+
+    if (monthIncome > 0 && expenseTotal > 0) {
+      const savingsRate = Math.round(((monthIncome - expenseTotal) / monthIncome) * 100);
+      tips.push(savingsRate >= 20
+        ? `You’ve kept ${savingsRate}% of this month’s recorded income after expenses. Keep building that buffer.`
+        : savingsRate >= 0
+          ? `About ${savingsRate}% of this month’s recorded income remains after expenses. Try setting aside a little more on payday.`
+          : `This month’s recorded expenses are ${formatRupees(expenseTotal - monthIncome)} above income. Review non-essential spending first.`);
+    } else if (monthIncome > 0) {
+      tips.push('You have income recorded this month but no expenses yet. Add spending as it happens for a clearer plan.');
+    } else {
+      tips.push('Record this month’s income and expenses to get suggestions based on your latest activity.');
+    }
+
+    if (topCategory) {
+      const share = expenseTotal > 0 ? Math.round((topCategory[1] / expenseTotal) * 100) : 0;
+      tips.push(`${topCategory[0]} is your largest expense category this month at ${formatRupees(topCategory[1])} (${share}% of recorded spending). Check for one cost you can trim.`);
+    } else {
+      tips.push('No expenses are recorded this month yet. Logging them by category will reveal where your money goes.');
+    }
+
+    const overBudget = data.budgets.map(budget => {
+      const spent = monthExpenses.filter(expense => expense.category.toLowerCase() === budget.category.toLowerCase()).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+      return { ...budget, spent };
+    }).filter(budget => budget.limit_amount > 0).sort((a, b) => (b.spent / b.limit_amount) - (a.spent / a.limit_amount))[0];
+    if (overBudget) {
+      const remaining = overBudget.limit_amount - overBudget.spent;
+      tips.push(remaining >= 0
+        ? `${overBudget.category} has ${formatRupees(remaining)} left in its budget. Keep an eye on it for the rest of the month.`
+        : `${overBudget.category} is ${formatRupees(Math.abs(remaining))} over its budget. Consider lowering this category’s remaining-month spend.`);
+    } else {
+      tips.push('Set a monthly limit for your biggest expense category to catch overspending earlier.');
+    }
+
+    const activeGoal = data.savings.filter(goal => goal.status !== 'completed' && goal.target > 0).sort((a, b) => (a.current / a.target) - (b.current / b.target))[0];
+    if (activeGoal) {
+      const remaining = Math.max(0, activeGoal.target - activeGoal.current);
+      tips.push(`${formatRupees(remaining)} remains to reach your “${activeGoal.name}” goal. A regular monthly contribution can help you get there.`);
+    } else {
+      tips.push('Create a savings goal and contribute regularly to give your spare balance a clear purpose.');
+    }
+    return tips.slice(0, 5);
   }, [data]);
 
   const balanceData = useMemo(() => {
@@ -264,6 +323,25 @@ export const Home = () => {
           trend={{ value: `${data.investments.length} assets`, isPositive: true }}
         />
       </div>
+
+      <Card className="border-border bg-card shadow-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <Lightbulb className="h-4 w-4 text-primary" /> Finance tips from your records
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">Suggestions based on this month’s income, spending, budgets, and goals.</p>
+        </CardHeader>
+        <CardContent>
+          <ol className="grid gap-3 sm:grid-cols-2">
+            {financeTips.map((tip, index) => (
+              <li key={index} className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 text-sm text-foreground">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{index + 1}</span>
+                <span>{tip}</span>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
 
       {/* Tabs: Overview / Monthly / Insights */}
       <Tabs defaultValue="overview" className="w-full">

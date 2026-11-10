@@ -820,7 +820,7 @@ export const Budget = () => {
       )}
 
 
-      <AIInsightsCard title="AI budget tips" focus="budget" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={data.budgets} />
+      <AIInsightsCard title="AI budget tips" focus="budget" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={JSON.stringify({ budgets: data.budgets, expenses: data.expenses, savings: data.savings, investments: data.investments, savingsTransactions: data.savingsTransactions, investmentTransactions: data.investmentTransactions })} />
     </div>
   );
 };

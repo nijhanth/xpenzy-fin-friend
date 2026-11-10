@@ -1326,7 +1326,7 @@ export const Investments = () => {
         </CardContent>
       </Card>
       
-      <AIInsightsCard title="AI investment tips" focus="investments" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={data.investments} />
+      <AIInsightsCard title="AI investment tips" focus="investments" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={JSON.stringify({ investments: data.investments, investmentTransactions: data.investmentTransactions, budgets: data.budgets })} />
       <InvestmentForm
         open={isFormOpen} 
         onClose={() => {

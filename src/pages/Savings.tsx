@@ -943,7 +943,7 @@ export const Savings = () => {
 
 
       
-      <AIInsightsCard title="AI savings tips" focus="savings" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={data.savings} />
+      <AIInsightsCard title="AI savings tips" focus="savings" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={JSON.stringify({ savings: data.savings, savingsTransactions: data.savingsTransactions, budgets: data.budgets })} />
       <SavingsForm 
         open={isFormOpen} 
         onClose={() => {

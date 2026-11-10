@@ -448,7 +448,7 @@ export const Income = () => {
         </CardContent>
       </Card>
       
-      <AIInsightsCard title="AI income tips" focus="income" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={data.income} />
+      <AIInsightsCard title="AI income tips" focus="income" autoGenerate isDataLoading={isFinancialLoading} showLanguageSelector refreshKey={JSON.stringify(data.income)} />
       <IncomeForm 
         open={isFormOpen} 
         onClose={() => {
