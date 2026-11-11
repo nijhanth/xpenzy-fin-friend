@@ -416,6 +416,7 @@ export const Income = () => {
                       </Badge>
                     </div>
                     <p className="font-medium text-foreground">₹{entry.amount.toLocaleString()}</p>
+                    {entry.accountId && <p className="truncate text-xs text-muted-foreground">{data.accounts.find(account => account.id === entry.accountId)?.name || 'Archived account'}</p>}
                     {entry.notes && <p className="truncate text-sm text-muted-foreground">{entry.notes}</p>}
                   </div>
                   <div className="text-right">

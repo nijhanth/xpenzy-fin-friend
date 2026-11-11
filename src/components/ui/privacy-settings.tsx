@@ -33,9 +33,9 @@ export const PrivacySettings = () => {
     });
   };
 
-  const clearAllData = () => {
+  const resetPrivacyPreferences = () => {
     const confirmed = window.confirm(
-      'Are you sure you want to clear all privacy preferences? This action cannot be undone.'
+      'Reset your privacy and display preferences to their defaults? This does not delete financial records, accounts, or your profile.'
     );
     
     if (confirmed) {
@@ -48,8 +48,8 @@ export const PrivacySettings = () => {
         securityMode: 'strict'
       });
       toast({
-        title: "Privacy Data Cleared",
-        description: "All privacy preferences have been reset to defaults.",
+        title: "Privacy preferences reset",
+        description: "Your display, analytics, and security mode preferences are back to their defaults. Financial data was not changed.",
       });
     }
   };
@@ -63,7 +63,7 @@ export const PrivacySettings = () => {
             Privacy & Security Settings
           </CardTitle>
           <CardDescription>
-            Control how your personal information is displayed and stored in the application.
+            Control how personal information is displayed and which privacy options are enabled. These settings do not delete financial records.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -156,9 +156,9 @@ export const PrivacySettings = () => {
             <Button 
               variant="destructive" 
               size="sm" 
-              onClick={clearAllData}
+              onClick={resetPrivacyPreferences}
             >
-              Clear All Privacy Data
+              Reset Privacy Preferences
             </Button>
           </div>
         </CardContent>

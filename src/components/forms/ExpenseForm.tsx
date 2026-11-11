@@ -14,12 +14,15 @@ import { useFinancial } from '@/contexts/FinancialContext';
 import { useToast } from '@/hooks/use-toast';
 import { ReminderCompletionField } from '@/components/forms/ReminderCompletionField';
 import { completeLinkedReminder } from '@/lib/reminderCompletion';
+import { AccountPicker } from '@/components/forms/AccountPicker';
+import { getDefaultAccountId } from '@/lib/financialAccounts';
 
 const expenseSchema = z.object({
   amount: z.number().min(1, 'Amount must be greater than 0'),
   date: z.string().min(1, 'Date is required'),
   category: z.string().min(1, 'Category is required'),
   paymentMode: z.enum(['Cash', 'UPI', 'Card', 'Bank Transfer', 'Net Banking']),
+  accountId: z.string().nullable().optional(),
   notes: z.string().optional().default(''),
   customCategory: z.string().optional().default(''),
   goalId: z.string().nullable().optional()
@@ -53,6 +56,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       date: new Date().toISOString().split('T')[0],
       category: undefined,
       paymentMode: 'UPI',
+      accountId: getDefaultAccountId(data.accounts),
       notes: '',
       customCategory: '',
       goalId: null
@@ -142,6 +146,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
           date: existingEntry.date,
           category: existingEntry.customCategory ? 'Custom' : existingEntry.category,
           paymentMode: existingEntry.paymentMode as any,
+          accountId: existingEntry.accountId ?? null,
           notes: existingEntry.notes,
           customCategory: existingEntry.customCategory || '',
           goalId: existingEntry.goalId ?? null
@@ -153,13 +158,14 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
         date: new Date().toISOString().split('T')[0],
         category: undefined,
         paymentMode: 'UPI',
+        accountId: getDefaultAccountId(data.accounts),
         notes: '',
         customCategory: '',
         goalId: null
       });
       setRelatedReminderId('');
     }
-  }, [editingId, open, data.expenses, form]);
+  }, [editingId, open, data.expenses, data.accounts, form]);
 
   // Active goals (status === 'active' OR no status set yet)
   const activeGoals = useMemo(
@@ -217,6 +223,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
       category: formData.category === 'Custom' ? formData.customCategory?.trim() || 'Custom' : formData.category,
       subcategory: 'General', // Default subcategory since we removed the field
       paymentMode: formData.paymentMode,
+      accountId: formData.accountId ?? null,
       notes: formData.notes || '',
       customCategory: formData.category === 'Custom' ? formData.customCategory : undefined,
       goalId: formData.goalId || null,
@@ -408,6 +415,18 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, editing
                     </SelectContent>
                   </Select>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="accountId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <AccountPicker id="expense-account" accounts={data.accounts} value={field.value} onChange={field.onChange} />
+                  </FormControl>
                 </FormItem>
               )}
             />

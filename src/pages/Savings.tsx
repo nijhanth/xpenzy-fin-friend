@@ -20,8 +20,8 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useFinancial } from '@/contexts/FinancialContext';
+import { getAccountBalances } from '@/lib/financialAccounts';
 import { useAuth } from '@/contexts/AuthContext';
-import { formatDisplayDate } from '@/lib/dateFormat';
 import { SavingsForm } from '@/components/forms/SavingsForm';
 import { SavingsTransactionForm } from '@/components/forms/SavingsTransactionForm';
 import { GoalSpendingForm } from '@/components/forms/GoalSpendingForm';
@@ -90,36 +90,20 @@ const goalActivitySign = (type: GoalActivityType) => type === 'adjustment' || ty
 export const Savings = () => {
   const { data, isLoading: isFinancialLoading, getSavingsTransactions, deleteSavingsTransaction, deleteExpense, markGoalCompleted, restoreGoal, allocateExistingSavingsBalance } = useFinancial();
   const { user } = useAuth();
-  const openingBalanceStorageKey = `xpenzy-opening-balance-${user?.id || 'local'}`;
-  const [openingBalance, setOpeningBalance] = useState(0);
-  const [openingDate, setOpeningDate] = useState(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`);
-  const [openingBalanceDraft, setOpeningBalanceDraft] = useState('0');
-  const [openingDateDraft, setOpeningDateDraft] = useState(openingDate);
-  const [isOpeningBalanceDialogOpen, setIsOpeningBalanceDialogOpen] = useState(false);
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      localStorage.removeItem(`xpenzy-opening-balance-${user.id}`);
+    } catch (error) {
+      console.error('Unable to remove the unused legacy savings balance:', error);
+    }
+  }, [user?.id]);
   const [goalAmountTarget, setGoalAmountTarget] = useState<{ id: string; name: string; current: number } | null>(null);
   const [goalAmountDraft, setGoalAmountDraft] = useState('0');
   const [assignmentToRemove, setAssignmentToRemove] = useState<{ id: string; name: string; amount: number } | null>(null);
   const [spendingGoalId, setSpendingGoalId] = useState<string | null>(null);
   const [withdrawalGoalId, setWithdrawalGoalId] = useState<string | null>(null);
   const [editingGoalExpenseId, setEditingGoalExpenseId] = useState<string | null>(null);
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(openingBalanceStorageKey);
-      if (!saved) return;
-      const parsed = JSON.parse(saved) as { amount?: number; date?: string };
-      const amount = Number(parsed.amount);
-      if (Number.isFinite(amount) && amount >= 0) {
-        setOpeningBalance(amount);
-        setOpeningBalanceDraft(String(amount));
-      }
-      if (parsed.date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) {
-        setOpeningDate(parsed.date);
-        setOpeningDateDraft(parsed.date);
-      }
-    } catch (error) {
-      console.error('Unable to load opening balance:', error);
-    }
-  }, [openingBalanceStorageKey]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
   const { deleteSavings } = useFinancial();
@@ -158,21 +142,30 @@ export const Savings = () => {
     .reduce((sum, transaction) => sum + transaction.amount, 0);
   const completedGoalsCount = data.savings.filter(goal => (goal.status ?? 'active') === 'completed').length;
 
-  // Real money currently in account = lifetime saved minus everything spent from goals
+  // Account balances are the source of truth for available cash; goal assignments earmark part of it.
   const savingsBalance = Math.max(0, currentGoalBalances - totalUsedFromGoals);
-  const balanceIncome = data.income.filter((entry) => entry.date >= openingDate).reduce((total, entry) => total + Number(entry.amount || 0), 0);
-  const balanceExpenses = data.expenses.filter((entry) => entry.date >= openingDate).reduce((total, entry) => total + Number(entry.amount || 0), 0);
-  const balanceSavings = data.savingsTransactions.filter((entry) => entry.date >= openingDate && !isBalanceReconciliation(entry.notes) && !isExistingBalanceAllocation(entry.notes)).reduce((total, entry) => total + Number(entry.amount || 0), 0);
-  const balanceInvestments = data.investmentTransactions.filter((entry) => entry.date >= openingDate && !entry.notes?.startsWith('Statement snapshot:')).reduce((total, entry) => total + Number(entry.amount || 0), 0);
-  const estimatedBankBalance = openingBalance + balanceIncome - balanceExpenses - balanceSavings - balanceInvestments;
+  const accountBalances = useMemo(() => getAccountBalances(data), [data]);
+  const estimatedBankBalance = data.accounts
+    .filter(account => account.isActive)
+    .reduce((total, account) => total + (accountBalances.get(account.id) || 0), 0);
+  const getExistingAllocationForGoal = (goalId: string) => data.savingsTransactions
+    .filter(transaction => transaction.savings_goal_id === goalId && isExistingBalanceAllocation(transaction.notes))
+    .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+  const totalExistingBalanceAllocated = data.savingsTransactions
+    .filter(transaction => isExistingBalanceAllocation(transaction.notes))
+    .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+  const availableBankBalance = Math.max(0, estimatedBankBalance - totalExistingBalanceAllocated);
   const editedSavingsTransaction = editingTransaction
     ? data.savingsTransactions.find(transaction => transaction.id === editingTransaction)
     : undefined;
+  const editedTransactionAccountIsActive = editedSavingsTransaction?.account_id
+    ? data.accounts.some(account => account.id === editedSavingsTransaction.account_id && account.isActive)
+    : false;
   const availableBalanceForSavings = Math.max(
     0,
-    estimatedBankBalance + (
+    availableBankBalance + (
       editedSavingsTransaction &&
-      editedSavingsTransaction.date >= openingDate &&
+      editedTransactionAccountIsActive &&
       editedSavingsTransaction.amount > 0 &&
       !isBalanceReconciliation(editedSavingsTransaction.notes) &&
       !isExistingBalanceAllocation(editedSavingsTransaction.notes)
@@ -180,34 +173,9 @@ export const Savings = () => {
         : 0
     )
   );
-  const getExistingAllocationForGoal = (goalId: string) => data.savingsTransactions
-    .filter(transaction => transaction.savings_goal_id === goalId && isExistingBalanceAllocation(transaction.notes))
-    .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
-  const totalExistingBalanceAllocated = data.savingsTransactions
-    .filter(transaction => isExistingBalanceAllocation(transaction.notes))
-    .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
-  const availableStartingBalance = Math.max(0, openingBalance - totalExistingBalanceAllocated);
   const currentGoalExistingAllocation = goalAmountTarget ? getExistingAllocationForGoal(goalAmountTarget.id) : 0;
-  const goalAmountLimit = currentGoalExistingAllocation + availableStartingBalance;
+  const goalAmountLimit = currentGoalExistingAllocation + availableBankBalance;
 
-  const saveOpeningBalance = () => {
-    const amount = Number(openingBalanceDraft);
-    if (!Number.isFinite(amount) || amount < 0 || !openingDateDraft) return;
-    setOpeningBalance(amount);
-    setOpeningDate(openingDateDraft);
-    setIsOpeningBalanceDialogOpen(false);
-    try {
-      localStorage.setItem(openingBalanceStorageKey, JSON.stringify({ amount, date: openingDateDraft }));
-    } catch (error) {
-      console.error('Unable to persist opening balance:', error);
-      toast({ title: 'Balance updated for this session', description: 'Browser storage was unavailable, so this balance may not be saved after you close the app.', variant: 'destructive' });
-    }
-  };
-  const openOpeningBalanceDialog = () => {
-    setOpeningBalanceDraft(String(openingBalance));
-    setOpeningDateDraft(openingDate);
-    setIsOpeningBalanceDialogOpen(true);
-  };
   const openGoalAmountDialog = (goal: { id: string; name: string; current: number }) => {
     setGoalAmountTarget(goal);
     setGoalAmountDraft(String(getExistingAllocationForGoal(goal.id)));
@@ -444,11 +412,11 @@ export const Savings = () => {
         <div className="relative min-w-0 flex-1">
           <Badge variant="secondary" className="mb-3 gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Savings &amp; bank balance</Badge>
           <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-3xl">Track your balance and savings</h1>
-          <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">Start with the money already in your bank. Add savings goals only if you want to set money aside for something specific.</p>
+          <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">Bank balances come from the opening balances and transactions recorded in Settings → Accounts. Create goals to track money set aside for something specific.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Badge variant="outline" className="gap-1.5 bg-background/70"><Target className="h-3.5 w-3.5 text-savings" />{activeGoals.length} active {activeGoals.length === 1 ? 'goal' : 'goals'}</Badge>
             <Badge variant="outline" className="gap-1.5 bg-background/70"><CalendarDays className="h-3.5 w-3.5 text-savings" />{formatCurrency(monthlyContributions)} net added this month</Badge>
-            <Badge variant="outline" className="gap-1.5 bg-background/70"><WalletCards className="h-3.5 w-3.5 text-savings" />{formatCurrency(availableStartingBalance)} unallocated starting savings</Badge>
+            <Badge variant="outline" className="gap-1.5 bg-background/70"><WalletCards className="h-3.5 w-3.5 text-savings" />{formatCurrency(availableBankBalance)} unallocated bank balance</Badge>
           </div>
         </div>
         <Button size="lg" className="relative w-full shrink-0 bg-savings text-white shadow-sm sm:w-auto" onClick={() => setIsFormOpen(true)}>
@@ -459,36 +427,16 @@ export const Savings = () => {
       <Card aria-label="Estimated current bank balance" className="border-border shadow-sm">
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-muted-foreground">Estimated current bank balance</p>
+            <p className="text-sm font-medium text-muted-foreground">Tracked balance across active accounts</p>
             <p className="mt-1 text-2xl font-bold tabular-nums text-foreground sm:text-3xl">{isFinancialLoading ? '—' : formatCurrency(estimatedBankBalance)}</p>
-            <p className="mt-1 break-words text-xs text-muted-foreground">Starting balance on {formatDisplayDate(openingDate)}: {isFinancialLoading ? '—' : formatCurrency(openingBalance)}. Since then: income {isFinancialLoading ? '—' : `+${formatCurrency(balanceIncome)}`}, expenses {isFinancialLoading ? '—' : `−${formatCurrency(balanceExpenses)}`}, savings transfers {isFinancialLoading ? '—' : `${balanceSavings >= 0 ? '−' : '+'}${formatCurrency(Math.abs(balanceSavings))}`}, investments {isFinancialLoading ? '—' : `${balanceInvestments >= 0 ? '−' : '+'}${formatCurrency(Math.abs(balanceInvestments))}`}.</p>
+            <p className="mt-1 break-words text-xs text-muted-foreground">
+              {data.accounts.some(account => account.isActive)
+                ? 'Calculated from active account opening balances and their assigned income, expenses, savings, investments, and transfers.'
+                : 'Add an account and its opening balance in Settings → Accounts to track your bank balance here.'}
+            </p>
           </div>
-          <Button variant="outline" className="w-full sm:w-auto" onClick={openOpeningBalanceDialog}>
-            {openingBalance > 0 ? 'Edit starting bank balance' : 'Set starting bank balance'}
-          </Button>
         </CardContent>
       </Card>
-
-      <Dialog open={isOpeningBalanceDialogOpen} onOpenChange={setIsOpeningBalanceDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Enter your starting bank balance</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="opening-balance" className="text-sm font-medium">Amount already in your bank account</label>
-              <Input id="opening-balance" type="number" min="0" step="0.01" value={openingBalanceDraft === '0' ? '' : openingBalanceDraft} onChange={(event) => setOpeningBalanceDraft(event.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="opening-balance-date" className="text-sm font-medium">Date of this bank balance</label>
-              <Input id="opening-balance-date" type="date" max={new Date().toISOString().slice(0, 10)} value={openingDateDraft} onChange={(event) => setOpeningDateDraft(event.target.value)} />
-            </div>
-            <p className="text-xs text-muted-foreground">Enter the amount currently in your bank account on this date. Transactions after this date will be added or deducted automatically.</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpeningBalanceDialogOpen(false)}>Cancel</Button>
-            <Button onClick={saveOpeningBalance} disabled={!openingDateDraft || Number(openingBalanceDraft) < 0}>Save balance</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={Boolean(goalAmountTarget)} onOpenChange={(open) => { if (!open) setGoalAmountTarget(null); }}>
         <DialogContent>
@@ -497,8 +445,8 @@ export const Savings = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div className="rounded-lg bg-muted/50 p-3 text-sm">
-              <p className="font-medium">Unallocated starting savings: {formatCurrency(availableStartingBalance)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">This uses only your starting bank balance of {formatCurrency(openingBalance)}. Recorded income is kept separate for Add Money. {formatCurrency(totalExistingBalanceAllocated)} of the starting balance is already allocated across goals.</p>
+              <p className="font-medium">Unallocated bank balance: {formatCurrency(availableBankBalance)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">This is based on your active bank accounts. {formatCurrency(totalExistingBalanceAllocated)} is already assigned to savings goals. Assigning existing money does not change account balances.</p>
             </div>
             <div className="space-y-2">
               <label htmlFor="existing-goal-amount" className="text-sm font-medium">Existing savings assigned to this goal</label>
@@ -511,7 +459,7 @@ export const Savings = () => {
                 value={goalAmountDraft === '0' ? '' : goalAmountDraft}
                 onChange={(event) => setGoalAmountDraft(event.target.value)}
               />
-              <p className="text-xs text-muted-foreground">Up to {formatCurrency(goalAmountLimit)} can be assigned to this goal. This only allocates existing money; it won’t record new income or reduce the bank balance.</p>
+              <p className="text-xs text-muted-foreground">Up to {formatCurrency(goalAmountLimit)} can be assigned to this goal. This only earmarks existing money; it won’t add a transaction or change the bank balance.</p>
             </div>
           </div>
           <DialogFooter>
@@ -526,9 +474,9 @@ export const Savings = () => {
         <CardContent className="pt-6">
           <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
             <div className="min-w-0 rounded-lg border border-primary/20 bg-primary/10 p-3 sm:p-4">
-              <p className="text-xs text-muted-foreground">Starting bank balance</p>
-              <p className="mt-1 truncate text-base font-bold text-foreground sm:text-lg">{formatCurrency(openingBalance)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">As of {formatDisplayDate(openingDate)}</p>
+              <p className="text-xs text-muted-foreground">Unallocated bank balance</p>
+              <p className="mt-1 truncate text-base font-bold text-foreground sm:text-lg">{formatCurrency(availableBankBalance)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Across active accounts</p>
             </div>
             <div className="min-w-0 rounded-lg border border-savings/20 bg-savings/10 p-3 sm:p-4">
               <p className="text-xs text-muted-foreground">Currently saved in goals</p>
@@ -681,6 +629,7 @@ export const Savings = () => {
                                   <div className="flex-1">
                                     <span className="font-medium">{goalActivityLabel(activity.type)}</span>
                                     <p className="text-muted-foreground">{formatDisplayDate(activity.date)}</p>
+                                    {activity.transaction?.account_id && <p className="text-muted-foreground">{data.accounts.find(account => account.id === activity.transaction?.account_id)?.name || 'Archived account'}</p>}
                                     {activity.notes && (
                                       <p className="text-muted-foreground text-xs mt-1">{activity.notes}</p>
                                     )}
@@ -738,16 +687,11 @@ export const Savings = () => {
             <div className="py-12 text-center text-muted-foreground">
               <Target className="w-16 h-16 mx-auto mb-4 opacity-50" />
               <h3 className="text-lg font-medium mb-2">No active savings goals</h3>
-              <p className="mx-auto mb-4 max-w-md text-sm">Already have money saved? Enter your current bank balance above. You can add savings goals later if you want to track money for specific plans.</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button variant="outline" onClick={openOpeningBalanceDialog}>
-                  Enter existing bank balance
-                </Button>
-                <Button onClick={() => setIsFormOpen(true)} className="bg-savings text-white">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create a savings goal
-                </Button>
-              </div>
+              <p className="mx-auto mb-4 max-w-md text-sm">Add your bank accounts and opening balances in Settings → Accounts. Create a savings goal whenever you want to set money aside for something specific.</p>
+              <Button onClick={() => setIsFormOpen(true)} className="bg-savings text-white">
+                <Plus className="w-4 h-4 mr-2" />
+                Create a savings goal
+              </Button>
             </div>
           )}
         </CardContent>
@@ -958,7 +902,7 @@ export const Savings = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove existing savings assignment?</AlertDialogTitle>
             <AlertDialogDescription>
-              {assignmentToRemove && `${formatCurrency(assignmentToRemove.amount)} will be unassigned from ${assignmentToRemove.name} and returned to unallocated starting savings. Your estimated bank balance will not change.`}
+              {assignmentToRemove && `${formatCurrency(assignmentToRemove.amount)} will be unassigned from ${assignmentToRemove.name} and returned to your unallocated bank balance. Your account balances will not change.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

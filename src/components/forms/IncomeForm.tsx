@@ -11,12 +11,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useToast } from '@/hooks/use-toast';
+import { AccountPicker } from '@/components/forms/AccountPicker';
+import { getDefaultAccountId } from '@/lib/financialAccounts';
 
 const incomeSchema = z.object({
   amount: z.number().min(1, 'Amount must be greater than 0'),
   date: z.string().min(1, 'Date is required'),
   category: z.enum(['Salary', 'Freelance', 'Gift', 'Investment', 'Business', 'Custom']),
   paymentMode: z.enum(['Cash', 'UPI', 'Card', 'Bank Transfer', 'Net Banking']),
+  accountId: z.string().nullable().optional(),
   notes: z.string().optional().default(''),
   customCategory: z.string().optional()
 });
@@ -42,6 +45,7 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose, editingId
       date: new Date().toISOString().split('T')[0],
       category: 'Salary',
       paymentMode: 'UPI',
+      accountId: null,
       notes: '',
       customCategory: ''
     }
@@ -57,14 +61,23 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose, editingId
           date: existingEntry.date,
           category: existingEntry.category as any,
           paymentMode: existingEntry.paymentMode as any,
+          accountId: existingEntry.accountId ?? null,
           notes: existingEntry.notes,
           customCategory: existingEntry.customCategory || ''
         });
       }
     } else if (!editingId) {
-      form.reset();
+      form.reset({
+        amount: 0,
+        date: new Date().toISOString().split('T')[0],
+        category: 'Salary',
+        paymentMode: 'UPI',
+        accountId: getDefaultAccountId(data.accounts),
+        notes: '',
+        customCategory: '',
+      });
     }
-  }, [editingId, open, data.income, form]);
+  }, [editingId, open, data.income, data.accounts, form]);
 
   const saveIncome = async (formData: IncomeFormData) => {
     const finalCategory = formData.category === 'Custom' && formData.customCategory 
@@ -76,6 +89,7 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose, editingId
       date: formData.date,
       category: finalCategory,
       paymentMode: formData.paymentMode,
+      accountId: formData.accountId ?? null,
       notes: formData.notes || '',
       customCategory: formData.category === 'Custom' ? formData.customCategory : undefined
     };
@@ -213,6 +227,18 @@ export const IncomeForm: React.FC<IncomeFormProps> = ({ open, onClose, editingId
                     </SelectContent>
                   </Select>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="accountId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <AccountPicker id="income-account" accounts={data.accounts} value={field.value} onChange={field.onChange} />
+                  </FormControl>
                 </FormItem>
               )}
             />

@@ -13,7 +13,6 @@ import { useToast } from '@/hooks/use-toast';
 const savingsSchema = z.object({
   name: z.string().min(1, 'Goal name is required'),
   target: z.number().min(1, 'Target amount must be greater than 0'),
-  current: z.number().min(0, 'Current amount must be 0 or greater'),
   date: z.string().min(1, 'Date is required'),
   notes: z.string().optional().default('')
 });
@@ -36,7 +35,6 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
     defaultValues: {
       name: '',
       target: 0,
-      current: 0,
       date: new Date().toISOString().split('T')[0],
       notes: ''
     }
@@ -50,7 +48,6 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
         form.reset({
           name: existingEntry.name,
           target: existingEntry.target,
-          current: existingEntry.current,
           date: existingEntry.date,
           notes: existingEntry.notes
         });
@@ -76,7 +73,6 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
     const savingsData = {
       name: formData.name,
       target: formData.target,
-      current: formData.current,
       date: formData.date,
       notes: formData.notes || ''
     };
@@ -88,7 +84,7 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
         description: `Goal "${formData.name}" updated successfully!`
       });
     } else {
-      await addSavingsGoal(savingsData);
+      await addSavingsGoal({ ...savingsData, current: 0 });
       toast({
         title: "Savings Goal Added",
         description: `Goal "${formData.name}" with target ₹${formData.target.toLocaleString()} created successfully!`
@@ -143,27 +139,6 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
 
             <FormField
               control={form.control}
-              name="current"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{isEditing ? 'Already saved for this goal (₹)' : 'Amount already saved (₹)'}</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Enter current saved amount"
-                      {...field}
-                      value={field.value || ''}
-                      onChange={e => field.onChange(Number(e.target.value))}
-                    />
-                  </FormControl>
-                  <p className="text-xs text-muted-foreground">Use this for money you already have set aside. It updates the goal amount without adding a new contribution transaction.</p>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
               name="date"
               render={({ field }) => (
                 <FormItem>
@@ -189,6 +164,10 @@ export const SavingsForm: React.FC<SavingsFormProps> = ({ open, onClose, editing
                 </FormItem>
               )}
             />
+
+            <p className="text-xs text-muted-foreground">
+              After creating the goal, use Add Money to record contributions and select the account the money comes from. Existing bank funds can be assigned from the goal’s actions.
+            </p>
 
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={onClose}>

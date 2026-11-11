@@ -10,6 +10,7 @@ import {
   Languages, 
   Trash2, 
   Shield,
+  LockKeyhole,
   ChevronRight,
   Edit,
   FileText,
@@ -34,6 +35,8 @@ import { Label } from '@/components/ui/label';
 import { database } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
 import type { useAppUpdate } from '@/hooks/useAppUpdate';
+import { AccountManagement } from '@/components/settings/AccountManagement';
+import { useFinancial } from '@/contexts/FinancialContext';
 
 interface SettingsProps {
   appUpdate: ReturnType<typeof useAppUpdate>;
@@ -41,6 +44,7 @@ interface SettingsProps {
 
 export const Settings = ({ appUpdate }: SettingsProps) => {
   const { user } = useAuth();
+  const { resetFinancialData } = useFinancial();
   const userId = user?.id;
   const { toast } = useToast();
   const { requestPermission } = useNotifications();
@@ -55,7 +59,14 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
   const [isLoading, setIsLoading] = useState(true);
   
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [isResettingData, setIsResettingData] = useState(false);
+  const [resetPassword, setResetPassword] = useState('');
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const { status: updateStatus, history, historyError, checkForUpdates, applyUpdate } = appUpdate;
@@ -205,6 +216,81 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
     }
   };
 
+  const handleChangePassword = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!user?.email) {
+      toast({
+        title: 'Unable to change password',
+        description: 'Your account does not have an email address.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (newPassword.length < 8 || newPassword.length > 128) {
+      toast({
+        title: 'Invalid new password',
+        description: 'Use a password between 8 and 128 characters.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      toast({
+        title: 'Passwords do not match',
+        description: 'Enter the same new password in both fields.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      toast({
+        title: 'Choose a different password',
+        description: 'Your new password must be different from your current password.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const { error: verificationError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+
+      if (verificationError) {
+        toast({
+          title: 'Current password could not be verified',
+          description: 'Check your current password and try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setShowChangePassword(false);
+      toast({ title: 'Password changed successfully' });
+    } catch (error) {
+      console.error('Error changing password:', error);
+      toast({
+        title: 'Could not change password',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const handleExportData = async () => {
     try {
       const data = await database.dataExport.exportAllData();
@@ -229,20 +315,56 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
   };
 
   const handleResetAllData = async () => {
-    try {
-      await database.dataExport.resetAllData();
-      setShowResetDialog(false);
+    if (!user?.email) {
       toast({
-        title: "Success",
-        description: "All data has been reset",
+        title: 'Unable to verify your account',
+        description: 'Your signed-in account does not have an email address.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!resetPassword) {
+      toast({
+        title: 'Password required',
+        description: 'Enter your account password to continue.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsResettingData(true);
+    try {
+      const { error: verificationError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: resetPassword,
+      });
+      if (verificationError) {
+        toast({
+          title: 'Password verification failed',
+          description: 'Check your account password and try again. No data was deleted.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      await database.dataExport.resetAllData();
+      resetFinancialData();
+      setShowResetDialog(false);
+      setResetPassword('');
+      toast({
+        title: "Financial data reset",
+        description: "Your accounts, transactions, savings, investments, budgets, notes, and AI history have been deleted.",
       });
     } catch (error) {
       console.error('Error resetting data:', error);
       toast({
-        title: "Error",
-        description: "Failed to reset data",
+        title: "Could not finish resetting financial data",
+        description: error instanceof Error ? error.message : "Some data may already have been deleted. Retry to remove the remaining data.",
         variant: "destructive",
       });
+    } finally {
+      setIsResettingData(false);
     }
   };
 
@@ -256,6 +378,8 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
         </div>
         <UserMenu />
       </div>
+
+      <AccountManagement />
 
       {/* Profile Section */}
       <Card className="bg-gradient-card border-border shadow-card">
@@ -282,6 +406,28 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
               }}
             >
               <Edit className="w-4 h-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-gradient-card border-border shadow-card">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <LockKeyhole className="w-5 h-5" />
+            Password & Security
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">Change password</p>
+              <p className="text-sm text-muted-foreground">
+                Verify your current password before setting a new one.
+              </p>
+            </div>
+            <Button variant="outline" onClick={() => setShowChangePassword(true)}>
+              Change password
             </Button>
           </div>
         </CardContent>
@@ -460,7 +606,7 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
             onClick={() => setShowResetDialog(true)}
           >
             <Trash2 className="w-4 h-4 mr-3" />
-            Reset All Data
+            Reset Financial Data
           </Button>
         </CardContent>
       </Card>
@@ -575,6 +721,84 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
       {/* Privacy & Security Settings */}
       <PrivacySettings />
 
+      <Dialog
+        open={showChangePassword}
+        onOpenChange={(open) => {
+          setShowChangePassword(open);
+          if (!open && !isChangingPassword) {
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmNewPassword('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change password</DialogTitle>
+            <DialogDescription>
+              Enter your current password, then choose a new password with 8 to 128 characters.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                required
+                maxLength={128}
+                disabled={isChangingPassword}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                required
+                minLength={8}
+                maxLength={128}
+                disabled={isChangingPassword}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-new-password">Confirm new password</Label>
+              <Input
+                id="confirm-new-password"
+                type="password"
+                autoComplete="new-password"
+                value={confirmNewPassword}
+                onChange={(event) => setConfirmNewPassword(event.target.value)}
+                required
+                minLength={8}
+                maxLength={128}
+                disabled={isChangingPassword}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowChangePassword(false)}
+                disabled={isChangingPassword}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isChangingPassword}>
+                {isChangingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+                Update password
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Profile Dialog */}
       <Dialog open={showEditProfile} onOpenChange={setShowEditProfile}>
         <DialogContent>
@@ -607,22 +831,49 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
       </Dialog>
 
       {/* Reset Data Confirmation Dialog */}
-      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+      <AlertDialog
+        open={showResetDialog}
+        onOpenChange={(open) => {
+          setShowResetDialog(open);
+          if (!open && !isResettingData) setResetPassword('');
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>Reset your financial data?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete your
-              expenses, income, investments, savings, budgets, notes, AI chat history, and saved AI memories.
+              This cannot be undone. It permanently deletes your accounts and opening balances, transactions, savings goals, investments, budgets, notes, account transfers, and AI chat history and memories. Your login, profile, and app preferences will remain. To reset privacy display preferences instead, use Privacy &amp; Security below.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="reset-account-password">Account password</Label>
+            <Input
+              id="reset-account-password"
+              type="password"
+              autoComplete="current-password"
+              value={resetPassword}
+              onChange={(event) => setResetPassword(event.target.value)}
+              placeholder="Enter your password to confirm"
+              maxLength={128}
+              disabled={isResettingData}
+            />
+          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel
+              disabled={isResettingData}
+              onClick={() => setResetPassword('')}
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleResetAllData}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!isResettingData && resetPassword) void handleResetAllData();
+              }}
+              disabled={isResettingData || !resetPassword}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Yes, reset all data
+              {isResettingData ? 'Resetting…' : 'Yes, reset financial data'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -674,7 +925,7 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
               <h3 className="font-semibold mb-2">4. Data Export & Deletion</h3>
               <p className="text-muted-foreground">
                 You have the right to export all your data at any time using the Export Data 
-                feature. You can also delete all your data using the Reset All Data feature.
+                feature. You can also delete your financial data using the Reset Financial Data feature.
               </p>
             </section>
             

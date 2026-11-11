@@ -60,6 +60,18 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Financial accounts
+
+Users can manage bank, cash, and wallet accounts in **Settings → Accounts**, choose a default account for new transactions, and optionally assign accounts to income, expenses, savings contributions, and investment contributions. The selected default can be changed for each transaction. Transfers between a user's own accounts update tracked balances without being counted as income or expenses. Transfers can optionally be linked to savings goals.
+
+Account tracking is manual and does not connect to banks or initiate payments. Branch names and IFSC codes are optional reference details; full account numbers are not collected. Apply the pending Supabase migrations before enabling account features.
+
+Use **Settings → Reset Financial Data** to delete accounts, transactions, savings goals, investments, budgets, notes, transfers, and AI history. This does not delete the login, profile, or app preferences. **Privacy & Security → Reset Privacy Preferences** only restores privacy and display preferences; it does not delete financial data.
+
+The Savings page derives available bank balance from active accounts and their opening balances and assigned transactions. There is no separate savings-page starting balance to avoid duplicate balance entry.
+
+Savings goals are created with a target and a zero balance. Record money through **Add Money** and select the account it comes from; each contribution is linked to that account, while the goal total aggregates contributions. Assigning existing savings earmarks part of the unallocated balance across active accounts and does not change any account balance.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/2d3feb60-d41b-4220-86af-fa27729889a5) and click on Share -> Publish.

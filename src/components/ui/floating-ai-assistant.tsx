@@ -74,7 +74,6 @@ interface PendingRecordChange {
   notes: string;
   name?: string;
   target?: number;
-  current?: number;
   targetId?: string;
   targetName?: string;
   investmentType?: string;
@@ -534,8 +533,8 @@ export const FloatingAIAssistant = () => {
     }
     if (change.mode === 'create_savings_goal' && (!change.name?.trim() || change.name.length > 100
       || !Number.isFinite(change.target) || Number(change.target) <= 0
-      || !Number.isFinite(change.current) || Number(change.current) < 0 || !validDate || change.notes.length > 500)) {
-      toast.error('Review the goal name, target, starting amount, date, and notes before confirming.');
+      || !validDate || change.notes.length > 500)) {
+      toast.error('Review the goal name, target, date, and notes before confirming.');
       return;
     }
     if (['create_savings_contribution', 'create_investment_contribution'].includes(change.mode)
@@ -601,7 +600,7 @@ export const FloatingAIAssistant = () => {
         await refreshExpenses();
       } else if (change.mode === 'create_savings_goal') {
         const { error } = await supabase.from('savings_goals').insert({
-          name: change.name!.trim(), target: change.target!, current: change.current!, date: change.date,
+          name: change.name!.trim(), target: change.target!, current: 0, date: change.date,
           notes: change.notes.trim(), user_id: user.id,
         });
         if (error) throw error;
@@ -982,12 +981,6 @@ export const FloatingAIAssistant = () => {
                     )}
                     {['create_savings_contribution', 'create_investment_contribution'].includes(pendingRecordChange.mode) && (
                       <p className="rounded-md bg-muted/60 p-2 text-xs">To: {pendingRecordChange.targetName}</p>
-                    )}
-                    {pendingRecordChange.mode === 'create_savings_goal' && (
-                      <label className="block space-y-1 text-xs text-muted-foreground">Already saved (INR)
-                        <Input type="number" min="0" max="1000000000" step="0.01" value={pendingRecordChange.current ?? 0}
-                          onChange={(event) => setPendingRecordChange((current) => current ? { ...current, current: Number(event.target.value) } : current)} className="h-9" />
-                      </label>
                     )}
                     {pendingRecordChange.mode === 'create_investment_holding' && (
                       <label className="block space-y-1 text-xs text-muted-foreground">Investment type

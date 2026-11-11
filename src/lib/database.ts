@@ -1,5 +1,11 @@
 import { supabase } from '@/integrations/supabase/client';
-import { IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, BudgetCategory, InvestmentTransaction, SavingsTransaction } from '@/types/financial';
+import { IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, BudgetCategory, InvestmentTransaction, SavingsTransaction, FinancialAccount, AccountTransfer } from '@/types/financial';
+
+const isMissingAccountSchemaError = (error: unknown) =>
+  typeof error === 'object'
+  && error !== null
+  && 'code' in error
+  && (error.code === '42P01' || error.code === 'PGRST205');
 
 // Income CRUD operations
 export const incomeService = {
@@ -14,6 +20,7 @@ export const incomeService = {
       id: item.id,
       amount: item.amount,
       date: item.date,
+      accountId: item.account_id ?? null,
       category: item.category as any,
       paymentMode: item.payment_mode as any,
       notes: item.notes,
@@ -27,6 +34,7 @@ export const incomeService = {
       .insert([{
         amount: income.amount,
         date: income.date,
+        account_id: income.accountId ?? null,
         category: income.category,
         payment_mode: income.paymentMode,
         notes: income.notes,
@@ -41,6 +49,7 @@ export const incomeService = {
       id: data.id,
       amount: data.amount,
       date: data.date,
+      accountId: data.account_id ?? null,
       category: data.category as any,
       paymentMode: data.payment_mode as any,
       notes: data.notes,
@@ -54,6 +63,7 @@ export const incomeService = {
       .update({
         amount: income.amount,
         date: income.date,
+        account_id: income.accountId,
         category: income.category,
         payment_mode: income.paymentMode,
         notes: income.notes,
@@ -68,6 +78,7 @@ export const incomeService = {
       id: data.id,
       amount: data.amount,
       date: data.date,
+      accountId: data.account_id ?? null,
       category: data.category as any,
       paymentMode: data.payment_mode as any,
       notes: data.notes,
@@ -98,6 +109,7 @@ export const expenseService = {
       id: item.id,
       amount: item.amount,
       date: item.date,
+      accountId: item.account_id ?? null,
       category: item.category as any,
       subcategory: item.subcategory,
       paymentMode: item.payment_mode as any,
@@ -112,6 +124,7 @@ export const expenseService = {
     const expenseRow = {
       amount: expense.amount,
       date: expense.date,
+      account_id: expense.accountId ?? null,
       category: expense.category,
       subcategory: expense.subcategory,
       payment_mode: expense.paymentMode,
@@ -132,6 +145,7 @@ export const expenseService = {
       id: data.id,
       amount: data.amount,
       date: data.date,
+      accountId: data.account_id ?? null,
       category: data.category as any,
       subcategory: data.subcategory,
       paymentMode: data.payment_mode as any,
@@ -152,6 +166,9 @@ export const expenseService = {
       notes: expense.notes,
       custom_category: expense.customCategory
     };
+    if (expense.accountId !== undefined) {
+      updatePayload.account_id = expense.accountId;
+    }
     if (expense.goalId !== undefined) {
       updatePayload.goal_id = expense.goalId;
     }
@@ -170,6 +187,7 @@ export const expenseService = {
       id: data.id,
       amount: data.amount,
       date: data.date,
+      accountId: data.account_id ?? null,
       category: data.category as any,
       subcategory: data.subcategory,
       paymentMode: data.payment_mode as any,
@@ -656,6 +674,127 @@ export const savingsTransactionService = {
   }
 };
 
+export const financialAccountService = {
+  async getAll(): Promise<FinancialAccount[]> {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) throw new Error('Not authenticated');
+    const { data, error } = await supabase
+      .from('financial_accounts')
+      .select('*')
+      .eq('user_id', user.user.id)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data || []).map(account => ({
+      id: account.id,
+      name: account.name,
+      bankName: account.bank_name,
+      accountType: account.account_type as FinancialAccount['accountType'],
+      branchName: account.branch_name,
+      ifscCode: account.ifsc_code,
+      lastFour: account.last_four,
+      openingBalance: Number(account.opening_balance || 0),
+      openingBalanceDate: account.opening_balance_date,
+      isActive: account.is_active,
+      isDefault: account.is_default,
+    }));
+  },
+
+  async create(account: Omit<FinancialAccount, 'id'>): Promise<FinancialAccount> {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) throw new Error('Not authenticated');
+    const { data, error } = await supabase.from('financial_accounts').insert({
+      user_id: user.user.id,
+      name: account.name.trim(),
+      bank_name: account.bankName.trim(),
+      account_type: account.accountType,
+      branch_name: account.branchName?.trim() || null,
+      ifsc_code: account.ifscCode?.trim().toUpperCase() || null,
+      last_four: account.lastFour?.trim() || null,
+      opening_balance: account.openingBalance,
+      opening_balance_date: account.openingBalanceDate,
+      is_active: account.isActive,
+      is_default: account.isDefault,
+    }).select().single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      name: data.name,
+      bankName: data.bank_name,
+      accountType: data.account_type as FinancialAccount['accountType'],
+      branchName: data.branch_name,
+      ifscCode: data.ifsc_code,
+      lastFour: data.last_four,
+      openingBalance: Number(data.opening_balance || 0),
+      openingBalanceDate: data.opening_balance_date,
+      isActive: data.is_active,
+      isDefault: data.is_default,
+    };
+  },
+
+  async setDefault(id: string | null): Promise<void> {
+    const { error } = await supabase.rpc('set_default_financial_account', {
+      p_account_id: id,
+    });
+    if (error) throw error;
+  },
+
+  async update(id: string, account: Omit<FinancialAccount, 'id'>): Promise<FinancialAccount> {
+    const { data, error } = await supabase.from('financial_accounts').update({
+      name: account.name.trim(),
+      bank_name: account.bankName.trim(),
+      account_type: account.accountType,
+      branch_name: account.branchName?.trim() || null,
+      ifsc_code: account.ifscCode?.trim().toUpperCase() || null,
+      last_four: account.lastFour?.trim() || null,
+      opening_balance: account.openingBalance,
+      opening_balance_date: account.openingBalanceDate,
+      is_active: account.isActive,
+    }).eq('id', id).select().single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      name: data.name,
+      bankName: data.bank_name,
+      accountType: data.account_type as FinancialAccount['accountType'],
+      branchName: data.branch_name,
+      ifscCode: data.ifsc_code,
+      lastFour: data.last_four,
+      openingBalance: Number(data.opening_balance || 0),
+      openingBalanceDate: data.opening_balance_date,
+      isActive: data.is_active,
+      isDefault: data.is_default,
+    };
+  },
+};
+
+export const accountTransferService = {
+  async getAll(): Promise<AccountTransfer[]> {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) throw new Error('Not authenticated');
+    const { data, error } = await supabase.from('account_transfers').select('*')
+      .eq('user_id', user.user.id).order('date', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(transfer: Omit<AccountTransfer, 'id'>): Promise<AccountTransfer> {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) throw new Error('Not authenticated');
+    const { data, error } = await supabase.from('account_transfers').insert({
+      ...transfer,
+      user_id: user.user.id,
+      savings_goal_id: transfer.savings_goal_id || null,
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase.from('account_transfers').delete().eq('id', id);
+    if (error) throw error;
+  },
+};
+
 // Notes Service
 const notesService = {
   async getAll(): Promise<any[]> {
@@ -790,7 +929,7 @@ const dataExportService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    const [expenses, income, investments, investmentTransactions, savings, savingsTransactions, budgets, notes, preferences, profile, aiChatHistory, aiMemories] = await Promise.all([
+    const [expenses, income, investments, investmentTransactions, savings, savingsTransactions, budgets, notes, preferences, profile, aiChatHistory, aiMemories, accounts, transfers] = await Promise.all([
       supabase.from('expense_entries').select('*').eq('user_id', user.id),
       supabase.from('income_entries').select('*').eq('user_id', user.id),
       supabase.from('investment_entries').select('*').eq('user_id', user.id),
@@ -803,9 +942,16 @@ const dataExportService = {
       supabase.from('profiles').select('*').eq('user_id', user.id).single(),
       supabase.from('ai_chat_messages').select('role, content, created_at').eq('user_id', user.id).order('created_at', { ascending: true }),
       supabase.from('ai_user_memories').select('memory, created_at').eq('user_id', user.id).order('created_at', { ascending: true }),
+      supabase.from('financial_accounts').select('*').eq('user_id', user.id),
+      supabase.from('account_transfers').select('*').eq('user_id', user.id),
     ]);
     if (aiChatHistory.error) throw aiChatHistory.error;
     if (aiMemories.error) throw aiMemories.error;
+    if (accounts.error && !isMissingAccountSchemaError(accounts.error)) throw accounts.error;
+    if (transfers.error && !isMissingAccountSchemaError(transfers.error)) throw transfers.error;
+    if (accounts.error || transfers.error) {
+      console.warn('Account data was omitted from export because the account migration is not applied.');
+    }
 
     return {
       user: { id: user.id, email: user.email },
@@ -821,6 +967,8 @@ const dataExportService = {
       savingsTransactions: savingsTransactions.data,
       budgets: budgets.data,
       notes: notes.data,
+      accounts: accounts.data || [],
+      transfers: transfers.data || [],
       exportedAt: new Date().toISOString(),
     };
   },
@@ -829,20 +977,27 @@ const dataExportService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    const results = await Promise.all([
-      supabase.from('expense_entries').delete().eq('user_id', user.id),
-      supabase.from('income_entries').delete().eq('user_id', user.id),
-      supabase.from('investment_transactions').delete().eq('user_id', user.id),
-      supabase.from('investment_entries').delete().eq('user_id', user.id),
-      supabase.from('savings_transactions').delete().eq('user_id', user.id),
-      supabase.from('savings_goals').delete().eq('user_id', user.id),
-      supabase.from('budget_categories').delete().eq('user_id', user.id),
-      supabase.from('notes').delete().eq('user_id', user.id),
-      supabase.from('ai_chat_messages').delete().eq('user_id', user.id),
-      supabase.from('ai_user_memories').delete().eq('user_id', user.id),
-    ]);
-    const failedResult = results.find((result) => result.error);
-    if (failedResult?.error) throw failedResult.error;
+    const deleteOwnedRows = async <T extends { error: { message: string } | null }>(query: PromiseLike<T>) => {
+      const { error } = await query;
+      if (error) throw error;
+    };
+
+    const transfersResult = await supabase.from('account_transfers').delete().eq('user_id', user.id);
+    if (transfersResult.error && !isMissingAccountSchemaError(transfersResult.error)) throw transfersResult.error;
+
+    await deleteOwnedRows(supabase.from('investment_transactions').delete().eq('user_id', user.id));
+    await deleteOwnedRows(supabase.from('savings_transactions').delete().eq('user_id', user.id));
+    await deleteOwnedRows(supabase.from('expense_entries').delete().eq('user_id', user.id));
+    await deleteOwnedRows(supabase.from('income_entries').delete().eq('user_id', user.id));
+    await deleteOwnedRows(supabase.from('investment_entries').delete().eq('user_id', user.id));
+    await deleteOwnedRows(supabase.from('savings_goals').delete().eq('user_id', user.id));
+    await deleteOwnedRows(supabase.from('budget_categories').delete().eq('user_id', user.id));
+    await deleteOwnedRows(supabase.from('notes').delete().eq('user_id', user.id));
+    await deleteOwnedRows(supabase.from('ai_chat_messages').delete().eq('user_id', user.id));
+    await deleteOwnedRows(supabase.from('ai_user_memories').delete().eq('user_id', user.id));
+
+    const accountsResult = await supabase.from('financial_accounts').delete().eq('user_id', user.id);
+    if (accountsResult.error && !isMissingAccountSchemaError(accountsResult.error)) throw accountsResult.error;
   }
 };
 

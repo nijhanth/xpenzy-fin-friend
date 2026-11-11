@@ -621,6 +621,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_default_financial_account: {
+        Args: { p_account_id: string | null }
+        Returns: undefined
+      }
       create_conversation_with_participants: {
         Args: { p_type: string; p_user1_id: string; p_user2_id: string }
         Returns: string

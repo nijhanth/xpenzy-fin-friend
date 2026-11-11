@@ -319,23 +319,6 @@ export const Security = () => {
         </CardContent>
       </Card>
 
-      {/* Emergency Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-red-600">Emergency Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Button variant="destructive" className="w-full justify-start">
-            <AlertTriangle className="w-5 h-5 mr-3" />
-            Reset All Data
-          </Button>
-          
-          <p className="text-xs text-muted-foreground text-center">
-            This action cannot be undone. Make sure you have a backup before proceeding.
-          </p>
-        </CardContent>
-      </Card>
-
       {/* PIN Setup Dialog */}
       <PinSetupDialog 
         open={showPinSetup} 

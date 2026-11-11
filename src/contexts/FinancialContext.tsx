@@ -1,12 +1,20 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { FinancialData, IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, InvestmentTransaction, BudgetCategory, SavingsTransaction } from '@/types/financial';
-import { incomeService, expenseService, savingsService, investmentService, budgetService, investmentTransactionService, savingsTransactionService } from '@/lib/database';
+import { FinancialData, IncomeEntry, ExpenseEntry, SavingsGoal, InvestmentEntry, InvestmentTransaction, BudgetCategory, SavingsTransaction, FinancialAccount, AccountTransfer } from '@/types/financial';
+import { incomeService, expenseService, savingsService, investmentService, budgetService, investmentTransactionService, savingsTransactionService, financialAccountService, accountTransferService } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 interface FinancialContextType {
   data: FinancialData;
   isLoading: boolean;
+  accountFeaturesAvailable: boolean;
+  resetFinancialData: () => void;
+  refreshAccounts: () => Promise<void>;
+  addAccount: (account: Omit<FinancialAccount, 'id'>) => Promise<void>;
+  updateAccount: (id: string, account: Omit<FinancialAccount, 'id'>) => Promise<void>;
+  setDefaultAccount: (id: string | null) => Promise<void>;
+  addAccountTransfer: (transfer: Omit<AccountTransfer, 'id'>) => Promise<void>;
+  deleteAccountTransfer: (id: string) => Promise<void>;
   refreshBudgets: () => Promise<void>;
   refreshExpenses: () => Promise<void>;
   refreshIncome: () => Promise<void>;
@@ -71,11 +79,28 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     investments: [],
     investmentTransactions: [],
     savingsTransactions: [],
-    budgets: []
+    budgets: [],
+    accounts: [],
+    transfers: []
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [accountFeaturesAvailable, setAccountFeaturesAvailable] = useState(false);
 
   const { toast } = useToast();
+
+  const resetFinancialData = () => {
+    setData({
+      income: [],
+      expenses: [],
+      savings: [],
+      investments: [],
+      investmentTransactions: [],
+      savingsTransactions: [],
+      budgets: [],
+      accounts: [],
+      transfers: [],
+    });
+  };
 
   const refreshBudgets = async () => {
     try {
@@ -165,6 +190,15 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  const refreshAccounts = async () => {
+    const [accounts, transfers] = await Promise.all([
+      financialAccountService.getAll(),
+      accountTransferService.getAll(),
+    ]);
+    setData(prev => ({ ...prev, accounts, transfers }));
+    setAccountFeaturesAvailable(true);
+  };
+
   // Load all data on component mount, but only if user is authenticated
   React.useEffect(() => {
     const loadAllData = async () => {
@@ -185,6 +219,23 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           investmentTransactionService.getAll(),
           savingsTransactionService.getAll()
         ]);
+        let accounts: FinancialAccount[] = [];
+        let transfers: AccountTransfer[] = [];
+        let accountSchemaAvailable = true;
+        try {
+          [accounts, transfers] = await Promise.all([
+            financialAccountService.getAll(),
+            accountTransferService.getAll(),
+          ]);
+        } catch (accountError) {
+          accountSchemaAvailable = false;
+          console.error('Account data could not be loaded:', accountError);
+          toast({
+            variant: 'destructive',
+            title: 'Account features are unavailable',
+            description: 'Apply the latest Supabase migration to enable account management. Existing finance records remain available.',
+          });
+        }
 
         const existingInvestmentIds = new Set(investmentData.map(investment => investment.id));
         const orphanedInvestmentIds = [...new Set(investmentTransactionData
@@ -221,8 +272,11 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           investments: investmentData,
           investmentTransactions: visibleInvestmentTransactions,
           savingsTransactions: savingsTransactionData,
-          budgets: visibleBudgets
+          budgets: visibleBudgets,
+          accounts,
+          transfers
         });
+        setAccountFeaturesAvailable(accountSchemaAvailable);
       } catch (error) {
         console.error('Error loading financial data:', error);
         // Only show error toast if user is authenticated (to avoid showing errors on login page)
@@ -241,6 +295,79 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     loadAllData();
   }, [toast]);
+
+  const addAccount = async (account: Omit<FinancialAccount, 'id'>) => {
+    try {
+      const saved = await financialAccountService.create(account);
+      setData(prev => ({ ...prev, accounts: [...prev.accounts, saved] }));
+    } catch (error) {
+      console.error('Error adding financial account:', error);
+      throw error;
+    }
+  };
+
+  const updateAccount = async (id: string, account: Omit<FinancialAccount, 'id'>) => {
+    try {
+      const saved = await financialAccountService.update(id, account);
+      setData(prev => ({ ...prev, accounts: prev.accounts.map(item => item.id === id ? saved : item) }));
+    } catch (error) {
+      console.error('Error updating financial account:', error);
+      throw error;
+    }
+  };
+
+  const setDefaultAccount = async (id: string | null) => {
+    try {
+      await financialAccountService.setDefault(id);
+      setData(prev => ({
+        ...prev,
+        accounts: prev.accounts.map(item => ({ ...item, isDefault: item.id === id })),
+      }));
+    } catch (error) {
+      console.error('Error setting default financial account:', error);
+      throw error;
+    }
+  };
+
+  const addAccountTransfer = async (transfer: Omit<AccountTransfer, 'id'>) => {
+    try {
+      const saved = await accountTransferService.create(transfer);
+      setData(prev => ({ ...prev, transfers: [saved, ...prev.transfers] }));
+      try {
+        const [savingsTransactions, savings] = await Promise.all([
+          savingsTransactionService.getAll(),
+          savingsService.getAll(),
+        ]);
+        setData(prev => ({ ...prev, savingsTransactions, savings }));
+      } catch (refreshError) {
+        console.error('Transfer saved, but linked savings progress refresh failed:', refreshError);
+        toast({ variant: 'destructive', title: 'Transfer saved, but savings progress could not refresh', description: 'Reload the app to see updated goal totals.' });
+      }
+    } catch (error) {
+      console.error('Error adding account transfer:', error);
+      throw error;
+    }
+  };
+
+  const deleteAccountTransfer = async (id: string) => {
+    try {
+      await accountTransferService.delete(id);
+      setData(prev => ({ ...prev, transfers: prev.transfers.filter(item => item.id !== id) }));
+      try {
+        const [savingsTransactions, savings] = await Promise.all([
+          savingsTransactionService.getAll(),
+          savingsService.getAll(),
+        ]);
+        setData(prev => ({ ...prev, savingsTransactions, savings }));
+      } catch (refreshError) {
+        console.error('Transfer deleted, but linked savings progress refresh failed:', refreshError);
+        toast({ variant: 'destructive', title: 'Transfer deleted, but savings progress could not refresh', description: 'Reload the app to see updated goal totals.' });
+      }
+    } catch (error) {
+      console.error('Error deleting account transfer:', error);
+      throw error;
+    }
+  };
 
   const addIncome = async (income: Omit<IncomeEntry, 'id'>) => {
     try {
@@ -1060,6 +1187,14 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     <FinancialContext.Provider value={{
       data,
       isLoading,
+      accountFeaturesAvailable,
+      resetFinancialData,
+      refreshAccounts,
+      addAccount,
+      updateAccount,
+      setDefaultAccount,
+      addAccountTransfer,
+      deleteAccountTransfer,
       refreshBudgets,
       refreshExpenses,
       refreshIncome,

@@ -962,6 +962,7 @@ export const Investments = () => {
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{investment?.name || 'Investment'}</p>
                       <p className="text-xs text-muted-foreground">{formatDisplayDate(transaction.date)}{transaction.notes ? ` · ${transaction.notes}` : ''}</p>
+                      {transaction.account_id && <p className="text-xs text-muted-foreground">{data.accounts.find(account => account.id === transaction.account_id)?.name || 'Archived account'}</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <div className="text-right text-xs">
@@ -1276,6 +1277,7 @@ export const Investments = () => {
                                   <div className="flex-1">
                                     <span className="font-medium">{transaction.notes?.startsWith('Manual redemption:') ? 'Redemption' : transaction.notes?.startsWith(statementSnapshotPrefix) ? 'Statement snapshot' : 'Monthly update'}</span>
                                     <p className="text-muted-foreground">{formatDisplayDate(transaction.date)}</p>
+                                    {transaction.account_id && <p className="text-muted-foreground">{data.accounts.find(account => account.id === transaction.account_id)?.name || 'Archived account'}</p>}
                                     {transaction.notes && (
                                       <p className="text-muted-foreground text-xs mt-1">{transaction.notes}</p>
                                     )}

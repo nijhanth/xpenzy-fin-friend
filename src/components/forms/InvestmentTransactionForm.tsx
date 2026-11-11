@@ -11,12 +11,15 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useFinancial } from '@/contexts/FinancialContext';
 import { ReminderCompletionField } from '@/components/forms/ReminderCompletionField';
 import { offerReminderCompletion } from '@/lib/reminderCompletion';
+import { AccountPicker } from '@/components/forms/AccountPicker';
+import { getDefaultAccountId } from '@/lib/financialAccounts';
 
 const transactionSchema = z.object({
   amount: z.number().min(0, 'Contribution cannot be negative'),
   date: z.string().min(1, 'Date is required'),
   notes: z.string().optional(),
-  profit_loss: z.number().default(0)
+  profit_loss: z.number().default(0),
+  account_id: z.string().nullable().optional()
 }).superRefine((data, context) => {
   if (data.amount === 0 && data.profit_loss === 0) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['amount'], message: 'Add a contribution or enter this month’s profit/loss' });
@@ -58,7 +61,8 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
       amount: 0,
       date: initialDate || new Date().toISOString().split('T')[0],
       notes: '',
-      profit_loss: 0
+      profit_loss: 0,
+      account_id: getDefaultAccountId(data.accounts)
     }
   });
 
@@ -72,7 +76,8 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
           amount: transaction.amount,
           date: transaction.date,
           notes: transaction.notes || '',
-          profit_loss: transaction.profit_loss || 0
+          profit_loss: transaction.profit_loss || 0,
+          account_id: transaction.account_id ?? null
         });
       }
     } else if (open && !editingId) {
@@ -80,10 +85,11 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
         amount: 0,
         date: initialDate || new Date().toISOString().split('T')[0],
         notes: '',
-        profit_loss: 0
+        profit_loss: 0,
+        account_id: getDefaultAccountId(data.accounts)
       });
     }
-  }, [editingId, open, form, data.investmentTransactions, initialDate]);
+  }, [editingId, open, form, data.investmentTransactions, data.accounts, initialDate]);
 
   const onSubmit = async (data: TransactionFormData) => {
     if (submitLock.current) return;
@@ -91,7 +97,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
     try {
       if (editingId) {
         const existingTransaction = data.investmentTransactions.find(transaction => transaction.id === editingId);
-        const saved = await updateInvestmentTransaction(editingId, { ...data, linked_note_id: relatedReminderId || null });
+        const saved = await updateInvestmentTransaction(editingId, { ...data, account_id: data.account_id ?? null, linked_note_id: relatedReminderId || null });
         if (!saved) return;
         if (relatedReminderId && relatedReminderId !== existingTransaction?.linked_note_id) {
           void offerReminderCompletion(relatedReminderId);
@@ -101,6 +107,7 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
           investment_id: investmentId,
           amount: data.amount,
           date: data.date,
+          account_id: data.account_id ?? null,
           linked_note_id: relatedReminderId || null,
           notes: data.notes || (data.amount > 0 ? `Monthly contribution to ${investmentName}` : `Monthly performance update for ${investmentName}`),
           profit_loss: data.profit_loss
@@ -117,15 +124,16 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-0 sm:max-w-[425px]">
+        <DialogHeader className="shrink-0 px-5 pt-5">
           <DialogTitle>
             {editingId ? 'Edit Monthly Update' : `Monthly Update · ${investmentName}`}
           </DialogTitle>
         </DialogHeader>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
             <FormField
               control={form.control}
               name="amount"
@@ -160,6 +168,19 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
                   </FormControl>
                   <FormMessage />
                   <p className="text-xs text-muted-foreground">Choose a date in the month you’re updating. Past dates are supported for entering history.</p>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="account_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <AccountPicker id="investment-transaction-account" accounts={data.accounts} value={field.value} onChange={field.onChange} />
+                  </FormControl>
+                  {data.accounts.length > 0 && <p className="text-xs text-muted-foreground">Select the account funding this contribution. Don’t also record the same money as an account transfer.</p>}
                 </FormItem>
               )}
             />
@@ -216,11 +237,12 @@ export const InvestmentTransactionForm: React.FC<InvestmentTransactionFormProps>
 
             <ReminderCompletionField value={relatedReminderId} onChange={setRelatedReminderId} refreshKey={open} excludedReminderIds={remindersUsedElsewhere} />
 
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={onClose}>
+            </div>
+            <div className="sticky bottom-0 flex shrink-0 justify-end gap-2 border-t border-border/70 bg-background/95 px-5 py-3 backdrop-blur">
+              <Button type="button" variant="outline" onClick={onClose} className="min-h-11">
                 Cancel
               </Button>
-              <Button type="submit" className="bg-investment text-white" disabled={form.formState.isSubmitting}>
+              <Button type="submit" className="min-h-11 bg-investment text-white" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Saving…' : editingId ? 'Save update' : 'Save monthly update'}
               </Button>
             </div>

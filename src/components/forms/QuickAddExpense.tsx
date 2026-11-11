@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ReminderCompletionField } from '@/components/forms/ReminderCompletionField';
 import { completeLinkedReminder } from '@/lib/reminderCompletion';
+import { AccountPicker } from '@/components/forms/AccountPicker';
+import { getDefaultAccountId } from '@/lib/financialAccounts';
 
 const CHAT_URL = `${SUPABASE_URL}/functions/v1/ai-assistant`;
 const DEFAULTS = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education', 'Other'];
@@ -40,6 +42,7 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
   const [relatedReminderId, setRelatedReminderId] = useState('');
+  const [accountId, setAccountId] = useState<string | null>(null);
 
   // Recent categories first, then budgets, then defaults
   const categories = useMemo(() => {
@@ -51,10 +54,10 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
 
   useEffect(() => {
     if (open) {
-      setText(''); setAmount(''); setNote(''); setDate(today()); setError(null); setAiNote(null); setRelatedReminderId('');
+      setText(''); setAmount(''); setNote(''); setDate(today()); setError(null); setAiNote(null); setRelatedReminderId(''); setAccountId(getDefaultAccountId(data.accounts));
       setCategory(localStorage.getItem(LAST_CAT_KEY) || '');
     }
-  }, [open]);
+  }, [open, data.accounts]);
 
   const readText = async () => {
     if (!text.trim()) return;
@@ -119,6 +122,7 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
         subcategory: 'General',
         paymentMode: 'UPI',
         notes: note.trim(),
+        accountId,
         linkedNoteId: relatedReminderId || null,
       });
       if (!added) {
@@ -181,6 +185,7 @@ export const QuickAddExpense = ({ open, onOpenChange }: Props) => {
               <p className="text-xs text-muted-foreground">New category: {category}</p>
             )}
           </div>
+          <AccountPicker id="quick-expense-account" accounts={data.accounts} value={accountId} onChange={setAccountId} />
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="qa-date">Date</Label>

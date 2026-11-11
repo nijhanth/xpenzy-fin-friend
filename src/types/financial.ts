@@ -3,6 +3,7 @@ export interface IncomeEntry {
   id: string;
   amount: number;
   date: string;
+  accountId?: string | null;
   category: 'Salary' | 'Freelance' | 'Gift' | 'Investment' | 'Business' | 'Custom';
   paymentMode: 'Cash' | 'UPI' | 'Card' | 'Bank Transfer' | 'Net Banking';
   notes: string;
@@ -13,6 +14,7 @@ export interface ExpenseEntry {
   id: string;
   amount: number;
   date: string;
+  accountId?: string | null;
   category: string; // Changed to string to allow budget categories
   subcategory: string;
   paymentMode: 'Cash' | 'UPI' | 'Card' | 'Bank Transfer' | 'Net Banking';
@@ -56,6 +58,7 @@ export interface InvestmentTransaction {
   user_id?: string;
   profit_loss?: number;
   linked_note_id?: string | null;
+  account_id?: string | null;
 }
 
 export interface SavingsTransaction {
@@ -66,6 +69,33 @@ export interface SavingsTransaction {
   notes?: string;
   user_id?: string;
   linked_note_id?: string | null;
+  account_id?: string | null;
+}
+
+export type FinancialAccountType = 'savings' | 'current' | 'salary' | 'cash' | 'wallet' | 'other';
+
+export interface FinancialAccount {
+  id: string;
+  name: string;
+  bankName: string;
+  accountType: FinancialAccountType;
+  branchName?: string | null;
+  ifscCode?: string | null;
+  lastFour?: string | null;
+  openingBalance: number;
+  openingBalanceDate: string;
+  isActive: boolean;
+  isDefault: boolean;
+}
+
+export interface AccountTransfer {
+  id: string;
+  from_account_id: string;
+  to_account_id: string;
+  savings_goal_id?: string | null;
+  amount: number;
+  date: string;
+  notes: string;
 }
 
 export interface BudgetCategory {
@@ -93,4 +123,6 @@ export interface FinancialData {
   investmentTransactions: InvestmentTransaction[];
   savingsTransactions: SavingsTransaction[];
   budgets: BudgetCategory[];
+  accounts: FinancialAccount[];
+  transfers: AccountTransfer[];
 }
