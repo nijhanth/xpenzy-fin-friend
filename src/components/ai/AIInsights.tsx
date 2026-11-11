@@ -15,6 +15,7 @@ const insightLanguages = [
   { value: 'ta', label: 'Tamil' },
   { value: 'te', label: 'Telugu' },
 ] as const;
+type InsightLanguage = (typeof insightLanguages)[number]['value'];
 
 export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'budget' | 'income' | 'savings' | 'investments' | 'notes'; autoGenerate?: boolean; isDataLoading?: boolean; refreshKey?: unknown; showLanguageSelector?: boolean }> = ({
   title = 'AI Insights', focus = 'expenses', autoGenerate = false, isDataLoading = false, refreshKey, showLanguageSelector = false,
@@ -23,12 +24,11 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
   const [isLoading, setIsLoading] = useState(false);
   const [errorState, setErrorState] = useState<'none' | 'no_data' | 'error' | 'language_unavailable'>('none');
   const [period, setPeriod] = useState<'week' | 'month'>('month');
-  const [language, setLanguage] = useState<(typeof insightLanguages)[number]['value']>('en');
+  const [language, setLanguage] = useState<InsightLanguage>('en');
   const [isDismissed, setIsDismissed] = useState(false);
   const lastAutoRequest = useRef('');
-  const englishInsights = useRef<string | null>(null);
 
-  const fetchInsights = useCallback(async (summaryPeriod: 'week' | 'month') => {
+  const fetchInsights = useCallback(async (summaryPeriod: 'week' | 'month', outputLanguage: InsightLanguage) => {
     if (isLoading) return null;
     setIsLoading(true);
     setErrorState('none');
@@ -51,7 +51,7 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
           action: 'insights',
           focus,
           period: summaryPeriod,
-          language: 'en',
+          language: outputLanguage,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
         signal: controller.signal,
@@ -71,16 +71,19 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
       }
 
       const data = await resp.json();
+      if (outputLanguage !== 'en' && data.language !== outputLanguage) {
+        setInsights(null);
+        setErrorState('language_unavailable');
+        return null;
+      }
       const content = (data.content || '').trim();
       console.log('AI insights response:', content.substring(0, 200));
 
       if (!content) {
         setErrorState('no_data');
         setInsights(null);
-        englishInsights.current = null;
         return null;
       } else {
-        englishInsights.current = content;
         setInsights(content);
         return content;
       }
@@ -99,72 +102,12 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
     }
   }, [isLoading, focus]);
 
-  const translateInsights = useCallback(async (source: string, outputLanguage: typeof language) => {
-    if (isLoading) return;
-    if (outputLanguage === 'en') {
-      setInsights(source);
-      setErrorState('none');
-      return;
-    }
-
-    setIsLoading(true);
-    setErrorState('none');
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      if (!accessToken) throw new Error('Please sign in');
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
-      const resp = await fetch(CHAT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          action: 'translate_insights',
-          sourceContent: source,
-          language: outputLanguage,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-
-      if (!resp.ok) throw new Error('Could not translate AI tips.');
-      const data = await resp.json();
-      if (data.language !== outputLanguage) {
-        setInsights(null);
-        setErrorState('language_unavailable');
-        return;
-      }
-
-      const translated = (data.content || '').trim();
-      if (!translated) throw new Error('Translation returned no content.');
-      setInsights(translated);
-    } catch (error) {
-      console.error('AI insights translation error:', error);
-      setInsights(null);
-      setErrorState('error');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isLoading]);
-
-  const refreshInsights = useCallback(async () => {
-    const source = await fetchInsights(period);
-    if (source && language !== 'en') await translateInsights(source, language);
-  }, [fetchInsights, language, period, translateInsights]);
+  const refreshInsights = useCallback((outputLanguage: InsightLanguage = language) =>
+    fetchInsights(period, outputLanguage), [fetchInsights, language, period]);
 
   const retryInsights = useCallback(async () => {
-    const source = englishInsights.current;
-    if (language !== 'en' && source) {
-      await translateInsights(source, language);
-      return;
-    }
     await refreshInsights();
-  }, [language, refreshInsights, translateInsights]);
+  }, [refreshInsights]);
 
   useEffect(() => {
     if (!autoGenerate || isLoading || isDataLoading) return;
@@ -175,10 +118,9 @@ export const AIInsightsCard: React.FC<{ title?: string; focus?: 'expenses' | 'bu
   }, [autoGenerate, refreshInsights, period, refreshKey, isLoading, isDataLoading]);
 
   const handleLanguageChange = (value: string) => {
-    const nextLanguage = value as typeof language;
+    const nextLanguage = value as InsightLanguage;
     setLanguage(nextLanguage);
-    const source = englishInsights.current;
-    if (source) void translateInsights(source, nextLanguage);
+    void refreshInsights(nextLanguage);
   };
 
   if (isDismissed) {

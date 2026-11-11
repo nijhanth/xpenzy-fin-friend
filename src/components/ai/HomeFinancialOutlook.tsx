@@ -254,20 +254,25 @@ export const HomeFinancialOutlook = ({ isFinancialLoading = false }: { isFinanci
       <p className="text-xs text-muted-foreground">Actual value includes savings goal balances and investment holdings. The expected line uses income after expenses, assuming any surplus is retained in savings or investments.</p>
     </CardHeader>
     <CardContent>
-      <div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><LineChart data={portfolioData} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
-        <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.45} vertical={false} />
-        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-        <YAxis axisLine={false} tickLine={false} width={52} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickFormatter={value => `₹${(Number(value) / 1000).toFixed(0)}k`} />
-        <Tooltip
-          allowEscapeViewBox={{ x: false, y: false }}
-          wrapperStyle={{ maxWidth: 'calc(100% - 8px)' }}
-          contentStyle={{ maxWidth: 180, padding: '8px 10px', whiteSpace: 'normal', overflowWrap: 'anywhere', background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 10, fontSize: 12 }}
-          labelStyle={{ marginBottom: 4, fontWeight: 600 }}
-          formatter={(value, name) => [value == null ? 'No data' : formatCurrency(Number(value)), name === 'actual' ? 'Actual' : 'Expected']}
-        />
-        {portfolioSeriesFilter !== 'expected' && <Line type="monotone" dataKey="actual" name="actual" stroke="hsl(var(--investment))" strokeWidth={2.5} connectNulls={false} dot={{ r: 4 }} activeDot={{ r: 8 }} />}
-        {portfolioSeriesFilter !== 'actual' && <Line type="monotone" dataKey="expected" name="expected" stroke="hsl(var(--primary))" strokeWidth={2.5} strokeDasharray="7 5" connectNulls={false} dot={{ r: 4 }} activeDot={{ r: 8 }} />}
-      </LineChart></ResponsiveContainer></div>
+      <div className="-mx-1 min-w-0 max-w-full overflow-x-auto overscroll-x-contain sm:mx-0" role="region" aria-label="Portfolio actual vs expected chart; scroll horizontally to view all months" tabIndex={0}>
+        <div className="h-64 min-w-0" style={{ minWidth: portfolioData.length > 6 ? 480 : '100%' }}>
+          <ResponsiveContainer width="100%" height="100%"><LineChart data={portfolioData} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+            <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.45} vertical={false} />
+            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+            <YAxis axisLine={false} tickLine={false} width={52} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickFormatter={value => `₹${(Number(value) / 1000).toFixed(0)}k`} />
+            <Tooltip
+              allowEscapeViewBox={{ x: false, y: false }}
+              wrapperStyle={{ maxWidth: 'calc(100% - 8px)' }}
+              contentStyle={{ maxWidth: 180, padding: '8px 10px', whiteSpace: 'normal', overflowWrap: 'anywhere', background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 10, fontSize: 12 }}
+              labelStyle={{ marginBottom: 4, fontWeight: 600 }}
+              formatter={(value, name) => [value == null ? 'No data' : formatCurrency(Number(value)), name === 'actual' ? 'Actual' : 'Expected']}
+            />
+            {portfolioSeriesFilter !== 'expected' && <Line type="monotone" dataKey="actual" name="actual" stroke="hsl(var(--investment))" strokeWidth={2.5} connectNulls={false} dot={{ r: 4 }} activeDot={{ r: 8 }} />}
+            {portfolioSeriesFilter !== 'actual' && <Line type="monotone" dataKey="expected" name="expected" stroke="hsl(var(--primary))" strokeWidth={2.5} strokeDasharray="7 5" connectNulls={false} dot={{ r: 4 }} activeDot={{ r: 8 }} />}
+          </LineChart></ResponsiveContainer>
+        </div>
+      </div>
+      {portfolioData.length > 6 && <p className="mt-2 text-center text-[11px] text-muted-foreground sm:hidden">Swipe the chart sideways to view every month.</p>}
       <div className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
         {portfolioSeriesFilter !== 'expected' && <span className="inline-flex items-center gap-2"><span className="h-0.5 w-5 bg-investment" /> Actual savings + investments</span>}
         {portfolioSeriesFilter !== 'actual' && <span className="inline-flex items-center gap-2"><span className="h-0.5 w-5 border-t-2 border-dashed border-primary" /> Expected scenario</span>}
