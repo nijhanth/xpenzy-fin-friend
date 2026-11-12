@@ -11,6 +11,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LogOut, Settings, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { usePrivacy } from '@/contexts/PrivacyContext';
+import { maskEmail, maskName } from '@/lib/security';
 
 interface UserMenuProps {
   onSettingsClick?: () => void;
@@ -19,6 +21,7 @@ interface UserMenuProps {
 export const UserMenu = ({ onSettingsClick }: UserMenuProps) => {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const { preferences } = usePrivacy();
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -39,7 +42,11 @@ export const UserMenu = ({ onSettingsClick }: UserMenuProps) => {
 
   if (!user) return null;
 
-  const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'User';
+  const name = user.user_metadata?.display_name || user.email?.split('@')[0] || 'User';
+  const displayName = preferences.showFullName ? name : maskName(name);
+  const email = user.email
+    ? preferences.showFullEmail ? user.email : maskEmail(user.email)
+    : '';
   const initials = displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase();
 
   return (
@@ -57,7 +64,7 @@ export const UserMenu = ({ onSettingsClick }: UserMenuProps) => {
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{displayName}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {user.email}
+              {email}
             </p>
           </div>
         </DropdownMenuLabel>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { formatDisplayDate } from '@/lib/dateFormat';
 import { useNotifications } from '@/hooks/useNotifications';
 import { 
@@ -18,6 +18,8 @@ import {
   Check,
   RefreshCw,
   Loader2,
+  ImagePlus,
+  Camera,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,6 +39,10 @@ import { useToast } from '@/hooks/use-toast';
 import type { useAppUpdate } from '@/hooks/useAppUpdate';
 import { AccountManagement } from '@/components/settings/AccountManagement';
 import { useFinancial } from '@/contexts/FinancialContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { usePrivacy } from '@/contexts/PrivacyContext';
+import { maskEmail, maskName } from '@/lib/security';
+import { useTheme } from 'next-themes';
 
 interface SettingsProps {
   appUpdate: ReturnType<typeof useAppUpdate>;
@@ -44,12 +50,13 @@ interface SettingsProps {
 
 export const Settings = ({ appUpdate }: SettingsProps) => {
   const { user } = useAuth();
+  const { preferences } = usePrivacy();
+  const { theme, setTheme } = useTheme();
   const { resetFinancialData } = useFinancial();
   const userId = user?.id;
   const { toast } = useToast();
   const { requestPermission } = useNotifications();
   
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [pushNotifications, setPushNotifications] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(true);
   const [budgetAlerts, setBudgetAlerts] = useState(true);
@@ -69,6 +76,8 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
   const [resetPassword, setResetPassword] = useState('');
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [displayName, setDisplayName] = useState('');
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const { status: updateStatus, history, historyError, checkForUpdates, applyUpdate } = appUpdate;
 
   // Load user preferences
@@ -78,10 +87,7 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
         const prefs = await database.userPreferences.get();
         if (prefs) {
           const isDark = prefs.theme === 'dark';
-          setIsDarkMode(isDark);
-          if (isDark) {
-            document.documentElement.classList.add('dark');
-          }
+          setTheme(isDark ? 'dark' : 'light');
           setPushNotifications(prefs.push_notifications);
           setWeeklyReports(prefs.weekly_reports);
           setBudgetAlerts(prefs.budget_alerts);
@@ -107,7 +113,7 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
       }
     };
     if (userId) void loadPreferences();
-  }, [toast, userId]);
+  }, [setTheme, toast, userId]);
 
   const updatePreference = async (key: string, value: any) => {
     try {
@@ -123,10 +129,9 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
   };
 
   const toggleTheme = async () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    document.documentElement.classList.toggle('dark');
-    await updatePreference('theme', newTheme ? 'dark' : 'light');
+    const newTheme = theme !== 'dark' ? 'dark' : 'light';
+    setTheme(newTheme);
+    await updatePreference('theme', newTheme);
   };
 
   const handlePushNotificationsChange = async (value: boolean) => {
@@ -213,6 +218,128 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
         description: "Failed to update profile",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: 'Unsupported image format',
+        description: 'Choose a JPEG, PNG, or WebP image.',
+        variant: 'destructive',
+      });
+      input.value = '';
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: 'Image is too large',
+        description: 'Choose an image smaller than 2 MB.',
+        variant: 'destructive',
+      });
+      input.value = '';
+      return;
+    }
+
+    if (!user?.id) {
+      toast({
+        title: 'Could not upload profile photo',
+        description: 'Sign in again and try once more.',
+        variant: 'destructive',
+      });
+      input.value = '';
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+      const avatarPath = `${user.id}/${crypto.randomUUID()}.${extension}`;
+      const storage = supabase.storage.from('avatars');
+      const { error: uploadError } = await storage.upload(avatarPath, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
+
+      const avatarUrl = storage.getPublicUrl(avatarPath).data.publicUrl;
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { avatar_url: avatarUrl, avatar_path: avatarPath },
+      });
+      if (updateError) {
+        const { error: cleanupError } = await storage.remove([avatarPath]);
+        if (cleanupError) console.error('Could not remove unlinked profile photo:', cleanupError);
+        throw updateError;
+      }
+
+      const previousAvatarPath = user.user_metadata?.avatar_path;
+      if (typeof previousAvatarPath === 'string'
+        && previousAvatarPath.startsWith(`${user.id}/`)
+        && previousAvatarPath !== avatarPath) {
+        const { error: cleanupError } = await storage.remove([previousAvatarPath]);
+        if (cleanupError) {
+          toast({
+            title: 'Profile photo updated',
+            description: 'The previous photo could not be removed from storage.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
+      toast({ title: 'Profile photo updated' });
+    } catch (error) {
+      console.error('Error uploading profile photo:', error);
+      toast({
+        title: 'Could not update profile photo',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+      input.value = '';
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user?.id) return;
+    setIsUploadingAvatar(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { avatar_url: null, avatar_path: null },
+      });
+      if (updateError) throw updateError;
+
+      const avatarPath = user.user_metadata?.avatar_path;
+      if (typeof avatarPath === 'string' && avatarPath.startsWith(`${user.id}/`)) {
+        const { error: removeError } = await supabase.storage.from('avatars').remove([avatarPath]);
+        if (removeError) {
+          toast({
+            title: 'Profile photo removed',
+            description: 'The image could not be removed from storage.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
+      toast({ title: 'Profile photo removed' });
+    } catch (error) {
+      console.error('Error removing profile photo:', error);
+      toast({
+        title: 'Could not remove profile photo',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -390,12 +517,53 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="relative shrink-0">
+              <Avatar className="h-16 w-16">
+                <AvatarImage
+                  src={user?.user_metadata?.avatar_url}
+                  alt={user?.user_metadata?.display_name || 'Profile photo'}
+                />
+                <AvatarFallback>
+                  {(user?.user_metadata?.display_name || 'U').slice(0, 1).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full border-2 border-card shadow-sm"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={isUploadingAvatar}
+                aria-label="Change profile photo"
+                title="Change profile photo"
+              >
+                {isUploadingAvatar
+                  ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  : <Camera className="h-4 w-4" aria-hidden />}
+              </Button>
+            </div>
+            <Input
+              ref={avatarInputRef}
+              id="profile-photo-upload"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="sr-only"
+              onChange={handleAvatarUpload}
+              disabled={isUploadingAvatar}
+              aria-label="Upload profile photo"
+            />
             <div className="flex-1">
               <p className="font-medium text-foreground">
-                {user?.user_metadata?.display_name || 'User'}
+                {preferences.showFullName
+                  ? user?.user_metadata?.display_name || 'User'
+                  : maskName(user?.user_metadata?.display_name || 'User')}
               </p>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <p className="text-sm text-muted-foreground">
+                {user?.email
+                  ? preferences.showFullEmail ? user.email : maskEmail(user.email)
+                  : ''}
+              </p>
             </div>
             <Button 
               variant="ghost" 
@@ -441,14 +609,14 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {isDarkMode ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+              {theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
               <div>
                 <p className="font-medium">Dark Mode</p>
                 <p className="text-sm text-muted-foreground">Toggle dark theme</p>
               </div>
             </div>
             <Switch 
-              checked={isDarkMode} 
+              checked={theme === 'dark'}
               onCheckedChange={toggleTheme}
             />
           </div>
@@ -809,6 +977,46 @@ export const Settings = ({ appUpdate }: SettingsProps) => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="flex flex-col items-center gap-3">
+              <Avatar className="h-20 w-20">
+                <AvatarImage
+                  src={user?.user_metadata?.avatar_url}
+                  alt={displayName || 'Profile photo'}
+                />
+                <AvatarFallback>
+                  {(displayName || 'U').slice(0, 1).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                >
+                  {isUploadingAvatar
+                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                    : <ImagePlus className="mr-2 h-4 w-4" aria-hidden />}
+                  {isUploadingAvatar ? 'Updating…' : 'Upload photo'}
+                </Button>
+                {user?.user_metadata?.avatar_path && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { void handleRemoveAvatar(); }}
+                    disabled={isUploadingAvatar}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                    Remove photo
+                  </Button>
+                )}
+              </div>
+              <p className="text-center text-xs text-muted-foreground">
+                JPEG, PNG, or WebP. Maximum file size: 2 MB.
+              </p>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="displayName">Display Name</Label>
               <Input

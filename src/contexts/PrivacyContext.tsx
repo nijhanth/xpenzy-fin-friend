@@ -20,7 +20,7 @@ interface PrivacyContextType {
 const defaultPreferences: PrivacyPreferences = {
   showFullEmail: false,
   showFullPhone: false,
-  showFullName: true,
+  showFullName: false,
   allowDataCollection: false,
   securityMode: 'strict'
 };

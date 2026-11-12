@@ -1,175 +1,205 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Download, TrendingUp, TrendingDown, IndianRupee, Calendar as CalendarIcon, ArrowUpRight, ArrowDownRight, PieChartIcon, BarChart3 } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, IndianRupee, Calendar as CalendarIcon, ArrowUpRight, ArrowDownRight, Wallet, Layers3, ReceiptText, CreditCard, type LucideIcon } from 'lucide-react';
 import { useFinancial } from '@/contexts/FinancialContext';
 import { useMemo, useState } from 'react';
-import { StatCard } from '@/components/ui/stat-card';
-import { AIInsightsCard, ExpensePredictionCard } from '@/components/ai/AIInsights';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, subDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, endOfDay, subMonths, startOfYear, endOfYear, subDays } from 'date-fns';
 import { formatDisplayDate } from '@/lib/dateFormat';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-type DateRange = 'thisMonth' | 'lastMonth' | 'last30Days' | 'last90Days' | 'thisYear' | 'custom';
-
-// Modern color palette for charts
-const EXPENSE_COLORS = [
-  'hsl(0, 84%, 60%)',      // Red
-  'hsl(25, 95%, 53%)',     // Orange
-  'hsl(45, 93%, 47%)',     // Yellow
-  'hsl(262, 83%, 58%)',    // Purple
-  'hsl(340, 82%, 52%)',    // Pink
-  'hsl(199, 89%, 48%)',    // Blue
+type DateRange = 'thisMonth' | 'lastMonth' | 'last7Days' | 'last30Days' | 'last90Days' | 'thisYear' | 'custom';
+type ReportType = 'overview' | 'expenses' | 'income' | 'savings' | 'investments' | 'payments';
+const reportTypes: { id: ReportType; label: string; description: string; icon: LucideIcon }[] = [
+  { id: 'overview', label: 'Overview', description: 'Your complete financial snapshot', icon: FileText },
+  { id: 'expenses', label: 'Expenses', description: 'Spending totals by category and all transactions', icon: TrendingDown },
+  { id: 'income', label: 'Income', description: 'Income totals by source and all transactions', icon: TrendingUp },
+  { id: 'savings', label: 'Savings', description: 'Current savings goals and balances', icon: IndianRupee },
+  { id: 'investments', label: 'Investments', description: 'Current investment balances', icon: Wallet },
+  { id: 'payments', label: 'Payment methods', description: 'Transactions grouped by payment method', icon: CreditCard },
 ];
 
-const INCOME_COLORS = [
-  'hsl(142, 76%, 36%)',    // Green
-  'hsl(173, 80%, 40%)',    // Teal
-  'hsl(199, 89%, 48%)',    // Blue
-  'hsl(221, 83%, 53%)',    // Indigo
-  'hsl(262, 83%, 58%)',    // Purple
-  'hsl(142, 71%, 45%)',    // Light Green
-];
+const currency = (amount: number) => new Intl.NumberFormat('en-IN', {
+  style: 'currency', currency: 'INR', maximumFractionDigits: 0,
+}).format(amount);
 
-const PAYMENT_COLORS = [
-  'hsl(221, 83%, 53%)',    // Blue
-  'hsl(142, 76%, 36%)',    // Green
-  'hsl(262, 83%, 58%)',    // Purple
-  'hsl(25, 95%, 53%)',     // Orange
-  'hsl(340, 82%, 52%)',    // Pink
-  'hsl(45, 93%, 47%)',     // Yellow
-];
-
-// Custom Tooltip for Expense Pie Chart
-const ExpensePieTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    const total = payload[0].payload.total || 0;
-    const percentage = total > 0 ? ((data.value / total) * 100).toFixed(1) : 0;
-    return (
-      <div className="bg-card/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: data.fill }} />
-          <span className="font-semibold text-foreground">{data.name}</span>
-        </div>
-        <div className="space-y-1 text-sm">
-          <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Amount:</span>
-            <span className="font-medium text-expense">₹{data.value.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Share:</span>
-            <span className="font-medium text-foreground">{percentage}%</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
-
-// Custom Tooltip for Income Bar Chart
-const IncomeBarTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-card/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
-        <p className="font-semibold text-foreground mb-2">{label}</p>
-        <div className="flex justify-between gap-4">
-          <span className="text-muted-foreground">Amount:</span>
-          <span className="font-medium text-income">₹{payload[0].value.toLocaleString()}</span>
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
-
-// Custom Tooltip for Payment Mode Chart
-const PaymentTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    return (
-      <div className="bg-card/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: data.fill }} />
-          <span className="font-semibold text-foreground">{data.name}</span>
-        </div>
-        <div className="flex justify-between gap-4 text-sm">
-          <span className="text-muted-foreground">Transactions:</span>
-          <span className="font-medium text-primary">{data.value}</span>
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
-
-// Custom Legend Component
-const CustomLegend = ({ payload, colors }: any) => {
-  if (!payload || payload.length === 0) return null;
-  
+const ReportKpi = ({ title, value, detail, icon: Icon, tone }: {
+  title: string; value: string; detail: string; icon: LucideIcon; tone: 'green' | 'red' | 'blue' | 'violet' | 'amber';
+}) => {
+  const tones = {
+    green: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    red: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+    blue: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+    violet: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+    amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  };
   return (
-    <div className="grid grid-cols-2 gap-2 mt-4 px-2">
-      {payload.map((entry: any, index: number) => (
-        <div key={index} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors">
-          <div 
-            className="w-3 h-3 rounded-full flex-shrink-0" 
-            style={{ backgroundColor: entry.color || colors[index % colors.length] }}
-          />
-          <span className="text-xs font-medium text-foreground truncate">{entry.value}</span>
+    <Card className="overflow-hidden rounded-xl border-border/60 bg-card shadow-sm transition-shadow duration-200 hover:shadow-md">
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:text-xs">{title}</p>
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tones[tone]}`}><Icon className="h-4 w-4" /></span>
         </div>
-      ))}
-    </div>
+        <p className="mt-3 truncate text-[clamp(1rem,4vw,1.5rem)] font-bold leading-tight tracking-tight text-foreground">{value}</p>
+        <p className="mt-1 truncate text-[11px] text-muted-foreground sm:text-xs">{detail}</p>
+      </CardContent>
+    </Card>
   );
 };
 
+const ReportTable = ({ title, headers, rows, mobileTitleIndex = 0, mobileSubtitleIndices = [], mobileValueIndex }: {
+  title: string;
+  headers: string[];
+  rows: (string | number)[][];
+  mobileTitleIndex?: number;
+  mobileSubtitleIndices?: number[];
+  mobileValueIndex?: number;
+}) => {
+  const valueIndex = mobileValueIndex ?? headers.length - 1;
+  return (
+    <Card className="overflow-hidden rounded-2xl border-border/60 bg-card shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-base">{title}</CardTitle>
+          <span className="shrink-0 text-xs text-muted-foreground">{rows.length} {rows.length === 1 ? 'row' : 'rows'}</span>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {rows.length === 0 ? (
+          <p className="border-t border-border/60 px-4 py-6 text-sm text-muted-foreground">No records in this report.</p>
+        ) : (
+          <>
+            <div className="divide-y divide-border/60 md:hidden">
+              {rows.map((row, rowIndex) => {
+                const details = mobileSubtitleIndices
+                  .map(index => {
+                    const value = String(row[index] ?? '');
+                    return value ? `${headers[index]}: ${value}` : '';
+                  })
+                  .filter(Boolean)
+                  .join(' · ');
+                return (
+                  <div key={`${String(row[0])}-${rowIndex}`} className="flex items-center gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{String(row[mobileTitleIndex] ?? '')}</p>
+                      {details && <p className="mt-0.5 truncate text-xs text-muted-foreground">{details}</p>}
+                    </div>
+                    <p className="shrink-0 text-right text-sm font-semibold">{String(row[valueIndex] ?? '')}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <Table aria-label={title}>
+                <TableHeader>
+                  <TableRow className="bg-secondary/30 hover:bg-secondary/30">
+                    {headers.map((header, index) => (
+                      <TableHead key={header} className={`font-semibold text-foreground ${index === valueIndex ? 'text-right' : ''}`}>{header}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row, rowIndex) => (
+                    <TableRow key={`${String(row[0])}-${rowIndex}`}>
+                      {row.map((cell, cellIndex) => (
+                        <TableCell key={`${headers[cellIndex]}-${cellIndex}`} className={cellIndex === valueIndex ? 'text-right font-semibold' : ''}>
+                          {String(cell)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+const downloadFile = (fileName: string, content: BlobPart, type: string) => {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+const escapeCsvCell = (value: string | number) => {
+  const text = String(value);
+  const safeText = typeof value === 'string' && /^\s*[=+\-@]/.test(text)
+    ? `'${text}`
+    : text;
+  return `"${safeText.replace(/"/g, '""')}"`;
+};
+
+function filterByDate<T extends { date: string }>(items: T[], startDate: Date, endDate: Date): T[] {
+  return items.filter(item => {
+    const itemDate = new Date(item.date);
+    return itemDate >= startDate && itemDate <= endDate;
+  });
+}
+
 export const Reports = () => {
   const { data } = useFinancial();
-  const [dateRange, setDateRange] = useState<DateRange>('thisMonth');
-  const [customStartDate, setCustomStartDate] = useState<Date>();
-  const [customEndDate, setCustomEndDate] = useState<Date>();
+  const [reportType, setReportType] = useState<ReportType>('overview');
+  const [dateRanges, setDateRanges] = useState<Record<ReportType, DateRange>>({ overview: 'thisMonth', expenses: 'thisMonth', income: 'thisMonth', savings: 'thisMonth', investments: 'thisMonth', payments: 'thisMonth' });
+  const [draftDateRanges, setDraftDateRanges] = useState<Record<ReportType, DateRange>>({ overview: 'thisMonth', expenses: 'thisMonth', income: 'thisMonth', savings: 'thisMonth', investments: 'thisMonth', payments: 'thisMonth' });
+  const [customDates, setCustomDates] = useState<Partial<Record<ReportType, { start?: Date; end?: Date }>>>({});
+  const [draftCustomDates, setDraftCustomDates] = useState<Partial<Record<ReportType, { start?: Date; end?: Date }>>>({});
+  const dateRange = dateRanges[reportType];
+  const draftDateRange = draftDateRanges[reportType];
+  const isSnapshotReport = reportType === 'savings' || reportType === 'investments';
+  const customStartDate = customDates[reportType]?.start;
+  const customEndDate = customDates[reportType]?.end;
+  const draftStartDate = draftCustomDates[reportType]?.start;
+  const draftEndDate = draftCustomDates[reportType]?.end;
+  const invalidDraftRange = draftDateRange === 'custom' && (!draftStartDate || !draftEndDate || draftStartDate > draftEndDate);
+  const setDateRange = (value: DateRange) => setDraftDateRanges(current => ({ ...current, [reportType]: value }));
+  const applyDateFilters = () => {
+    setDateRanges(current => ({ ...current, [reportType]: draftDateRange }));
+    setCustomDates(current => ({ ...current, [reportType]: draftCustomDates[reportType] }));
+  };
 
   // Calculate date range
   const { startDate, endDate } = useMemo(() => {
     const now = new Date();
     switch (dateRange) {
       case 'thisMonth':
-        return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
-      case 'lastMonth':
+        return { startDate: startOfMonth(now), endDate: endOfDay(endOfMonth(now)) };
+      case 'lastMonth': {
         const lastMonth = subMonths(now, 1);
-        return { startDate: startOfMonth(lastMonth), endDate: endOfMonth(lastMonth) };
+        return { startDate: startOfMonth(lastMonth), endDate: endOfDay(endOfMonth(lastMonth)) };
+      }
+      case 'last7Days':
+        return { startDate: subDays(now, 7), endDate: now };
       case 'last30Days':
         return { startDate: subDays(now, 30), endDate: now };
       case 'last90Days':
         return { startDate: subDays(now, 90), endDate: now };
       case 'thisYear':
-        return { startDate: startOfYear(now), endDate: endOfYear(now) };
+        return { startDate: startOfYear(now), endDate: endOfDay(endOfYear(now)) };
       case 'custom':
         return { 
           startDate: customStartDate || startOfMonth(now), 
-          endDate: customEndDate || endOfMonth(now) 
+          endDate: endOfDay(customEndDate || endOfMonth(now))
         };
       default:
-        return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
+        return { startDate: startOfMonth(now), endDate: endOfDay(endOfMonth(now)) };
     }
   }, [dateRange, customStartDate, customEndDate]);
 
   // Filter data by date range
   const filteredData = useMemo(() => {
-    const filterByDate = (items: any[]) => 
-      items.filter(item => {
-        const itemDate = new Date(item.date);
-        return itemDate >= startDate && itemDate <= endDate;
-      });
-
     return {
-      income: filterByDate(data.income),
-      expenses: filterByDate(data.expenses),
+      income: filterByDate(data.income, startDate, endDate),
+      expenses: filterByDate(data.expenses, startDate, endDate),
       savings: data.savings,
       investments: data.investments,
     };
@@ -180,7 +210,7 @@ export const Reports = () => {
     const totalIncome = filteredData.income.reduce((sum, item) => sum + item.amount, 0);
     const totalExpenses = filteredData.expenses.reduce((sum, item) => sum + item.amount, 0);
     const lifetimeSavings = filteredData.savings.reduce((sum, item) => sum + (item.current || 0), 0);
-    const totalUsedFromGoals = filteredData.savings.reduce((sum, item: any) => sum + (item.used_amount || 0), 0);
+    const totalUsedFromGoals = filteredData.savings.reduce((sum, item) => sum + (item.used_amount || 0), 0);
     const totalSavings = Math.max(0, lifetimeSavings - totalUsedFromGoals);
     const totalInvestments = filteredData.investments.reduce((sum, item) => sum + item.current, 0);
     const netBalance = totalIncome - totalExpenses;
@@ -195,21 +225,15 @@ export const Reports = () => {
     };
   }, [filteredData]);
 
-  // Expense breakdown by category with total for percentage
+  // Expense totals by category
   const expensesByCategory = useMemo(() => {
     const categoryMap = new Map<string, number>();
     filteredData.expenses.forEach(expense => {
       const current = categoryMap.get(expense.category) || 0;
       categoryMap.set(expense.category, current + expense.amount);
     });
-    const total = Array.from(categoryMap.values()).reduce((sum, val) => sum + val, 0);
     return Array.from(categoryMap.entries())
-      .map(([name, value], index) => ({ 
-        name, 
-        value, 
-        total,
-        fill: EXPENSE_COLORS[index % EXPENSE_COLORS.length]
-      }))
+      .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
   }, [filteredData.expenses]);
 
@@ -222,11 +246,7 @@ export const Reports = () => {
       categoryMap.set(category, current + income.amount);
     });
     return Array.from(categoryMap.entries())
-      .map(([name, value], index) => ({ 
-        name, 
-        value,
-        fill: INCOME_COLORS[index % INCOME_COLORS.length]
-      }))
+      .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
   }, [filteredData.income]);
 
@@ -237,249 +257,393 @@ export const Reports = () => {
       const current = modeMap.get(item.paymentMode) || 0;
       modeMap.set(item.paymentMode, current + 1);
     });
-    return Array.from(modeMap.entries()).map(([name, value], index) => ({ 
-      name, 
-      value,
-      fill: PAYMENT_COLORS[index % PAYMENT_COLORS.length]
-    }));
+    return Array.from(modeMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
   }, [filteredData]);
+  const savingsTarget = filteredData.savings.reduce((sum, goal) => sum + goal.target, 0);
+  const savingsGoalProgress = savingsTarget > 0 ? Math.min(100, Math.round((totals.savings / savingsTarget) * 100)) : 0;
+  const investmentNetChange = filteredData.investments.reduce((sum, item) => sum + item.current - item.invested, 0);
+  const mostUsedPaymentMode = paymentModeData[0];
 
-  const hasData = filteredData.income.length > 0 || filteredData.expenses.length > 0 || 
-                   filteredData.savings.length > 0 || filteredData.investments.length > 0;
+  const kpis = useMemo(() => {
+    const overview = [
+      { title: 'Income', value: currency(totals.income), detail: `${filteredData.income.length} transactions`, icon: TrendingUp, tone: 'green' as const },
+      { title: 'Expenses', value: currency(totals.expenses), detail: `${filteredData.expenses.length} transactions`, icon: TrendingDown, tone: 'red' as const },
+      { title: 'Net cash flow', value: currency(totals.netBalance), detail: totals.netBalance >= 0 ? 'Positive for this period' : 'Below zero this period', icon: totals.netBalance >= 0 ? ArrowUpRight : ArrowDownRight, tone: totals.netBalance >= 0 ? 'blue' as const : 'red' as const },
+    ];
+    switch (reportType) {
+      case 'expenses': return [overview[1], { title: 'Largest category', value: expensesByCategory[0]?.name || '—', detail: expensesByCategory[0] ? currency(expensesByCategory[0].value) : 'No spending recorded', icon: Layers3, tone: 'amber' as const }];
+      case 'income': return [overview[0], { title: 'Income sources', value: String(incomeByCategory.length), detail: 'Categories in this period', icon: Layers3, tone: 'blue' as const }];
+      case 'savings':
+        return [
+          { title: 'Current savings', value: currency(totals.savings), detail: `${filteredData.savings.length} goals`, icon: IndianRupee, tone: 'green' as const },
+          { title: 'Goal progress', value: `${savingsGoalProgress}%`, detail: `Of ${currency(savingsTarget)} total target`, icon: Layers3, tone: 'blue' as const },
+        ];
+      case 'investments':
+        return [
+          { title: 'Portfolio value', value: currency(totals.investments), detail: `${filteredData.investments.length} investments`, icon: TrendingUp, tone: 'violet' as const },
+          { title: 'Net change', value: `${investmentNetChange >= 0 ? '+' : '−'}${currency(Math.abs(investmentNetChange))}`, detail: 'Current value compared with invested', icon: investmentNetChange >= 0 ? ArrowUpRight : ArrowDownRight, tone: investmentNetChange >= 0 ? 'green' as const : 'red' as const },
+        ];
+      case 'payments': {
+        return [
+          { title: 'Transactions', value: String(paymentModeData.reduce((sum, item) => sum + item.value, 0)), detail: `${paymentModeData.length} payment methods`, icon: ReceiptText, tone: 'blue' as const },
+          { title: 'Most used', value: mostUsedPaymentMode?.name || '—', detail: mostUsedPaymentMode ? `${mostUsedPaymentMode.value} transactions` : 'No payments recorded', icon: Wallet, tone: 'violet' as const },
+        ];
+      }
+      default: return overview;
+    }
+  }, [reportType, totals, filteredData, expensesByCategory, incomeByCategory, paymentModeData, savingsTarget, savingsGoalProgress, investmentNetChange, mostUsedPaymentMode]);
 
-  // Top expenses
-  const topExpenses = useMemo(() => 
-    [...filteredData.expenses]
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5),
+  const hasData = reportType === 'overview'
+    ? filteredData.income.length > 0 || filteredData.expenses.length > 0 || filteredData.savings.length > 0 || filteredData.investments.length > 0
+    : reportType === 'expenses' ? filteredData.expenses.length > 0
+    : reportType === 'income' ? filteredData.income.length > 0
+    : reportType === 'savings' ? filteredData.savings.length > 0
+    : reportType === 'investments' ? filteredData.investments.length > 0
+    : paymentModeData.length > 0;
+
+  const sortedExpenses = useMemo(
+    () => [...filteredData.expenses].sort((a, b) => b.date.localeCompare(a.date)),
     [filteredData.expenses]
   );
+  const sortedIncome = useMemo(
+    () => [...filteredData.income].sort((a, b) => b.date.localeCompare(a.date)),
+    [filteredData.income]
+  );
+  const expenseRows = useMemo(
+    () => sortedExpenses.map(expense => [
+      formatDisplayDate(expense.date),
+      expense.category,
+      expense.subcategory || '',
+      expense.paymentMode,
+      currency(expense.amount),
+      expense.notes || '',
+    ]),
+    [sortedExpenses]
+  );
+  const incomeRows = useMemo(
+    () => sortedIncome.map(income => [
+      formatDisplayDate(income.date),
+      income.customCategory || income.category,
+      income.paymentMode,
+      currency(income.amount),
+      income.notes || '',
+    ]),
+    [sortedIncome]
+  );
+  const savingsRows = filteredData.savings.map(goal => [goal.name, currency(goal.current), currency(goal.target)]);
+  const investmentRows = filteredData.investments.map(item => [
+    item.name,
+    item.customType || item.type,
+    currency(item.invested),
+    currency(item.current),
+  ]);
+  const paymentRows = paymentModeData.map(item => [item.name, String(item.value)]);
 
   // Export function
   const exportData = (exportFormat: 'csv' | 'json' | 'pdf') => {
-    const periodString = `${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
+    const reportDate = new Date();
+    const asOfDate = format(reportDate, 'yyyy-MM-dd');
+    const periodString = isSnapshotReport
+      ? `Current balance snapshot as of ${formatDisplayDate(reportDate)}`
+      : `${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
+    const fileName = isSnapshotReport
+      ? `xpenzy-${reportType}-report-as-of-${asOfDate}`
+      : `xpenzy-${reportType}-report-${format(startDate, 'yyyy-MM-dd')}-to-${format(endDate, 'yyyy-MM-dd')}`;
+    const summary = reportType === 'overview'
+      ? {
+          income: totals.income,
+          expenses: totals.expenses,
+          netBalance: totals.netBalance,
+          currentSavings: totals.savings,
+          currentInvestments: totals.investments,
+          currentWealth: totals.totalWealth,
+        }
+      : reportType === 'expenses'
+          ? {
+              totalExpenses: totals.expenses,
+              transactionCount: sortedExpenses.length,
+              largestCategory: expensesByCategory[0]?.name || null,
+              largestCategoryAmount: expensesByCategory[0]?.value || 0,
+            }
+        : reportType === 'income'
+            ? { totalIncome: totals.income, transactionCount: sortedIncome.length, incomeSources: incomeByCategory.length }
+          : reportType === 'savings'
+              ? {
+                  currentSavings: totals.savings,
+                  goalCount: filteredData.savings.length,
+                  goalTarget: savingsTarget,
+                  goalProgressPercent: savingsGoalProgress,
+                }
+            : reportType === 'investments'
+                ? { currentInvestments: totals.investments, investmentCount: filteredData.investments.length, netChange: investmentNetChange }
+                : {
+                    transactionCount: paymentModeData.reduce((sum, item) => sum + item.value, 0),
+                    paymentMethodCount: paymentModeData.length,
+                    mostUsedPaymentMode: mostUsedPaymentMode?.name || null,
+                  };
     const reportData = {
-      period: periodString,
-      summary: totals,
-      income: filteredData.income,
-      expenses: filteredData.expenses,
-      savings: filteredData.savings,
-      investments: filteredData.investments,
-      expensesByCategory,
-      incomeByCategory,
+      reportType,
+      generatedAt: new Date().toISOString(),
+      ...(isSnapshotReport ? { asOfDate } : {
+        period: {
+          startDate: format(startDate, 'yyyy-MM-dd'),
+          endDate: format(endDate, 'yyyy-MM-dd'),
+        },
+      }),
+      summary,
+      ...(reportType === 'overview' || reportType === 'income' ? { incomeTransactions: sortedIncome, incomeByCategory } : {}),
+      ...(reportType === 'overview' || reportType === 'expenses' ? { expenseTransactions: sortedExpenses, expensesByCategory } : {}),
+      ...(reportType === 'savings' ? { currentSavingsGoals: filteredData.savings } : {}),
+      ...(reportType === 'investments' ? { currentInvestments: filteredData.investments } : {}),
+      ...(reportType === 'overview' || reportType === 'payments' ? { paymentMethods: paymentModeData } : {}),
     };
 
     if (exportFormat === 'json') {
-      const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `xpenzy-report-${format(startDate, 'yyyy-MM-dd')}.json`;
-      a.click();
+      downloadFile(`${fileName}.json`, JSON.stringify(reportData, null, 2), 'application/json;charset=utf-8');
     } else if (exportFormat === 'csv') {
-      const periodRow = `Period: ${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
-      const csvRows = [
+      const csvRows: (string | number)[][] = [
         ['Xpenzy Financial Report'],
-        [periodRow],
+        [isSnapshotReport ? 'Snapshot' : 'Period', periodString],
         [],
         ['Summary'],
-        ['Total Income', totals.income.toString()],
-        ['Total Expenses', totals.expenses.toString()],
-        ['Net Balance', totals.netBalance.toString()],
-        ['Total Savings', totals.savings.toString()],
-        ['Total Investments', totals.investments.toString()],
-        [],
-        ['Expenses by Category'],
-        ['Category', 'Amount'],
-        ...expensesByCategory.map(cat => [cat.name, cat.value.toString()]),
+        ['Metric', 'Value'],
+        ...(reportType === 'overview' ? [
+          ['Total Income', totals.income], ['Total Expenses', totals.expenses], ['Net Cash Flow', totals.netBalance],
+          ['Current Savings', totals.savings], ['Current Investments', totals.investments], ['Current Wealth', totals.totalWealth],
+        ] : reportType === 'expenses' ? [
+          ['Total Expenses', totals.expenses], ['Transactions', sortedExpenses.length],
+          ['Largest Category', expensesByCategory[0]?.name || '—'],
+          ['Largest Category Amount', expensesByCategory[0]?.value || 0],
+        ] : reportType === 'income' ? [
+          ['Total Income', totals.income], ['Transactions', sortedIncome.length], ['Income Sources', incomeByCategory.length],
+        ] : reportType === 'savings' ? [
+          ['Current Savings', totals.savings], ['Goals', filteredData.savings.length],
+          ['Goal Target', savingsTarget], ['Goal Progress', `${savingsGoalProgress}%`],
+        ] : reportType === 'investments' ? [
+          ['Current Investments', totals.investments], ['Investments', filteredData.investments.length], ['Net Change', investmentNetChange],
+        ] : [
+          ['Transactions', paymentModeData.reduce((sum, item) => sum + item.value, 0)],
+          ['Payment Methods', paymentModeData.length], ['Most Used Method', mostUsedPaymentMode?.name || '—'],
+        ]),
       ];
-      
-      const csvContent = csvRows.map(row => row.join(',')).join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `xpenzy-report-${format(startDate, 'yyyy-MM-dd')}.csv`;
-      a.click();
+
+      if (reportType === 'overview' || reportType === 'expenses') {
+        csvRows.push(
+          [],
+          ['Expenses by Category'],
+          ['Category', 'Amount (INR)'],
+          ...expensesByCategory.map(category => [category.name, category.value]),
+          [],
+          ['Expense Transactions'],
+          ['Date', 'Category', 'Subcategory', 'Payment Mode', 'Amount (INR)', 'Notes'],
+          ...sortedExpenses.map(expense => [
+            formatDisplayDate(expense.date),
+            expense.category,
+            expense.subcategory || '',
+            expense.paymentMode,
+            expense.amount,
+            expense.notes || '',
+          ])
+        );
+      }
+
+      if (reportType === 'overview' || reportType === 'income') {
+        csvRows.push(
+          [],
+          ['Income by Category'],
+          ['Category', 'Amount (INR)'],
+          ...incomeByCategory.map(category => [category.name, category.value]),
+          [],
+          ['Income Transactions'],
+          ['Date', 'Category', 'Payment Mode', 'Amount (INR)', 'Notes'],
+          ...sortedIncome.map(income => [
+            formatDisplayDate(income.date),
+            income.customCategory || income.category,
+            income.paymentMode,
+            income.amount,
+            income.notes || '',
+          ])
+        );
+      }
+
+      if (reportType === 'savings') {
+        csvRows.push([], ['Savings Goals'], ['Goal', 'Current (INR)', 'Target (INR)'],
+          ...filteredData.savings.map(goal => [goal.name, goal.current, goal.target]));
+      }
+      if (reportType === 'investments') {
+        csvRows.push([], ['Investments'], ['Investment', 'Type', 'Invested (INR)', 'Current (INR)'],
+          ...filteredData.investments.map(item => [item.name, item.customType || item.type, item.invested, item.current]));
+      }
+      if (reportType === 'overview' || reportType === 'payments') {
+        csvRows.push([], ['Payment Methods'], ['Method', 'Transactions'],
+          ...paymentModeData.map(item => [item.name, item.value]));
+      }
+
+      const csvContent = `\uFEFF${csvRows.map(row => row.map(escapeCsvCell).join(',')).join('\r\n')}`;
+      downloadFile(`${fileName}.csv`, csvContent, 'text/csv;charset=utf-8');
     } else if (exportFormat === 'pdf') {
-      const doc = new jsPDF();
+      const doc = new jsPDF({ orientation: reportType === 'overview' || reportType === 'expenses' || reportType === 'income' ? 'landscape' : 'portrait' });
       const pageWidth = doc.internal.pageSize.width;
-      
       doc.setFontSize(20);
       doc.setTextColor(40, 40, 40);
-      doc.text('Xpenzy Financial Report', pageWidth / 2, 20, { align: 'center' });
-      
+      doc.text(`Xpenzy ${reportTypes.find(type => type.id === reportType)?.label} Report`, pageWidth / 2, 20, { align: 'center' });
       doc.setFontSize(12);
       doc.setTextColor(100, 100, 100);
       doc.text(periodString, pageWidth / 2, 30, { align: 'center' });
-      
-      doc.setFontSize(14);
-      doc.setTextColor(40, 40, 40);
-      doc.text('Summary', 14, 45);
-      
-      autoTable(doc, {
-        startY: 50,
-        head: [['Metric', 'Amount (₹)']],
-        body: [
-          ['Total Income', totals.income.toLocaleString()],
-          ['Total Expenses', totals.expenses.toLocaleString()],
-          ['Net Balance', totals.netBalance.toLocaleString()],
-          ['Total Savings', totals.savings.toLocaleString()],
-          ['Total Investments', totals.investments.toLocaleString()],
-          ['Total Wealth', totals.totalWealth.toLocaleString()],
-        ],
-        theme: 'striped',
-        headStyles: { fillColor: [66, 139, 202] },
-      });
-      
-      if (expensesByCategory.length > 0) {
-        const finalY = (doc as any).lastAutoTable.finalY || 50;
-        doc.setFontSize(14);
-        doc.text('Expenses by Category', 14, finalY + 15);
-        
+
+      const pdfSummaryRows: string[][] = reportType === 'overview'
+        ? [
+            ['Total Income', currency(totals.income)],
+            ['Total Expenses', currency(totals.expenses)],
+            ['Net Cash Flow', currency(totals.netBalance)],
+            ['Current Savings', currency(totals.savings)],
+            ['Current Investments', currency(totals.investments)],
+            ['Current Wealth', currency(totals.totalWealth)],
+          ]
+        : reportType === 'expenses'
+            ? [
+                ['Total Expenses', currency(totals.expenses)],
+                ['Transactions', String(sortedExpenses.length)],
+                ['Largest Category', expensesByCategory[0]?.name || '—'],
+                ['Largest Category Amount', currency(expensesByCategory[0]?.value || 0)],
+              ]
+          : reportType === 'income'
+              ? [['Total Income', currency(totals.income)], ['Transactions', String(sortedIncome.length)], ['Income Sources', String(incomeByCategory.length)]]
+            : reportType === 'savings'
+                ? [
+                    ['Current Savings', currency(totals.savings)],
+                    ['Goals', String(filteredData.savings.length)],
+                    ['Goal Target', currency(savingsTarget)],
+                    ['Goal Progress', `${savingsGoalProgress}%`],
+                  ]
+              : reportType === 'investments'
+                  ? [
+                      ['Current Investments', currency(totals.investments)],
+                      ['Investments', String(filteredData.investments.length)],
+                      ['Net Change', currency(investmentNetChange)],
+                    ]
+                : [
+                    ['Transactions', String(paymentModeData.reduce((sum, item) => sum + item.value, 0))],
+                    ['Payment Methods', String(paymentModeData.length)],
+                      ['Most Used Method', mostUsedPaymentMode?.name || '—'],
+                  ];
+
+      let cursorY = 42;
+      const addPdfTable = (title: string, headers: string[], rows: string[][]) => {
+        if (rows.length === 0) return;
+        if (cursorY > doc.internal.pageSize.height - 38) {
+          doc.addPage();
+          cursorY = 20;
+        }
+        doc.setFontSize(13);
+        doc.setTextColor(40, 40, 40);
+        doc.text(title, 14, cursorY);
+        const tableStartY = cursorY + 5;
         autoTable(doc, {
-          startY: finalY + 20,
-          head: [['Category', 'Amount (₹)']],
-          body: expensesByCategory.map(cat => [cat.name, cat.value.toLocaleString()]),
+          startY: tableStartY,
+          head: [headers],
+          body: rows,
           theme: 'striped',
-          headStyles: { fillColor: [231, 76, 60] },
+          headStyles: { fillColor: [66, 139, 202] },
+          styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+          margin: { left: 14, right: 14 },
         });
+        const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY;
+        cursorY = (finalY ?? tableStartY) + 12;
+      };
+
+      addPdfTable('Summary', ['Metric', 'Value'], pdfSummaryRows);
+      if (reportType === 'overview' || reportType === 'expenses') {
+        addPdfTable('Expenses by Category', ['Category', 'Amount (INR)'],
+          expensesByCategory.map(category => [category.name, currency(category.value)]));
+        addPdfTable('Expense Transactions',
+          ['Date', 'Category', 'Subcategory', 'Payment Mode', 'Amount (INR)', 'Notes'],
+          expenseRows);
       }
-      
-      if (incomeByCategory.length > 0) {
-        const finalY = (doc as any).lastAutoTable.finalY || 50;
-        doc.setFontSize(14);
-        doc.text('Income by Category', 14, finalY + 15);
-        
-        autoTable(doc, {
-          startY: finalY + 20,
-          head: [['Category', 'Amount (₹)']],
-          body: incomeByCategory.map(cat => [cat.name, cat.value.toLocaleString()]),
-          theme: 'striped',
-          headStyles: { fillColor: [46, 204, 113] },
-        });
+      if (reportType === 'overview' || reportType === 'income') {
+        addPdfTable('Income by Category', ['Category', 'Amount (INR)'],
+          incomeByCategory.map(category => [category.name, currency(category.value)]));
+        addPdfTable('Income Transactions',
+          ['Date', 'Category', 'Payment Mode', 'Amount (INR)', 'Notes'],
+          incomeRows);
       }
-      
-      if (topExpenses.length > 0) {
-        const finalY = (doc as any).lastAutoTable.finalY || 50;
-        doc.setFontSize(14);
-        doc.text('Top 5 Expenses', 14, finalY + 15);
-        
-        autoTable(doc, {
-          startY: finalY + 20,
-          head: [['Date', 'Category', 'Payment Mode', 'Amount (₹)']],
-          body: topExpenses.map(expense => [
-            formatDisplayDate(expense.date),
-            expense.category,
-            expense.paymentMode,
-            expense.amount.toLocaleString(),
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [155, 89, 182] },
-        });
+      if (reportType === 'savings') {
+        addPdfTable('Savings Goals', ['Goal', 'Current (INR)', 'Target (INR)'], savingsRows);
       }
-      
-      doc.save(`xpenzy-report-${format(startDate, 'yyyy-MM-dd')}.pdf`);
+      if (reportType === 'investments') {
+        addPdfTable('Investments', ['Investment', 'Type', 'Invested (INR)', 'Current (INR)'], investmentRows);
+      }
+      if (reportType === 'overview' || reportType === 'payments') {
+        addPdfTable('Payment Methods', ['Method', 'Transactions'], paymentRows);
+      }
+
+      doc.save(`${fileName}.pdf`);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/10 p-4 pb-24 md:pb-4 space-y-6 animate-fade-in">
+    <div className="mx-auto min-h-screen max-w-7xl space-y-5 bg-background px-3 pb-28 pt-4 sm:space-y-6 sm:px-6 md:pb-8 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-primary/10">
-              <FileText className="w-7 h-7 text-primary" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-3 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            <div className="rounded-2xl bg-primary p-2.5 shadow-lg shadow-primary/20">
+              <FileText className="h-6 w-6 text-primary-foreground" />
             </div>
-            Insights
+            Reports
           </h1>
-          <p className="text-muted-foreground mt-2 flex items-center gap-2">
-            <CalendarIcon className="w-4 h-4" />
-            {formatDisplayDate(startDate)} - {formatDisplayDate(endDate)}
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            {reportTypes.find(type => type.id === reportType)?.description}. {isSnapshotReport ? 'This is a current balance snapshot; date filters do not apply.' : 'Activity is filtered to the selected period; savings and investments are shown as current balances.'}
           </p>
         </div>
+        <Badge variant="outline" className="w-fit gap-2 rounded-full border-border/70 bg-card px-3 py-1.5 text-xs font-medium shadow-sm">
+          <CalendarIcon className="h-3.5 w-3.5" aria-hidden />
+          {isSnapshotReport ? 'Current balance snapshot' : `${formatDisplayDate(startDate)} – ${formatDisplayDate(endDate)}`}
+        </Badge>
       </div>
 
-      <section aria-labelledby="ai-recap-title" className="space-y-3">
-        <div>
-          <h2 id="ai-recap-title" className="text-lg font-semibold">Monthly AI recap</h2>
-          <p className="text-sm text-muted-foreground">A short summary based on your recorded financial activity.</p>
-        </div>
-        <AIInsightsCard />
-        <details>
-          <summary className="cursor-pointer py-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            View AI spending forecast
-          </summary>
-          <div className="mt-3"><ExpensePredictionCard /></div>
-        </details>
-      </section>
-
-      {/* Date Range Selector */}
-      <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <CalendarIcon className="w-5 h-5 text-primary" />
-            Select Period
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { label: 'This Month', value: 'thisMonth' as DateRange },
-              { label: 'Last Month', value: 'lastMonth' as DateRange },
-              { label: 'Last 30 Days', value: 'last30Days' as DateRange },
-              { label: 'Last 90 Days', value: 'last90Days' as DateRange },
-              { label: 'This Year', value: 'thisYear' as DateRange },
-            ].map(option => (
-              <Button
-                key={option.value}
-                variant={dateRange === option.value ? 'default' : 'outline'}
-                onClick={() => setDateRange(option.value)}
-                size="sm"
-                className={dateRange === option.value ? 'shadow-md' : 'hover:bg-secondary/50'}
-              >
-                {option.label}
-              </Button>
-            ))}
-            
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant={dateRange === 'custom' ? 'default' : 'outline'} size="sm">
-                  <CalendarIcon className="w-4 h-4 mr-2" />
-                  Custom Range
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <div className="p-4 space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Start Date</label>
-                    <Calendar
-                      mode="single"
-                      selected={customStartDate}
-                      onSelect={(date) => {
-                        setCustomStartDate(date);
-                        setDateRange('custom');
-                      }}
-                      className="pointer-events-auto"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">End Date</label>
-                    <Calendar
-                      mode="single"
-                      selected={customEndDate}
-                      onSelect={(date) => {
-                        setCustomEndDate(date);
-                        setDateRange('custom');
-                      }}
-                      className="pointer-events-auto"
-                    />
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
+      <Card className="overflow-hidden rounded-2xl border-border/60 bg-card shadow-sm">
+        <CardContent className="space-y-4 p-4 sm:p-5">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1" role="group" aria-label="Report type">
+            {reportTypes.map(type => {
+              const TypeIcon = type.icon;
+              const selected = reportType === type.id;
+              return <Button key={type.id} type="button" aria-pressed={selected} variant="ghost" size="sm" className={'h-10 shrink-0 gap-2 rounded-xl px-3 ' + (selected ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground')} onClick={() => setReportType(type.id)}><TypeIcon className="h-4 w-4" />{type.label}</Button>;
+            })}
           </div>
+          {isSnapshotReport ? (
+            <p className="border-t border-border/60 pt-4 text-sm text-muted-foreground">
+              Showing live {reportType} balances. Choose Overview, Expenses, Income, or Payment methods to filter activity by date.
+            </p>
+          ) : (
+          <div className="flex flex-col gap-4 border-t border-border/60 pt-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="flex items-center gap-2"><CalendarIcon className="h-4 w-4 text-primary" /><h2 className="text-sm font-semibold">Date range</h2><span className="text-xs text-muted-foreground">Choose a period, then apply</span></div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: 'This month', value: 'thisMonth' as DateRange },
+                  { label: 'Last month', value: 'lastMonth' as DateRange },
+                  { label: '7 days', value: 'last7Days' as DateRange },
+                  { label: '30 days', value: 'last30Days' as DateRange },
+                  { label: '90 days', value: 'last90Days' as DateRange },
+                  { label: 'This year', value: 'thisYear' as DateRange },
+                ].map(option => <Button key={option.value} type="button" aria-pressed={draftDateRange === option.value} variant="outline" onClick={() => setDateRange(option.value)} size="sm" className={'h-8 rounded-lg px-3 text-xs ' + (draftDateRange === option.value ? 'border-primary bg-primary/10 text-primary hover:bg-primary/15' : 'border-border/70 bg-background')}>{option.label}</Button>)}
+                <Button type="button" aria-pressed={draftDateRange === 'custom'} variant="outline" onClick={() => setDateRange('custom')} size="sm" className={'h-8 rounded-lg px-3 text-xs ' + (draftDateRange === 'custom' ? 'border-primary bg-primary/10 text-primary' : 'border-border/70 bg-background')}>Custom</Button>
+              </div>
+              {draftDateRange === 'custom' && <div className="grid max-w-lg grid-cols-2 gap-3">
+                <label className="space-y-1 text-xs font-medium text-muted-foreground">From<input type="date" value={draftStartDate ? format(draftStartDate, 'yyyy-MM-dd') : ''} onChange={event => { const date = event.target.value ? new Date(event.target.value + 'T00:00:00') : undefined; setDraftCustomDates(current => ({ ...current, [reportType]: { ...current[reportType], start: date } })); }} className="block h-10 w-full rounded-xl border border-border bg-background px-3 text-sm font-normal text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
+                <label className="space-y-1 text-xs font-medium text-muted-foreground">To<input type="date" value={draftEndDate ? format(draftEndDate, 'yyyy-MM-dd') : ''} onChange={event => { const date = event.target.value ? new Date(event.target.value + 'T00:00:00') : undefined; setDraftCustomDates(current => ({ ...current, [reportType]: { ...current[reportType], end: date } })); }} className="block h-10 w-full rounded-xl border border-border bg-background px-3 text-sm font-normal text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
+              </div>}
+            </div>
+            <div className="flex items-center gap-2 lg:justify-end">
+              <p className="mr-auto text-xs text-muted-foreground lg:mr-2">Applied: <span className="font-medium text-foreground">{formatDisplayDate(startDate)} to {formatDisplayDate(endDate)}</span></p>
+              <Button variant="outline" size="sm" className="h-10 rounded-xl px-4" onClick={() => { setDateRange('thisMonth'); setDraftCustomDates(current => ({ ...current, [reportType]: undefined })); setDateRanges(current => ({ ...current, [reportType]: 'thisMonth' })); setCustomDates(current => ({ ...current, [reportType]: undefined })); }}>Reset</Button>
+              <Button size="sm" className="h-10 rounded-xl px-5 shadow-sm" disabled={invalidDraftRange} onClick={applyDateFilters}>Apply filters</Button>
+            </div>
+          </div>
+          )}
         </CardContent>
       </Card>
 
@@ -497,420 +661,118 @@ export const Reports = () => {
         </Card>
       ) : (
         <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard
-              title="Total Income"
-              value={`₹${totals.income.toLocaleString()}`}
-              icon={TrendingUp}
-              variant="income"
-              subtitle={`${filteredData.income.length} transactions`}
-            />
-            <StatCard
-              title="Total Expenses"
-              value={`₹${totals.expenses.toLocaleString()}`}
-              icon={TrendingDown}
-              variant="expense"
-              subtitle={`${filteredData.expenses.length} transactions`}
-            />
-            <StatCard
-              title="Net Balance"
-              value={`₹${totals.netBalance.toLocaleString()}`}
-              icon={totals.netBalance >= 0 ? ArrowUpRight : ArrowDownRight}
-              variant={totals.netBalance >= 0 ? 'income' : 'expense'}
-              subtitle={totals.netBalance >= 0 ? 'Surplus' : 'Deficit'}
-            />
-            <StatCard
-              title="Total Savings"
-              value={`₹${totals.savings.toLocaleString()}`}
-              icon={IndianRupee}
-              variant="savings"
-              subtitle={`${filteredData.savings.length} goals`}
-            />
-            <StatCard
-              title="Total Investments"
-              value={`₹${totals.investments.toLocaleString()}`}
-              icon={TrendingUp}
-              variant="default"
-              subtitle={`${filteredData.investments.length} investments`}
-            />
-            <StatCard
-              title="Total Wealth"
-              value={`₹${totals.totalWealth.toLocaleString()}`}
-              icon={TrendingUp}
-              variant="income"
-              subtitle="Savings + Investments"
-            />
-          </div>
-
-          {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Expenses by Category - Modern Donut Chart */}
-            {expensesByCategory.length > 0 && (
-              <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <PieChartIcon className="w-5 h-5 text-expense" />
-                      Expenses by Category
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">
-                      {expensesByCategory.length} categories
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {/* Chart Container */}
-                  <div className="relative h-[200px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <defs>
-                          {expensesByCategory.map((entry, index) => (
-                            <linearGradient key={`expGrad-${index}`} id={`expenseGradient-${index}`} x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor={entry.fill} stopOpacity={1} />
-                              <stop offset="100%" stopColor={entry.fill} stopOpacity={0.7} />
-                            </linearGradient>
-                          ))}
-                          <filter id="expenseShadow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.25"/>
-                          </filter>
-                        </defs>
-                        <Pie
-                          data={expensesByCategory}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={50}
-                          outerRadius={85}
-                          paddingAngle={3}
-                          dataKey="value"
-                          stroke="hsl(var(--background))"
-                          strokeWidth={2}
-                          filter="url(#expenseShadow)"
-                        >
-                          {expensesByCategory.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={`url(#expenseGradient-${index})`}
-                              className="transition-all duration-300 hover:opacity-80"
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<ExpensePieTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    {/* Center Label */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Total</p>
-                        <p className="text-lg font-bold text-expense">₹{totals.expenses.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Legend - Separate from chart */}
-                  <div className="grid grid-cols-2 gap-2 mt-4">
-                    {expensesByCategory.map((entry, index) => (
-                      <div key={index} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors">
-                        <div 
-                          className="w-3 h-3 rounded-full flex-shrink-0" 
-                          style={{ backgroundColor: entry.fill }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-foreground truncate">{entry.name}</p>
-                          <p className="text-xs text-muted-foreground">₹{entry.value.toLocaleString()}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Income by Category - Modern Bar Chart */}
-            {incomeByCategory.length > 0 && (
-              <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-income" />
-                      Income by Category
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">
-                      {incomeByCategory.length} sources
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={incomeByCategory} layout="vertical" margin={{ left: 20, right: 20 }}>
-                      <defs>
-                        <linearGradient id="incomeBarGradient" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="hsl(var(--income))" stopOpacity={0.8} />
-                          <stop offset="100%" stopColor="hsl(142, 76%, 46%)" stopOpacity={1} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis 
-                        type="number" 
-                        axisLine={false} 
-                        tickLine={false}
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                        tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
-                      />
-                      <YAxis 
-                        type="category" 
-                        dataKey="name" 
-                        axisLine={false} 
-                        tickLine={false}
-                        tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }}
-                        width={80}
-                      />
-                      <Tooltip content={<IncomeBarTooltip />} cursor={{ fill: 'hsl(var(--secondary))', opacity: 0.3 }} />
-                      <Bar 
-                        dataKey="value" 
-                        fill="url(#incomeBarGradient)" 
-                        radius={[0, 6, 6, 0]}
-                        maxBarSize={35}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Payment Methods - Modern Donut Chart */}
-            {paymentModeData.length > 0 && (
-              <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <PieChartIcon className="w-5 h-5 text-primary" />
-                      Payment Methods
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">
-                      {paymentModeData.reduce((sum, d) => sum + d.value, 0)} transactions
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {/* Chart Container */}
-                  <div className="relative h-[200px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <defs>
-                          {paymentModeData.map((entry, index) => (
-                            <linearGradient key={`payGrad-${index}`} id={`paymentGradient-${index}`} x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor={entry.fill} stopOpacity={1} />
-                              <stop offset="100%" stopColor={entry.fill} stopOpacity={0.7} />
-                            </linearGradient>
-                          ))}
-                          <filter id="paymentShadow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.25"/>
-                          </filter>
-                        </defs>
-                        <Pie
-                          data={paymentModeData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={50}
-                          outerRadius={85}
-                          paddingAngle={4}
-                          dataKey="value"
-                          stroke="hsl(var(--background))"
-                          strokeWidth={2}
-                          filter="url(#paymentShadow)"
-                        >
-                          {paymentModeData.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={`url(#paymentGradient-${index})`}
-                              className="transition-all duration-300 hover:opacity-80"
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<PaymentTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    {/* Center Label */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Total</p>
-                        <p className="text-lg font-bold text-primary">{paymentModeData.reduce((sum, d) => sum + d.value, 0)}</p>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Legend - Separate from chart */}
-                  <div className="grid grid-cols-2 gap-2 mt-4">
-                    {paymentModeData.map((entry, index) => (
-                      <div key={index} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors">
-                        <div 
-                          className="w-3 h-3 rounded-full flex-shrink-0" 
-                          style={{ backgroundColor: entry.fill }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-foreground truncate">{entry.name}</p>
-                          <p className="text-xs text-muted-foreground">{entry.value} transactions</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Expense Category Breakdown - Modern Bar Chart */}
-            {expensesByCategory.length > 0 && (
-              <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-expense" />
-                      Expense Breakdown
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs text-expense">
-                      ₹{totals.expenses.toLocaleString()}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={expensesByCategory} layout="vertical" margin={{ left: 20, right: 20 }}>
-                      <defs>
-                        <linearGradient id="expenseBarGradient" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="hsl(var(--expense))" stopOpacity={0.8} />
-                          <stop offset="100%" stopColor="hsl(0, 84%, 50%)" stopOpacity={1} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis 
-                        type="number" 
-                        axisLine={false} 
-                        tickLine={false}
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                        tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
-                      />
-                      <YAxis 
-                        type="category" 
-                        dataKey="name" 
-                        axisLine={false} 
-                        tickLine={false}
-                        tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }}
-                        width={80}
-                      />
-                      <Tooltip content={<ExpensePieTooltip />} cursor={{ fill: 'hsl(var(--secondary))', opacity: 0.3 }} />
-                      <Bar 
-                        dataKey="value" 
-                        fill="url(#expenseBarGradient)" 
-                        radius={[0, 6, 6, 0]}
-                        maxBarSize={35}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Top Expenses Table - Modern Design */}
-          {topExpenses.length > 0 && (
-            <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <TrendingDown className="w-5 h-5 text-expense" />
-                    Top 5 Expenses
-                  </CardTitle>
-                  <Badge variant="outline" className="text-xs">
-                    Highest spending
-                  </Badge>
+          {/* Report-specific KPIs */}
+          <section aria-label={`${reportType} key metrics`} className={`grid grid-cols-2 gap-3 ${kpis.length === 3 ? 'sm:grid-cols-3' : ''}`}>
+            {kpis.map(kpi => <ReportKpi key={kpi.title} {...kpi} />)}
+          </section>
+          {reportType === 'overview' && (
+            <section aria-label="Current balances" className="grid grid-cols-2 gap-3 rounded-xl border border-border/60 bg-card p-3 shadow-sm sm:grid-cols-3">
+              {[
+                ['Current savings', currency(totals.savings)],
+                ['Current investments', currency(totals.investments)],
+                ['Current wealth', currency(totals.totalWealth)],
+              ].map(([label, value]) => (
+                <div key={label} className="min-w-0">
+                  <p className="truncate text-[11px] font-medium text-muted-foreground">{label}</p>
+                  <p className="mt-1 truncate text-sm font-bold tracking-tight">{value}</p>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-secondary/30 hover:bg-secondary/30">
-                        <TableHead className="text-foreground font-semibold">Date</TableHead>
-                        <TableHead className="text-foreground font-semibold">Category</TableHead>
-                        <TableHead className="text-foreground font-semibold">Payment Mode</TableHead>
-                        <TableHead className="text-right text-foreground font-semibold">Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {topExpenses.map((expense, index) => (
-                        <TableRow 
-                          key={expense.id}
-                          className="hover:bg-secondary/20 transition-colors border-b border-border/30"
-                        >
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-expense/10 flex items-center justify-center text-xs font-bold text-expense">
-                                {index + 1}
-                              </div>
-                              {formatDisplayDate(expense.date)}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium text-foreground">{expense.category}</div>
-                              {expense.subcategory && (
-                                <div className="text-xs text-muted-foreground mt-0.5">{expense.subcategory}</div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="font-normal">
-                              {expense.paymentMode}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="font-bold text-expense text-lg">
-                              ₹{expense.amount.toLocaleString()}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
+              ))}
+            </section>
           )}
-
-          {/* Export Section - Modern Design */}
-          <Card className="bg-gradient-card border-border/50 shadow-card overflow-hidden">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Download className="w-5 h-5 text-primary" />
-                Export Report
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-3">
-                <Button 
-                  variant="outline" 
-                  className="flex items-center gap-2 hover:bg-primary/10 hover:border-primary/50 transition-all"
-                  onClick={() => exportData('csv')}
-                >
-                  <Download className="w-4 h-4" />
-                  Export as CSV
+          <Card className="rounded-2xl border-border/60 bg-card shadow-sm">
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-semibold">Download {reportTypes.find(type => type.id === reportType)?.label.toLowerCase()} report</h2>
+                <p className="text-xs text-muted-foreground">
+                  {isSnapshotReport ? `Current balances as of ${formatDisplayDate(new Date())}.` : `For ${formatDisplayDate(startDate)} – ${formatDisplayDate(endDate)}.`} Screen details match the PDF and CSV; CSV opens in Excel.
+                </p>
+              </div>
+              <div className="grid w-full grid-cols-3 gap-2 sm:w-auto">
+                <Button variant="outline" size="sm" className="w-full px-2" onClick={() => exportData('csv')}>
+                  <Download className="mr-1.5 h-4 w-4" aria-hidden />
+                  CSV
                 </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex items-center gap-2 hover:bg-primary/10 hover:border-primary/50 transition-all"
-                  onClick={() => exportData('json')}
-                >
-                  <Download className="w-4 h-4" />
-                  Export as JSON
+                <Button variant="outline" size="sm" className="w-full px-2" onClick={() => exportData('json')}>
+                  <Download className="mr-1.5 h-4 w-4" aria-hidden />
+                  JSON
                 </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex items-center gap-2 hover:bg-primary/10 hover:border-primary/50 transition-all"
-                  onClick={() => exportData('pdf')}
-                >
-                  <Download className="w-4 h-4" />
-                  Export as PDF
+                <Button variant="outline" size="sm" className="w-full px-2" onClick={() => exportData('pdf')}>
+                  <Download className="mr-1.5 h-4 w-4" aria-hidden />
+                  PDF
                 </Button>
               </div>
             </CardContent>
           </Card>
+          {/* Charts Row */}
+          <div className="space-y-4">
+            {(reportType === 'overview' || reportType === 'expenses') && (
+              <>
+                <ReportTable
+                  title="Expenses by category"
+                  headers={['Category', 'Amount']}
+                  rows={expensesByCategory.map(category => [category.name, currency(category.value)])}
+                  mobileValueIndex={1}
+                />
+                <ReportTable
+                  title="Expense transactions"
+                  headers={['Date', 'Category', 'Subcategory', 'Payment mode', 'Amount', 'Notes']}
+                  rows={expenseRows}
+                  mobileTitleIndex={1}
+                  mobileSubtitleIndices={[0, 2, 3, 5]}
+                  mobileValueIndex={4}
+                />
+              </>
+            )}
+
+            {(reportType === 'overview' || reportType === 'income') && (
+              <>
+                <ReportTable
+                  title="Income by category"
+                  headers={['Category', 'Amount']}
+                  rows={incomeByCategory.map(category => [category.name, currency(category.value)])}
+                  mobileValueIndex={1}
+                />
+                <ReportTable
+                  title="Income transactions"
+                  headers={['Date', 'Category', 'Payment mode', 'Amount', 'Notes']}
+                  rows={incomeRows}
+                  mobileTitleIndex={1}
+                  mobileSubtitleIndices={[0, 2, 4]}
+                  mobileValueIndex={3}
+                />
+              </>
+            )}
+
+            {(reportType === 'overview' || reportType === 'payments') && (
+              <ReportTable
+                title="Payment methods"
+                headers={['Method', 'Transactions']}
+                rows={paymentRows}
+                mobileValueIndex={1}
+              />
+            )}
+
+          </div>
+
+          {reportType === 'savings' && (
+            <ReportTable
+              title="Savings goals"
+              headers={['Goal', 'Current', 'Target']}
+              rows={savingsRows}
+              mobileSubtitleIndices={[2]}
+              mobileValueIndex={1}
+            />
+          )}
+          {reportType === 'investments' && (
+            <ReportTable
+              title="Investments"
+              headers={['Investment', 'Type', 'Invested', 'Current']}
+              rows={investmentRows}
+              mobileSubtitleIndices={[1, 2]}
+              mobileValueIndex={3}
+            />
+          )}
+
         </>
       )}
     </div>

@@ -74,7 +74,7 @@ const TradeChartTooltip = ({ active, payload }: any) => {
 export const Home = () => {
   const { data } = useFinancial();
   const { user } = useAuth();
-  const { preferences, hasConsent } = usePrivacy();
+  const { preferences } = usePrivacy();
   const [activeForm, setActiveForm] = useState<'income' | 'expense' | 'savings' | 'investment' | null>(null);
 
   const userHasAccess = hasDataAccess(user?.user_metadata?.role || 'user');
@@ -86,7 +86,7 @@ export const Home = () => {
     }
     const rawName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'User';
     const sanitizedName = sanitizeUserInput(rawName);
-    if (preferences.securityMode === 'strict' && !hasConsent('showFullName')) {
+    if (!preferences.showFullName) {
       return maskName(sanitizedName);
     }
     return sanitizedName;

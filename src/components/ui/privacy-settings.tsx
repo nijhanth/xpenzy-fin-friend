@@ -1,35 +1,46 @@
-import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Shield, Eye, EyeOff, Lock } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Shield, Eye, EyeOff, Lock, UserRound, Mail, RotateCcw } from 'lucide-react';
 import { usePrivacy } from '@/contexts/PrivacyContext';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+
+type DisplayPreference = 'showFullName' | 'showFullEmail';
 
 export const PrivacySettings = () => {
   const { preferences, updatePreferences, requestConsent } = usePrivacy();
   const { toast } = useToast();
 
-  const handleToggle = async (key: keyof typeof preferences, value: boolean) => {
+  const handleToggle = async (key: DisplayPreference, value: boolean) => {
     if (value && !preferences[key]) {
       const consent = await requestConsent(key);
       if (!consent) return;
+    } else {
+      updatePreferences({ [key]: value });
     }
-    
-    updatePreferences({ [key]: value });
     toast({
-      title: "Privacy Setting Updated",
-      description: `Your ${key.replace(/([A-Z])/g, ' $1').toLowerCase()} preference has been saved.`,
+      title: 'Display preference updated',
+      description: value ? 'This information will appear in full.' : 'This information will be masked in the app.',
     });
   };
 
   const handleSecurityModeChange = (mode: 'strict' | 'balanced' | 'minimal') => {
-    updatePreferences({ securityMode: mode });
+    const visibility = {
+      strict: { showFullName: false, showFullEmail: false },
+      balanced: { showFullName: true, showFullEmail: false },
+      minimal: { showFullName: true, showFullEmail: true },
+    }[mode];
+    updatePreferences({ securityMode: mode, ...visibility });
     toast({
-      title: "Security Mode Updated",
-      description: `Security mode changed to ${mode}.`,
+      title: 'Privacy preset updated',
+      description: mode === 'strict'
+        ? 'Your name and email are now masked.'
+        : mode === 'balanced'
+          ? 'Your name is visible and your email is masked.'
+          : 'Your name and email are visible in full.',
     });
   };
 
@@ -39,126 +50,114 @@ export const PrivacySettings = () => {
     );
     
     if (confirmed) {
-      localStorage.removeItem('privacy-preferences');
       updatePreferences({
         showFullEmail: false,
         showFullPhone: false,
-        showFullName: true,
+        showFullName: false,
         allowDataCollection: false,
         securityMode: 'strict'
       });
       toast({
-        title: "Privacy preferences reset",
-        description: "Your display, analytics, and security mode preferences are back to their defaults. Financial data was not changed.",
+        title: 'Privacy preferences reset',
+        description: 'Your name and email are masked. Financial data was not changed.',
       });
     }
   };
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="w-5 h-5" />
-            Privacy & Security Settings
-          </CardTitle>
-          <CardDescription>
-            Control how personal information is displayed and which privacy options are enabled. These settings do not delete financial records.
-          </CardDescription>
+      <Card className="overflow-hidden border-border shadow-card">
+        <CardHeader className="border-b border-border bg-muted/30">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
+              <Shield className="h-5 w-5" aria-hidden />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Privacy &amp; display</CardTitle>
+              <CardDescription className="mt-1">
+                Choose how personal details appear in Xpenzy. Your financial records are unchanged.
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Display Preferences */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium text-foreground">Data Display Preferences</h4>
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Eye className="w-4 h-4 text-muted-foreground" />
-                <Label htmlFor="show-full-name" className="text-sm">Show full name</Label>
-              </div>
-              <Switch
-                id="show-full-name"
-                checked={preferences.showFullName}
-                onCheckedChange={(checked) => handleToggle('showFullName', checked)}
-              />
+        <CardContent className="space-y-6 p-4 sm:p-6">
+          <section className="space-y-3" aria-labelledby="privacy-display-heading">
+            <div className="flex items-center justify-between gap-3">
+              <h4 id="privacy-display-heading" className="text-sm font-semibold">Personal details</h4>
+              <Badge variant="secondary">
+                {preferences.showFullName
+                  ? preferences.showFullEmail ? 'Name and email visible' : 'Name visible'
+                  : preferences.showFullEmail ? 'Email visible' : 'Fully masked'}
+              </Badge>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <EyeOff className="w-4 h-4 text-muted-foreground" />
-                <Label htmlFor="show-full-email" className="text-sm">Show full email address</Label>
+            <div className="divide-y divide-border rounded-xl border border-border">
+              <div className="flex min-h-16 items-center justify-between gap-4 p-3 sm:p-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <div className="min-w-0">
+                    <Label htmlFor="show-full-name" className="text-sm font-medium">Show full name</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">Otherwise, your name is masked on the home screen and account menu.</p>
+                  </div>
+                </div>
+                <Switch
+                  id="show-full-name"
+                  checked={preferences.showFullName}
+                  onCheckedChange={(checked) => { void handleToggle('showFullName', checked); }}
+                  aria-label="Show full name"
+                />
               </div>
-              <Switch
-                id="show-full-email"
-                checked={preferences.showFullEmail}
-                onCheckedChange={(checked) => handleToggle('showFullEmail', checked)}
-              />
-            </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <EyeOff className="w-4 h-4 text-muted-foreground" />
-                <Label htmlFor="show-full-phone" className="text-sm">Show full phone number</Label>
+              <div className="flex min-h-16 items-center justify-between gap-4 p-3 sm:p-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <div className="min-w-0">
+                    <Label htmlFor="show-full-email" className="text-sm font-medium">Show full email address</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">Otherwise, your email is masked in account menus and settings.</p>
+                  </div>
+                </div>
+                <Switch
+                  id="show-full-email"
+                  checked={preferences.showFullEmail}
+                  onCheckedChange={(checked) => { void handleToggle('showFullEmail', checked); }}
+                  aria-label="Show full email address"
+                />
               </div>
-              <Switch
-                id="show-full-phone"
-                checked={preferences.showFullPhone}
-                onCheckedChange={(checked) => handleToggle('showFullPhone', checked)}
-              />
             </div>
+          </section>
+
+          <section className="space-y-3" aria-labelledby="privacy-mode-heading">
+            <div className="flex items-center gap-2">
+              <Lock className="h-4 w-4 text-muted-foreground" aria-hidden />
+              <h4 id="privacy-mode-heading" className="text-sm font-semibold">Visibility preset</h4>
+            </div>
+            <Select value={preferences.securityMode} onValueChange={handleSecurityModeChange}>
+              <SelectTrigger aria-label="Visibility preset">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="strict">Strict — mask name and email</SelectItem>
+                <SelectItem value="balanced">Balanced — show name, mask email</SelectItem>
+                <SelectItem value="minimal">Minimal — show name and email</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Presets update both switches. You can then adjust either detail separately.
+            </p>
+          </section>
+
+          <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+            Xpenzy currently has no phone number profile field and does not collect usage analytics, so those controls are not shown.
           </div>
 
-          {/* Security Mode */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium text-foreground">Security Mode</h4>
-            <div className="flex items-center gap-3">
-              <Lock className="w-4 h-4 text-muted-foreground" />
-              <Select
-                value={preferences.securityMode}
-                onValueChange={handleSecurityModeChange}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="strict">
-                    Strict - Maximum data protection and masking
-                  </SelectItem>
-                  <SelectItem value="balanced">
-                    Balanced - Moderate protection with usability
-                  </SelectItem>
-                  <SelectItem value="minimal">
-                    Minimal - Basic protection, full data visibility
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h4 className="text-sm font-medium">Reset privacy preferences</h4>
+              <p className="text-xs text-muted-foreground">Restore strict masking without deleting financial data.</p>
             </div>
-          </div>
-
-          {/* Data Collection */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium text-foreground">Data Collection</h4>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="allow-data-collection" className="text-sm">
-                Allow anonymous usage analytics
-              </Label>
-              <Switch
-                id="allow-data-collection"
-                checked={preferences.allowDataCollection}
-                onCheckedChange={(checked) => handleToggle('allowDataCollection', checked)}
-              />
-            </div>
-          </div>
-
-          {/* Danger Zone */}
-          <div className="pt-4 border-t">
-            <h4 className="text-sm font-medium text-destructive mb-4">Danger Zone</h4>
-            <Button 
-              variant="destructive" 
-              size="sm" 
-              onClick={resetPrivacyPreferences}
-            >
-              Reset Privacy Preferences
+            <Button variant="outline" size="sm" onClick={resetPrivacyPreferences}>
+              <RotateCcw className="mr-2 h-4 w-4" aria-hidden />
+              Reset preferences
             </Button>
           </div>
         </CardContent>

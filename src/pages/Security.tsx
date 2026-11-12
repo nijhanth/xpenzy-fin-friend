@@ -7,35 +7,25 @@ import {
   Lock, 
   Fingerprint, 
   Smartphone, 
-  Cloud, 
-  Download,
   AlertTriangle,
   CheckCircle,
-  Eye,
-  EyeOff,
-  RefreshCw
 } from 'lucide-react';
 import { useState } from 'react';
 import { useSecuritySettings } from '@/hooks/useSecuritySettings';
 import { useAppLock } from '@/hooks/useAppLock';
-import { useCloudSync } from '@/hooks/useCloudSync';
-import { GoogleDriveBackup } from '@/components/ui/google-drive-backup';
 import { PinSetupDialog } from '@/components/ui/pin-setup-dialog';
 
 export const Security = () => {
-  const { settings, loading, updateSetting, updateBackupTimestamp } = useSecuritySettings();
-  const { hasPin, lockApp, isLocked } = useAppLock();
-  const { isEnabled: cloudSyncEnabled, isConnected, isSyncing, enableCloudSync, disableCloudSync, performSync, getTimeSinceLastSync } = useCloudSync();
+  const { settings, loading, updateSetting } = useSecuritySettings();
+  const { hasPin, lockApp } = useAppLock();
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [pinMode, setPinMode] = useState<'setup' | 'change' | 'remove'>('setup');
 
   const getSecurityScore = () => {
     if (!settings) return 0;
     let score = 0;
-    if (hasPin) score += 25;
-    if (settings.biometric_auth) score += 25;
-    if (settings.auto_lock && hasPin) score += 25;
-    if (cloudSyncEnabled && isConnected) score += 25;
+    if (hasPin) score += 50;
+    if (settings.auto_lock && hasPin) score += 50;
     return score;
   };
 
@@ -64,14 +54,6 @@ export const Security = () => {
       setShowPinSetup(true);
     }
     updateSetting('app_lock', checked);
-  };
-
-  const handleCloudSyncToggle = async (checked: boolean) => {
-    if (checked) {
-      await enableCloudSync();
-    } else {
-      disableCloudSync();
-    }
   };
 
   const handleChangePinClick = () => {
@@ -205,41 +187,6 @@ export const Security = () => {
               />
             </div>
 
-            {/* Cloud Sync */}
-            <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                  <Cloud className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-medium">Cloud Sync</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {cloudSyncEnabled && isConnected 
-                      ? `Last sync: ${getTimeSinceLastSync()}`
-                      : isConnected 
-                        ? 'Auto sync to Google Drive'
-                        : 'Connect Google Drive first'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {cloudSyncEnabled && isConnected && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => performSync()}
-                    disabled={isSyncing}
-                  >
-                    <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                  </Button>
-                )}
-                <Switch 
-                  checked={cloudSyncEnabled}
-                  onCheckedChange={handleCloudSyncToggle}
-                  disabled={!isConnected || isSyncing}
-                />
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -276,46 +223,6 @@ export const Security = () => {
             Setup Biometric Lock
             <Badge className="ml-auto">Coming Soon</Badge>
           </Button>
-        </CardContent>
-      </Card>
-
-      {/* Google Drive Backup */}
-      <GoogleDriveBackup />
-
-      {/* Local Backup */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Local Backup</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="border border-border rounded-lg p-4">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-secondary text-secondary-foreground">
-                  <Download className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-medium">Device Backup</h3>
-                  <p className="text-sm text-muted-foreground">Save encrypted backup to device</p>
-                </div>
-              </div>
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => updateBackupTimestamp('local')}
-                disabled={!settings}
-              >
-                Backup Now
-              </Button>
-            </div>
-            
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Last backup: {settings?.last_backup_local 
-                ? `${Math.floor((Date.now() - new Date(settings.last_backup_local).getTime()) / (1000 * 60 * 60))} hours ago`
-                : 'Never'}</span>
-              <span>Size: N/A</span>
-            </div>
-          </div>
         </CardContent>
       </Card>
 

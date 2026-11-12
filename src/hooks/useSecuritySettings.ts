@@ -7,11 +7,8 @@ interface SecuritySettings {
   biometric_auth: boolean;
   auto_lock: boolean;
   auto_lock_timeout: number;
-  cloud_sync: boolean;
   two_factor_enabled: boolean;
   security_alerts: boolean;
-  last_backup_local: string | null;
-  last_backup_cloud: string | null;
 }
 
 const DEFAULT_SETTINGS: SecuritySettings = {
@@ -19,11 +16,8 @@ const DEFAULT_SETTINGS: SecuritySettings = {
   biometric_auth: false,
   auto_lock: true,
   auto_lock_timeout: 300,
-  cloud_sync: true,
   two_factor_enabled: false,
   security_alerts: true,
-  last_backup_local: null,
-  last_backup_cloud: null,
 };
 
 const STORAGE_KEY = 'xpenzy_security_settings';
@@ -49,7 +43,17 @@ export const useSecuritySettings = () => {
     
     if (stored) {
       try {
-        setSettings(JSON.parse(stored));
+        const storedSettings = JSON.parse(stored) as Partial<SecuritySettings> & {
+          cloud_sync?: boolean;
+          last_backup_cloud?: string | null;
+          last_backup_local?: string | null;
+        };
+        delete storedSettings.cloud_sync;
+        delete storedSettings.last_backup_cloud;
+        delete storedSettings.last_backup_local;
+        const nextSettings = { ...DEFAULT_SETTINGS, ...storedSettings };
+        setSettings(nextSettings);
+        localStorage.setItem(storageKey, JSON.stringify(nextSettings));
       } catch {
         setSettings(DEFAULT_SETTINGS);
         localStorage.setItem(storageKey, JSON.stringify(DEFAULT_SETTINGS));
@@ -78,17 +82,9 @@ export const useSecuritySettings = () => {
     });
   };
 
-  const updateBackupTimestamp = (type: 'local' | 'cloud') => {
-    if (!user || !settings) return;
-
-    const field = type === 'local' ? 'last_backup_local' : 'last_backup_cloud';
-    updateSetting(field, new Date().toISOString());
-  };
-
   return {
     settings,
     loading: loading || authLoading,
     updateSetting,
-    updateBackupTimestamp,
   };
 };

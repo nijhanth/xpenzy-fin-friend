@@ -111,6 +111,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<number | null>(null);
+  const isVerifyingRecoveryOtp = useRef(false);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -129,7 +130,7 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
   };
 
   useEffect(() => {
-    if (user && view !== 'forgot-reset' && view !== 'forgot-success') {
+    if (user && view !== 'forgot-reset' && view !== 'forgot-success' && !isVerifyingRecoveryOtp.current) {
       onAuthSuccess();
     }
   }, [user, view, onAuthSuccess]);
@@ -402,18 +403,27 @@ export const Auth = ({ onAuthSuccess }: AuthProps) => {
       return;
     }
     setIsLoading(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email: resetEmail.trim(),
-      token: otp,
-      type: 'recovery',
-    });
-    setIsLoading(false);
-    if (error) {
-      setErrors({ otp: 'Invalid or expired code' });
-      toast({ variant: 'destructive', title: 'Verification failed', description: error.message });
-      return;
+    isVerifyingRecoveryOtp.current = true;
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email: resetEmail.trim(),
+        token: otp,
+        type: 'recovery',
+      });
+      if (error) {
+        setErrors({ otp: 'Invalid or expired code' });
+        toast({ variant: 'destructive', title: 'Verification failed', description: error.message });
+        return;
+      }
+      goTo('forgot-reset');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Check your connection and try again.';
+      setErrors({ otp: message });
+      toast({ variant: 'destructive', title: 'Verification failed', description: message });
+    } finally {
+      isVerifyingRecoveryOtp.current = false;
+      setIsLoading(false);
     }
-    goTo('forgot-reset');
   };
 
   // ---------- Forgot Password: Set New Password ----------
